@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # gather provenance info
 prov=$(python ../src/loony/get_curret_provenance.py)

@@ -2,11 +2,23 @@ name: loony
 channels:
   - conda-forge
 dependencies:
+  - python>=3.12
   - ipython
-  - sh
+  - ipykernel
+  - duckdb
   - fire
   - gdal
-  - rasterio
+  - geopandas
+  - libgdal-arrow-parquet
+  - matplotlib-base
+  - numpy
   - pvl
   - polars
   - pip
+  - pyproj
+  - rasterio
+  - sh
+  - shapely
+  - pip:
+    - --editable .
+    - moody

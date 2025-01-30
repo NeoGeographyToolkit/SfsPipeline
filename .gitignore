@@ -6,3 +6,4 @@
 *.DS_STORE
 sfs_cover.csv
 __pycache__/
+*.egg-info/

@@ -4,9 +4,9 @@ import os
 from pathlib import Path
 import json
 import socket
+import fire
 
-
-if __name__ == '__main__':
+def run():
     provenance_info = {
         "date": str(datetime.datetime.now()),
         "user": os.getlogin(),
@@ -15,3 +15,9 @@ if __name__ == '__main__':
     }
     provenance_info_json = json.dumps(provenance_info, separators=(',', ':'))
     print(provenance_info_json, flush=True)
+
+def main():
+    fire.Fire(run)
+
+if __name__ == '__main__':
+    main()
