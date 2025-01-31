@@ -243,6 +243,15 @@ def gsd_ratio(
     _min = min(resolution1, resolution2)
     return _max/_min
 
+def angular_separation_acos(deg1: float, deg2: float)-> float:
+    # Convert degrees to radians
+    a = np.radians(deg1)
+    b = np.radians(deg2)
+    # Compute separation using arccos of cosine of the difference
+    separation_rad = np.arccos(np.cos(a - b))
+    # Convert result back to degrees, if desired
+    return np.degrees(separation_rad)
+
 
 def get_min_box(wkt_geometry: str)-> str:
     geom = wkt.loads(wkt_geometry)
@@ -318,6 +327,7 @@ def main():
     con.create_function("gsd_ratio", gsd_ratio)
     con.create_function("rect_height", get_height)
     con.create_function("rect_width", get_width)
+    con.create_function("angular_separation_acos", angular_separation_acos)
     # fetch the crs of the source database
     crs_info = con.sql(f"SELECT layers[1].geometry_fields[1].crs.auth_name as name, layers[1].geometry_fields[1].crs.auth_code as code FROM st_read_meta('{args.db_path}');").df().iloc[0].to_dict()
     if crs_info['name'] == 'IAU':
@@ -389,6 +399,7 @@ def main():
         p.*,
         ST_INTERSECTION(p.geom, roi.geom) as roi_overlap_geom,
         ABS(p.L_SUB_SOLAR_GROUND_AZIMUTH - p.R_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_DIFF,
+        angular_separation_acos(p.L_SUB_SOLAR_GROUND_AZIMUTH, p.R_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_ACOS_DIFF,
         (ST_AREA(p.geom) / p.L_AREA) * 100 AS OVERLAP_PERCENTAGE,
         (ST_AREA(ST_INTERSECTION(p.geom, roi.geom)) / ST_AREA(roi.geom)) * 100 AS ROI_OVERLAP_PERCENTAGE,
         parallax(radians(p.L_EMISSION_ANGLE), radians(p.L_SUB_SPACECRAFT_GROUND_AZIMUTH), radians(p.R_EMISSION_ANGLE), radians(p.R_SUB_SPACECRAFT_GROUND_AZIMUTH)) as PARALLAX_ANGLE,
