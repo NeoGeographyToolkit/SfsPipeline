@@ -5,3 +5,94 @@ The main documentation for the Ames Stereo Pipeline SfS is available here:
 https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html
 
 We will use this as the reference document, but there are many practical aspects of generating DEMs via SfS that are not necessarily documented. 
+
+
+
+
+## Command Line Tools
+
+
+## Process Cumulative Index to parquet files
+
+this command will process the CUMINDEX.LBL and CUMINDEX.TAB in your home directory (NOTE: they must be in home dir, or at least symlinked there...)
+into parquet files in /tmp. On a M2 Macbook Air this takes about 2 minutes.
+Each parquet file will have an embedded metadata tag of the Provenance information which includes 
+the date time stamp in utc, the user, the hostname, and the md5sum of the CUMINDEX.TAB file
+
+```bash
+process-cumulative-index
+```
+
+output looks like:
+
+```bash
+Gathering Provenance...
+Provenance: {"date":"2025-01-31 09:29:41.468754","user":"aannex","hostname":"starmirage","md5sum":"828e6e35a977a67f4ab16eab59dd2bfe"}
+preprocessing the cumlative index to the flatgeobuf file in /tmp
+Read metadata from cumulative label
+Loaded raw NAC only table with 2629426 rows
+Got schema
+Created cleaned table
+Updated Longitudes to correct range
+computed ground azimuth columns and made new table
+created lroc spatial table, starting to apply hilbert order
+saving hilbert ordered data to flatgeobuf
+done!
+       41.46 real        82.00 user         8.13 sys
+creating the parquet files...
+0...10...20...30...40...50...60...70...80...90...100 - done.
+       20.94 real        19.82 user         1.82 sys
+created global parquet file at /tmp/lroc_cumulative.parquet
+        5.62 real         5.70 user         0.22 sys
+created north polar parquet file at /tmp/lroc_cumulative_north_polar.parquet
+        6.31 real         6.38 user         0.26 sys
+created south polar parquet file at /tmp/lroc_cumulative_south_polar.parquet
+Done! Parquet Files are located in /tmp/ for your use.
+```
+
+## SFS Cover
+
+Even with a larger ROI for SFS Cover, you will only end up with a few thousand observations so geopackage output
+is totally fine for this
+
+```bash
+sfs-cover --db_path /tmp/lroc_cumulative_south_polar.parquet -p "POLYGON((72471.2817000002 158818.3489,128308.508199999 158818.3489,128308.508199999 119030.173,72471.2817000002 119030.173,72471.2817000002 158818.3489))" -t mons_mouton_regional --gpkg /tmp/mons_mouton_regional.gpkg
+```
+
+the provenance info is propogated from the source db parquet file:
+
+```bash
+ogrinfo /tmp/mons_mouton_regional.gpkg mons_mouton_regional -so | head
+INFO: Open of `/tmp/mons_mouton_regional.gpkg'
+      using driver `GPKG' successful.
+
+Layer name: mons_mouton_regional
+Metadata:
+  PROVENANCE={"date":"2025-01-31 09:29:41.468754","user":"aannex","hostname":"starmirage","md5sum":"828e6e35a977a67f4ab16eab59dd2bfe"}
+Geometry: Polygon
+Feature Count: 4844
+Extent: (-58034.599620, -25721.486558) - (216325.951463, 263254.550266)
+Layer SRS WKT:
+```
+
+## Finding stereo pairs from SFS Cover outputs
+
+```bash
+find-stereo-pairs --db_path /tmp/mons_mouton_regional.gpkg -p "POLYGON((72471.2817000002 158818.3489,128308.508199999 158818.3489,128308.508199999 119030.173,72471.2817000002 119030.173,72471.2817000002 158818.3489))" -g /tmp/stereo_pairs_mons_mouton_regional.gpkg
+```
+
+and again metadata is propogated from the source GPKG file:
+
+```bash
+ogrinfo /tmp/stereo_pairs_mons_mouton_regional.gpkg stereo_pairs_mons_mouton_regional -so | head
+INFO: Open of `/tmp/stereo_pairs_mons_mouton_regional.gpkg'
+      using driver `GPKG' successful.
+
+Layer name: stereo_pairs_mons_mouton_regional
+Metadata:
+  PROVENANCE={"date":"2025-01-31 09:29:41.468754","user":"aannex","hostname":"starmirage","md5sum":"828e6e35a977a67f4ab16eab59dd2bfe"}
+Geometry: Unknown (any)
+Feature Count: 273
+Extent: (37521.275857, 67456.116796) - (153931.222797, 187826.424185)
+Layer SRS WKT:
+```

@@ -25,6 +25,7 @@ dependencies = [
     "sh",
     "rasterio",
     "duckdb",
+    "fiona",
     "pyproj",
     "geopandas",
     "polars",
@@ -54,3 +55,4 @@ get-current-provenance = "loony.get_current_provenance:main"
 sfs-cover = "loony.new_sfs_cover:main"
 preprocess-cumulative-index = "loony.process_lroc_cumulative_index:main"
 process-cumulative-index = "loony.resources.process:main"
+find-stereo-pairs = "loony.find_stereo_pairs:main"

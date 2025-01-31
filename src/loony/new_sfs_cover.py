@@ -18,8 +18,8 @@ photometric information, and displays plots."""
 
 import argparse
 import textwrap as tw
-from pathlib import Path
 
+import fiona
 import geopandas as gp
 import pyproj
 import shapely
@@ -30,6 +30,8 @@ import matplotlib
 from pyproj.crs import ProjectedCRS
 from pyproj.crs.coordinate_operation import StereographicConversion
 
+from .utils import get_embedded_provenance
+
 # setup pyproj CRSs and transforms
 moon_crs_ge = pyproj.CRS.from_user_input('IAU_2015:30100')
 moon_crs_np = pyproj.CRS.from_user_input('IAU_2015:30130')
@@ -39,7 +41,8 @@ moon_crs_sp = pyproj.CRS.from_user_input('IAU_2015:30135')
 def get_provenance(df: gp.GeoDataFrame):
     """Get the max volume/orbit/most recent date in the dataframe"""
     most_recent = df.loc[df['ORBIT_NUMBER'].idxmax(),:]
-    return f"As of PDS Volume {most_recent['VOLUME_ID']},\norbit {most_recent['ORBIT_NUMBER']}, {most_recent['START_TIME']}"
+    message = f"As of PDS Volume {most_recent['VOLUME_ID']},\norbit {most_recent['ORBIT_NUMBER']}, {most_recent['START_TIME']}"
+    return message
 
 
 def make_stereographic_moon_projection(lon, lat):
@@ -294,6 +297,8 @@ def main():
         parser.error(str(err))
     # Load database of LROC index, assuming it's geoparquet
     df = gp.read_parquet(args.db_path)
+    # get embedded provenance info
+    embedded_provenance = get_embedded_provenance(args.db_path)
     # perform query for downselection and prepare output geodataframe
     df_results = perform_geo_selection(df, df_query)
     # get provenance for results based on the database used
@@ -313,6 +318,8 @@ def main():
     # write out gpkg if requested
     if args.gpkg:
         df_results.to_file(args.gpkg, driver="GPKG")
+    with fiona.open(args.gpkg, "a") as dst:
+        dst.update_tag_item('PROVENANCE', embedded_provenance if embedded_provenance else provenance)
     # plot results after writing out to disk
     # TODO just output these both as pngs and call it a day
     plot_footprints(df_results, df_query, title, provenance=provenance, use_stereographic=True)

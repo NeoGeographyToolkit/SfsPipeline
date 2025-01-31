@@ -12,6 +12,8 @@ from shapely import wkt
 from shapely import Polygon
 import geopandas as gpd
 
+import fiona
+from .utils import get_embedded_provenance
 
 
 def quality(value: float, ideal, low: float, high: float) -> float:
@@ -323,6 +325,8 @@ def main():
     # load the database into duckdb
     con.sql(f"CREATE TEMP TABLE df AS SELECT * FROM ST_READ('{args.db_path}');")
     print(f'Loaded DB: {args.db_path}')
+    # get embedded provenance info
+    embedded_provenance = get_embedded_provenance(args.db_path)
     # create a spatial index R-tree
     con.sql("CREATE INDEX my_idx ON df USING RTREE (geom)")
     print('Created Spatial Index')
@@ -437,6 +441,8 @@ def main():
     COPY (SELECT * EXCLUDE (roi_overlap_geom) FROM stereo_pairs_filtered) TO '{args.gpkg}'         
     WITH (FORMAT GDAL, DRIVER 'GPKG', SRS '{crs_info["name"]}:{crs_info["code"]}');
     """)
+    with fiona.open(args.gpkg, "a") as dst:
+        dst.update_tag_item('PROVENANCE', embedded_provenance or "None")
     print(f"Wrote {args.gpkg}\n Done!")
     # Filter out skinny slivers
 
