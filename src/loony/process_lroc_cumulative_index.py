@@ -2,15 +2,17 @@ from pathlib import Path
 import fire
 import duckdb
 import pvl
-from pdr.parselabel.pds3 import parse_pvl
 import polars as pl
-from ground_azimuth import ground_azimuth_numpy as ground_azimuth
+from .ground_azimuth import ground_azimuth_numpy as ground_azimuth
 
 # first download CUMINDEX.LBL to your home dir
 # next download CUMINDEX.TAB to your home dir 
 
 
-def run(lbl_path:str = '~/CUMINDEX.LBL'):
+def run(lbl_path: str = '~/CUMINDEX.LBL'):
+    lbl_path: Path = Path(lbl_path).expanduser()
+    db_path: Path = lbl_path.with_suffix('.TAB')
+    assert lbl_path.exists() and db_path.exists()
     ## load label and parse manually with pvl
     lbl = pvl.load(Path(lbl_path).expanduser())
     index = lbl['INDEX_TABLE']
@@ -26,21 +28,20 @@ def run(lbl_path:str = '~/CUMINDEX.LBL'):
     con.load_extension("spatial")
 
     # Load the CSV without a header
-    con.execute("""
+    con.execute(f"""
         CREATE TEMP TABLE 
             raw 
         AS SELECT 
             * 
         FROM 
-            read_csv_auto('~/CUMINDEX.TAB', sep=',', header=false, quote='"')
+            read_csv_auto('{str(db_path)}', sep=',', header=false, quote='"')
         WHERE 
             column04
         ILIKE
             '%nac%'
     """)
-
-    print('Loaded raw table', flush=True)
-
+    count = con.execute('SELECT COUNT(*) FROM raw;').fetchone()
+    print(f'Loaded raw NAC only table with {count[0]} rows', flush=True)
     # Retrieve the schema and identify VARCHAR columns
     schema = con.execute("""
         SELECT 

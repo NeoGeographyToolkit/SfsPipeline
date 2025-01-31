@@ -15,6 +15,7 @@ dependencies:
   - pvl
   - polars
   - pip
+  - pyarrow
   - pyproj
   - rasterio
   - sh

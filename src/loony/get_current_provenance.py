@@ -1,15 +1,15 @@
 import sh
 import datetime
-import os
 from pathlib import Path
 import json
 import socket
+import getpass
 import fire
 
 def run():
     provenance_info = {
         "date": str(datetime.datetime.now()),
-        "user": os.getlogin(),
+        "user": getpass.getuser(),
         "hostname": socket.gethostname(),
         "md5sum": sh.md5sum(Path('~/CUMINDEX.TAB').expanduser()).split(' ')[0]
     }

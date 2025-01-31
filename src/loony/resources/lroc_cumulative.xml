@@ -1,4 +1,0 @@
-<OGRVRTLayer name="lroc_cumulative">
-    <SrcDataSource>/tmp/lroc_cumulative_index_all.fgb</SrcDataSource>
-    <SrcLayer>lroc_cumulative_index_all</SrcLayer>
-</OGRVRTLayer>

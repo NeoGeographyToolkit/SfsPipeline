@@ -30,20 +30,24 @@ dependencies = [
     "polars",
     "fire",
     "shapely",
-    "numpy"
+    "numpy",
+    "pyarrow"
 ]
 
 [project.urls]
 Repository = "https://github.com/NeoGeographyToolkit/sfstools.git"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
 [tool.setuptools.dynamic]
 version = {attr = "loony.__version__"}
 readme = {file = "README.md"}
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["resources/"]
-namespaces = false
+[tool.setuptools.package-data]
+"*" = ["*.xml"]
+
 
 [project.scripts]
 get-current-provenance = "loony.get_current_provenance:main"
