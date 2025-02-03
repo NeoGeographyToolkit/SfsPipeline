@@ -439,6 +439,8 @@ def main():
         HEIGHT / WIDTH <= 5
     AND
         ST_NumPoints(roi_overlap_geom) > 3
+    AND
+        SOLAR_AZ_ACOS_DIFF < 30.0
     ORDER BY
         ROI_OVERLAP_PERCENTAGE desc,
         OVERLAP_PERCENTAGE desc;
