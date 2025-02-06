@@ -308,6 +308,21 @@ def arg_parser():
         help="If given, signifies that a GeoPackage file with the images "
              "that cross the ROI should also be written out."
     )
+    parser.add_argument(
+        "--min_diff_emi",
+        type=float, default=6.0,
+        help="minimum (inclusive) acceptable difference in emission angle for a stereo pair"
+    )
+    parser.add_argument(
+        "--max_diff_emi",
+        type=float, default=30.0,
+        help="maximum (inclusive) acceptable difference in emission angle for a stereo pair"
+    )
+    parser.add_argument(
+        "--max_diff_slrgaz",
+        type=float, default=30.0,
+        help="maximum (inclusive) difference is solar ground azimuth for a stereo pair"
+    )
     return parser
 
 
@@ -344,7 +359,7 @@ def main():
     con.sql(f"CREATE TEMP TABLE roi AS SELECT ST_MakeValid(ST_GeomFromText('{args.polygon}')) as geom;")
     # compute all the pair-wise intersections for analysis
     print("Performing spatial join (this will be slow for large source databases...)")
-    con.sql("""
+    con.sql(f"""
     CREATE TEMP TABLE 
             pairs_raw
     AS SELECT
@@ -381,9 +396,9 @@ def main():
     AND
         L_EMISSION_ANGLE < R_EMISSION_ANGLE -- Ensures left is more NADIR than right
     AND 
-        EMISSION_DIFF >= 6.0
+        EMISSION_DIFF >= {args.min_diff_emi}
     AND
-        EMISSION_DIFF <= 30.0;
+        EMISSION_DIFF <= {args.max_diff_emi};
     """)
     count = con.sql("SELECT COUNT(*) from pairs_raw;").fetchall()
     print(f"Started off with {count[0][0]} pairs before filtering...")
@@ -426,7 +441,7 @@ def main():
         ROI_OVERLAP_PERCENTAGE desc,
         OVERLAP_PERCENTAGE desc;        
     """)
-    con.sql("""
+    con.sql(f"""
     CREATE TEMP TABLE
         stereo_pairs_filtered
     AS SELECT
@@ -440,7 +455,7 @@ def main():
     AND
         ST_NumPoints(roi_overlap_geom) > 3
     AND
-        SOLAR_AZ_ACOS_DIFF < 30.0
+        SOLAR_AZ_ACOS_DIFF < {args.max_diff_slrgaz}
     ORDER BY
         ROI_OVERLAP_PERCENTAGE desc,
         OVERLAP_PERCENTAGE desc;
