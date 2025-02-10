@@ -2,6 +2,7 @@
 
 
 # https://duckdb.org/docs/api/python/function
+import abc
 import argparse
 import numpy as np
 import numpy.core.multiarray
@@ -16,57 +17,55 @@ import fiona
 from .utils import get_embedded_provenance
 
 
-def quality(value: float, ideal, low: float, high: float) -> float:
-    """Return a quality value based on *value*.
-
+def quality_ideal(value: float, ideal: float, low: float, high: float) -> float:
+    """
     The value of *ideal* would be a perfect value of *value*, but
     if *value* is between *low* and *high* it is acceptable.  *ideal*
     must be between *low* and *high*, otherwise a ValueError is raised.
-
+    
     A quality value of one indicates that *value* is *ideal*.
     Quality values between zero and one indicate that *value*
     is between *low* and *high* (the closer to *ideal*, the higher
     the quality score).  Values less than zero are beyond the
     acceptable range of *low* and *high*.
-
-    If *ideal* is a two-tuple, then this indicates that all values
-    between and including those values are "ideal" values.  Again,
-    these two values must be between *low* and *high*
     """
-
-    if isinstance(ideal, abc.Sequence):
-        if len(ideal) == 2:
-            if not (low <= ideal[0] <= ideal[1] <= high):
-                raise ValueError(
-                    f"The ideal values ({ideal}) is are not between low "
-                    f"({low}) and high ({high})."
-                )
-            if ideal[0] <= value <= ideal[1]:
-                return 1
-
-            if value < ideal[0]:
-                return (value - low) / (ideal[0] - low)
-            else:
-                return (value - high) / (ideal[1] - high)
-        else:
-            raise ValueError(
-                f"The provided ideal value must be either a single value or a"
-                f"two-tuple.  It was neither: {ideal}"
-            )
-    else:
-        if not (low <= ideal <= high):
+    if not (low <= ideal <= high):
             raise ValueError(
                 f"The ideal value ({ideal}) is not between low ({low}) and "
                 f"high ({high})."
             )
+    if value == ideal:
+        return 1.0
+    if value < ideal:
+        return (value - low) / (ideal - low)
+    else:
+        return (value - high) / (ideal - high)
 
-        if value == ideal:
-            return 1
 
-        if value < ideal:
-            return (value - low) / (ideal - low)
-        else:
-            return (value - high) / (ideal - high)
+def quality_bounded(value: float, ideal_low, ideal_high, low: float, high: float) -> float:
+    """
+    If *ideal* is a two-tuple, then this indicates that all values
+    between and including those values are "ideal" values.  Again,
+    these two values must be between *low* and *high*
+
+    Return a quality value based on *value*.
+    A quality value of one indicates that *value* is *ideal*.
+    Quality values between zero and one indicate that *value*
+    is between *low* and *high* (the closer to *ideal*, the higher
+    the quality score).  Values less than zero are beyond the
+    acceptable range of *low* and *high*.
+    """
+    if not (low <= ideal_low <= ideal_high <= high):
+        raise ValueError(
+            f"The ideal values ({ideal_low}, {ideal_high}) is are not between low "
+            f"({low}) and high ({high})."
+        )
+    if ideal_low <= value <= ideal_high:
+        return 1
+    if value < ideal_low:
+        return (value - low) / (ideal_low - low)
+    else:
+        return (value - high) / (ideal_high - high)
 
 
 def incidence_quality(incidence_angle: float) -> float:
@@ -79,7 +78,7 @@ def incidence_quality(incidence_angle: float) -> float:
         (shadows to be avoided).
     - Recommended: Nominally 50°
     """
-    return quality(incidence_angle, 50, 40, 65)
+    return quality_ideal(incidence_angle, 50, 40, 65)
 
 
 def emission_quality(emission_angle: float) -> float:
@@ -93,7 +92,7 @@ def emission_quality(emission_angle: float) -> float:
       Greater than the slope (≥15° even for smooth surfaces) for radar.
     - Recommended: No recommendation
     """
-    return quality(emission_angle, 22.5, 0, 45)
+    return quality_ideal(emission_angle, 22.5, 0, 45)
 
 
 def phase_quality(phase_angle: float) -> float:
@@ -105,7 +104,7 @@ def phase_quality(phase_angle: float) -> float:
     - Limits: Between 5° and 120°.
     - Recommended: ≥ 30°
     """
-    return quality(phase_angle, 60, 5, 120)
+    return quality_ideal(phase_angle, 60, 5, 120)
 
 
 def gsd_quality(gsd1: float, gsd2: float) -> float:
@@ -119,7 +118,7 @@ def gsd_quality(gsd1: float, gsd2: float) -> float:
     (Becker at al., 2015).
     """
     ratio = max(gsd1, gsd2) / min(gsd1, gsd2)
-    return quality(ratio, 1, 1, 2.5)
+    return quality_ideal(ratio, 1, 1, 2.5)
 
 
 def stereo_strength_quality(parallax_height_ratio: float) -> float:
@@ -129,7 +128,7 @@ def stereo_strength_quality(parallax_height_ratio: float) -> float:
     - Limits: Between 0.1 (5°) and 1 (~45°).
     - Recommended: 0.4 (20°) to 0.6 (30°).
     """
-    return quality(parallax_height_ratio, (0.4, 0.6), 0.1, 1)
+    return quality_bounded(parallax_height_ratio, 0.4, 0.6, 0.1, 1)
 
 
 def illumination_quality(shadow_tip_distance: float) -> float:
@@ -139,7 +138,7 @@ def illumination_quality(shadow_tip_distance: float) -> float:
     - Limits: 0 to 2.58.
     - Recommended: 0
     """
-    return quality(shadow_tip_distance, 0, 0, 2.58)
+    return quality_ideal(shadow_tip_distance, 0, 0, 2.58)
 
 
 def delta_solar_az_quality(az1: float, az2: float) -> float:
@@ -155,7 +154,7 @@ def delta_solar_az_quality(az1: float, az2: float) -> float:
     - Recommended: ≤ 20°
     """
     az_diff = abs(az1 - az2)
-    return quality(az_diff, (0, 20), 0, 100)
+    return quality_bounded(az_diff, 0, 20, 0, 100)
 
 
 def stereo_overlap_quality(area_fraction: float) -> float:
@@ -165,7 +164,7 @@ def stereo_overlap_quality(area_fraction: float) -> float:
     - Limits: Between 30% and 100%.
     - Recommended: 50% to 100%.
     """
-    return quality(area_fraction, (0.5, 1.0), 0.3, 1)
+    return quality_bounded(area_fraction, 0.5, 1.0, 0.3, 1)
 
 
 def parallax(
@@ -184,7 +183,6 @@ def parallax(
         (math.cos(emission1) * math.cos(emission2))
     )
     return math.acos(one_dot_two)
-
 
 
 def dp(
@@ -235,6 +233,7 @@ def dsh(
     shy2 = math.tan(incidence2) * math.sin(solar_az2)
     return math.sqrt((shx1 - shx2) ** 2 + (shy1 - shy2) ** 2)
 
+
 def gsd_ratio(
     resolution1: float, 
     resolution2: float
@@ -242,6 +241,7 @@ def gsd_ratio(
     _max = max(resolution1, resolution2)
     _min = min(resolution1, resolution2)
     return _max/_min
+
 
 def angular_separation_acos(deg1: float, deg2: float)-> float:
     # Convert degrees to radians
@@ -269,6 +269,7 @@ def get_height_width(wkt_geometry: str)-> tuple[float, float]:
     width = min(d1,d2)
     return height, width 
 
+
 def get_height(wkt_geometry: str)-> float:
     geom = wkt.loads(wkt_geometry)
     box = geom.minimum_rotated_rectangle
@@ -277,6 +278,7 @@ def get_height(wkt_geometry: str)-> float:
     d2 = np.sqrt((x[2] - x[1])**2 + (y[2] - y[1])**2)
     height = max(d1, d2)
     return height
+
 
 def get_width(wkt_geometry: str)-> float:
     geom = wkt.loads(wkt_geometry)
@@ -336,6 +338,15 @@ def main():
     con.install_extension("spatial")
     con.load_extension("spatial")
     # register functions
+    con.create_function("incidence_quality", incidence_quality)
+    con.create_function("emission_quality", emission_quality)
+    con.create_function("phase_quality", phase_quality)
+    con.create_function("gsd_quality", gsd_quality)
+    con.create_function("stereo_strength_quality", stereo_strength_quality)
+    con.create_function("illumination_quality", illumination_quality)
+    con.create_function("delta_solar_az_quality", delta_solar_az_quality)
+    con.create_function("stereo_overlap_quality", stereo_overlap_quality)
+    #
     con.create_function("parallax", parallax)
     con.create_function("parallax_height_ratio", dp)
     con.create_function("shadow_tip_distance", dsh)
@@ -412,6 +423,9 @@ def main():
         stereo_pairs
     AS SELECT
         p.*,
+        -- add wms urls for quick viewing
+        CONCAT('https://wms.lroc.asu.edu/lroc/view_lroc/LRO-L-LROC-2-EDR-V1.0/',p.L_PRODUCT_ID) as L_VIEW,
+        CONCAT('https://wms.lroc.asu.edu/lroc/view_lroc/LRO-L-LROC-2-EDR-V1.0/',p.R_PRODUCT_ID) as R_VIEW,
         ST_INTERSECTION(p.geom, roi.geom) as roi_overlap_geom,
         ABS(p.L_SUB_SOLAR_GROUND_AZIMUTH - p.R_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_DIFF,
         angular_separation_acos(p.L_SUB_SOLAR_GROUND_AZIMUTH, p.R_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_ACOS_DIFF,
@@ -421,6 +435,15 @@ def main():
         parallax_height_ratio(radians(p.L_EMISSION_ANGLE), radians(p.L_SUB_SPACECRAFT_GROUND_AZIMUTH), radians(p.R_EMISSION_ANGLE), radians(p.R_SUB_SPACECRAFT_GROUND_AZIMUTH)) as PARALLAX_HEIGHT_RATIO,
         shadow_tip_distance(radians(p.L_INCIDENCE_ANGLE), radians(p.L_SUB_SOLAR_GROUND_AZIMUTH), radians(p.R_INCIDENCE_ANGLE), radians(p.R_SUB_SOLAR_GROUND_AZIMUTH)) as SHADOW_TIP_DISTANCE,
         gsd_ratio(p.L_RESOLUTION::DOUBLE, p.R_RESOLUTION::DOUBLE) as GSD_RATIO,
+        -- other pair dependent quality metrics here
+        incidence_quality(p.L_INCIDENCE_ANGLE::FLOAT) as L_INCIDENCE_QUALITY,
+        incidence_quality(p.R_INCIDENCE_ANGLE::FLOAT) as R_INCIDENCE_QUALITY,
+        phase_quality(p.L_PHASE_ANGLE::FLOAT) as L_PHASE_QUALITY,
+        phase_quality(p.R_PHASE_ANGLE::FLOAT) as R_PHASE_QUALITY,
+        emission_quality(p.L_EMISSION_ANGLE::FLOAT) as L_EMISSION_QUALITY,
+        emission_quality(p.R_EMISSION_ANGLE::FLOAT) as R_EMISSION_QUALITY,                      
+        gsd_quality(p.L_RESOLUTION::FLOAT, p.R_RESOLUTION::FLOAT) as GSD_QUALITY,
+        delta_solar_az_quality(p.L_SUB_SOLAR_GROUND_AZIMUTH::FLOAT, p.R_SUB_SOLAR_GROUND_AZIMUTH::FLOAT) as DELTA_SOLAR_AZ_QUALITY,
     FROM 
         pairs_raw as p
     JOIN
@@ -447,7 +470,14 @@ def main():
     AS SELECT
         *,
         rect_height(ST_AsText(roi_overlap_geom)) as HEIGHT,
-        rect_width(ST_AsText(roi_overlap_geom)) as WIDTH
+        rect_width(ST_AsText(roi_overlap_geom)) as WIDTH,
+        -- quality checks
+        illumination_quality(SHADOW_TIP_DISTANCE::FLOAT) as ILLUMINATION_QUALITY,
+        stereo_strength_quality(PARALLAX_HEIGHT_RATIO::FLOAT) as STEREO_STRENGTH_QUALITY,
+        -- make a drake like quality check to quickly determine if any are negative
+        CASE
+            WHEN LEAST(L_INCIDENCE_QUALITY, L_PHASE_QUALITY, L_EMISSION_QUALITY, R_INCIDENCE_QUALITY, R_PHASE_QUALITY, R_EMISSION_QUALITY, GSD_QUALITY, DELTA_SOLAR_AZ_QUALITY, ILLUMINATION_QUALITY, STEREO_STRENGTH_QUALITY) < 0 THEN 0 ELSE 1
+        END AS QUALITY
     FROM
         stereo_pairs
     WHERE

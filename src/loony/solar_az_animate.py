@@ -122,17 +122,6 @@ def run(db_path, wkt_roi, az_step_size: float = 10.0):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 def main():
     fire.Fire(run)
 
