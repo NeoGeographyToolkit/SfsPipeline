@@ -48,7 +48,11 @@ cd $PBS_O_WORKDIR
 echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
 # get the number of unique nodes 
-NUM_NODES=$(sort -u $PBS_NODEFILE | wc -l)
+if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
+    NUM_NODES=1
+else
+    NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+fi
 echo "running on $NUM_NODES nodes"
 echo
 ##############################################
@@ -69,9 +73,16 @@ TMPFILE=$(mktemp /nobackup/aannex/mapproj_ba_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
-find $INPUT_DIR -type f -name '*.ech.cub' | while read -r file; do
-    echo "$MAPPROJ $DEM {} {.}.json --tr 1 --bundle-adjust-prefix $BA_PREFIX--t_projwin $PROJWIN_EXTENT" >> "$TMPFILE"
-done
+{
+    trap '' DEBUG
+    for file in "$INPUT_DIR"/*.ech.cub; do
+        echo "$MAPPROJ $DEM $file ${file%%.cub}.json --tr 1 --bundle-adjust-prefix $BA_PREFIX --t_projwin $PROJWIN_EXTENT" >> "$TMPFILE";
+    done;
+    if [[ "$DEBUG" == "true" ]]; then
+        trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
+    fi
+}
+
 # log we are about to start (TODO move below to new script)
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 

@@ -30,7 +30,11 @@ cd $PBS_O_WORKDIR
 echo machine is $(uname -a)
 echo machine file is $PBS_NODEFILE
 # get the number of unique nodes 
-NUM_NODES=$(sort -u $PBS_NODEFILE | wc -l)
+if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
+    NUM_NODES=1
+else
+    NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+fi
 echo "running on $NUM_NODES nodes"
 echo
 ##############################################
@@ -39,10 +43,8 @@ echo
 TMPFILE=$(mktemp /nobackup/aannex/calibrate_edr_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
-# Generate commands dynamically and store in temp file
-find $INPUT_DIR -type f -name '*.IMG' | while read -r file; do
-    echo "/home7/aannex/bin/calibrate_edr.sh {} " >> "$TMPFILE"
-done
+# Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
+find "$INPUT_DIR" -type f -name '*.IMG' -exec echo "/home7/aannex/bin/calibrate_edr.sh {}" \; >> "$TMPFILE"
 # log we are about to start 
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
