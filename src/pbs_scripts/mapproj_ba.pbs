@@ -1,12 +1,12 @@
 #!/bin/bash
-#PBS -N pbs_calibrate_edr       
+#PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
 #PBS -l select=10:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
-#PBS -o pbs_calibrate_edr.log   
+#PBS -o pbs_mapproj_ba.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
@@ -19,22 +19,28 @@ if [[ "$DEBUG" == "true" ]]; then
 fi
 # Ensure a DEM was provided
 if [ -z "$DEM" ]; then
-    echo "Error: DEM is not set. Use qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files,PROJWIN_EXTENT= mapproj_basic.pbs"
+    echo "Error: DEM is not set. Use qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files,PROJWIN_EXTENT= mapproj_ba.pbs"
     exit 1
 fi
 echo "DEM file: $DEM"
 # Ensure an input directory is provided
 if [ -z "$INPUT_DIR" ]; then
-    echo "Error: INPUT_DIR is not set. Use qsub -v INPUT_DIR=/path/to/CUB/files,PROJWIN_EXTENT= mapproj_basic.pbs"
+    echo "Error: INPUT_DIR is not set. Use qsub -v INPUT_DIR=/path/to/CUB/files,PROJWIN_EXTENT= mapproj_ba.pbs"
     exit 1
 fi
 echo "Path to CUBs: $INPUT_DIR"
 # Ensure a projwin extent was provided
 if [ -z "$PROJWIN_EXTENT" ]; then
-    echo "Error: PROJWIN_EXTENT is not set. Use qsub -v INPUT_DIR=/path/to/CUB/files,PROJWIN_EXTENT= mapproj_basic.pbs"
+    echo "Error: PROJWIN_EXTENT is not set. Use qsub -v INPUT_DIR=/path/to/CUB/files,PROJWIN_EXTENT= mapproj_ba.pbs"
     exit 1
 fi
 echo "Projection extent: $PROJWIN_EXTENT"
+# Ensure bundle adjust prefix was provided
+if [ -z "$BA_PREFIX" ]; then
+    echo "Error: BA_PREFIX is not set. Use qsub -v INPUT_DIR=/path/to/CUB/files,BA_PREFIX= ,PROJWIN_EXTENT= mapproj_ba.pbs"
+    exit 1
+fi
+echo "Projection extent: $BA_PREFIX"
 ##############################################
 # Change to the working directory
 echo Working directory is $PBS_O_WORKDIR
@@ -59,21 +65,21 @@ MAPPROJ=`which mapproject`
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp /nobackup/aannex/mapproj_basic_cmds.XXXXXX)
+TMPFILE=$(mktemp /nobackup/aannex/mapproj_ba_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 find $INPUT_DIR -type f -name '*.ech.cub' | while read -r file; do
-    echo "$MAPPROJ $DEM {} {.}.json --tr 1 --t_projwin $PROJWIN_EXTENT" >> "$TMPFILE"
+    echo "$MAPPROJ $DEM {} {.}.json --tr 1 --bundle-adjust-prefix $BA_PREFIX--t_projwin $PROJWIN_EXTENT" >> "$TMPFILE"
 done
 # log we are about to start (TODO move below to new script)
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        parallel --joblog pbs_mapproj_basic_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        parallel --joblog pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
     else
-        parallel --joblog pbs_mapproj_basic_job.log  < "$TMPFILE"
+        parallel --joblog pbs_mapproj_ba_job.log  < "$TMPFILE"
     fi
 else
     # we are in debug mode so just log out the commands that would
