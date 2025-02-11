@@ -96,3 +96,15 @@ Feature Count: 273
 Extent: (37521.275857, 67456.116796) - (153931.222797, 187826.424185)
 Layer SRS WKT:
 ```
+
+## Downloading EDRs fast
+
+```bash
+db_to_urls.sh lrocedrlist.gpkg | xargs -n 1 -P 8  -I {} wget {} -P ~/nobackup/LROCNACEDR/
+```
+
+db_to_urls.sh (in base scripts) outputs a list of formatted URLs from a GeoPackage/other spatial format (for now just output from sfs-cover)
+into URLs that by default use the USGS AWS mirror of LROC NAC PDS data, which has much more bandwidth than the ASU servers.
+
+You can pass those to xargs and wget them in parallel, an example that downloaded almost 600 Gb only took a few minutes (maybe 10-15)
+
