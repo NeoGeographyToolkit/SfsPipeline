@@ -77,7 +77,7 @@ trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG
-    for file in "$INPUT_DIR"/*.ech.cub; do
+    for file in "$INPUT_DIR"*.ech.cub; do
         echo "$MAPPROJ $DEM $file ${file%%.cub}.json --tr 1 --bundle-adjust-prefix $BA_PREFIX --t_projwin $PROJWIN_EXTENT" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
