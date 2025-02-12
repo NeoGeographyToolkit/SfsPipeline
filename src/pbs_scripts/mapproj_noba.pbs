@@ -78,7 +78,6 @@ trap 'rm -f "$TMPFILE"' EXIT
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
 }
-
 # log we are about to start (TODO move below to new script)
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 

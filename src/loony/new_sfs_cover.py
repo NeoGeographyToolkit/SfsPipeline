@@ -20,6 +20,7 @@ import argparse
 import textwrap as tw
 
 import fiona
+import duckdb
 import geopandas as gp
 import pyproj
 import shapely
@@ -50,7 +51,7 @@ def make_stereographic_moon_projection(lon, lat):
     proj_crs = ProjectedCRS(conversion, geodetic_crs=moon_crs_ge)
     return proj_crs
 
-def calculate_initial_compass_bearing(deg_lon_A, deg_lat_A, deg_lon_B, deg_lat_B):
+def calculate_initial_compass_bearing(deg_lon_A:float, deg_lat_A:float, deg_lon_B:float, deg_lat_B:float)-> float:
     """
     Calculates the bearing between two points.
 
@@ -83,12 +84,12 @@ def calculate_initial_compass_bearing(deg_lon_A, deg_lat_A, deg_lon_B, deg_lat_B
     compass_bearing = (initial_bearing + 360) % 360
     return compass_bearing
 
-def perform_geo_selection(df_all: gp.GeoDataFrame, df_query: gp.GeoDataFrame)-> gp.GeoDataFrame:
+def perform_geo_selection(df_scr: gp.GeoDataFrame, df_query: gp.GeoDataFrame)-> gp.GeoDataFrame:
     # get geometry
     geom = df_query.geometry.iloc[0]
     # TODO ensure the geom and df are in same crs
-    indexes = df_all.sindex.query(geom, predicate='intersects')
-    df_selected = df_all.iloc[indexes]
+    indexes = df_scr.sindex.query(geom, predicate='intersects')
+    df_selected = df_scr.iloc[indexes]
     # filter out high incidence angles
     df_selected = df_selected[df_selected['INCIDENCE_ANGLE'] < 95]
     # update center longitudes to be -180 to 180 by trusting the reprojection of the geometry
@@ -111,6 +112,108 @@ def perform_geo_selection(df_all: gp.GeoDataFrame, df_query: gp.GeoDataFrame)-> 
     # perform a final sort
     df_sorted = df_selected.sort_values(by=["INCIDENCE_ANGLE", "fraction_area"])
     return df_sorted
+
+def _perform_geo_selection_sql(con, wkt_geometry: str):
+    # Step 1: Create a temp table with the query geometry.
+    con.execute(f"""
+    CREATE TEMPORARY TABLE temp_query_geom AS
+    SELECT ST_GeomFromText('{wkt_geometry}') AS geom;
+    """)
+    # Step 2: Create a temp table with rows that intersect the query geometry
+    # SUB_SOLAR_GROUND_AZIMUTH is precomputed solar_bearing
+    con.execute("""
+    CREATE TEMPORARY TABLE temp_intersection AS
+    SELECT 
+        a.*,
+        ST_Area(ST_Intersection(a.geometry, q.geom)) / ST_Area(q.geom) AS fraction_area,
+    FROM 
+        df_src AS a
+    CROSS JOIN 
+        temp_query_geom AS q
+    WHERE 
+        ST_Intersects(a.geometry, q.geom) AND a.INCIDENCE_ANGLE < 95 AND RESOLUTION::float <= 1.75;
+    """)
+    # Final step: Query the final results sorted by SUB_SOLAR_GROUND_AZIMUTH, ST_Hilbert(geometry), INCIDENCE_ANGLE and fraction_area.
+    # TODO this doesn't go quite as far as I'd want to order the results such that more likely than not nearby rows overlap
+    # but it seems to do enough such 
+    con.execute("""
+    CREATE TEMPORARY TABLE numbered_ordered AS 
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY SUB_SOLAR_GROUND_AZIMUTH,INCIDENCE_ANGLE,ST_Hilbert(ST_Centroid(geometry)),fraction_area) AS fid,
+    FROM temp_intersection;
+    CREATE TEMPORARY TABLE temp_final AS 
+    SELECT 
+        * EXCLUDE geometry, 
+        ST_AsText(geometry) as geometry,
+        -- determine if the previous geometry intersects the current row
+        COALESCE(
+            ST_Intersects(geometry, LAG(geometry) OVER (ORDER BY fid)),
+            false
+        ) AS intersects_prior,
+    FROM numbered_ordered
+    ORDER BY fid;
+    """)
+    # get the results df
+    result_df = con.execute("SELECT * from temp_final").df()
+    # return results df
+    return result_df
+
+
+def perform_geo_selection_duckdb(df_src_path: str, df_query: gp.GeoDataFrame)-> gp.GeoDataFrame:
+    # get geometry
+    geom = df_query.geometry.iloc[0]
+    # TODO ensure the geom and df are in same crs
+    # Connect to DuckDB
+    con = duckdb.connect(config = {'threads': 4})
+    con.sql('SET enable_progress_bar = true;')
+    con.sql('SET memory_limit = "4GB";')
+    con.install_extension("spatial")
+    con.load_extension("spatial")
+    # register functions
+    con.create_function('calculate_initial_compass_bearing', calculate_initial_compass_bearing)
+    # load the database into duckdb
+    con.sql(f"CREATE TEMP TABLE df_src AS (SELECT * FROM '{df_src_path}');")
+    print(f'Loaded DB: {df_src_path}')
+    # create a spatial index R-tree
+    con.sql("CREATE INDEX my_idx ON df_src USING RTREE (geometry)")
+    print('Created Spatial Index')
+    # perform the actual work
+    result_df = _perform_geo_selection_sql(con, shapely.to_wkt(geom))
+    # convert back to geodataframe
+    result_df['geometry'] = gp.GeoSeries.from_wkt(result_df['geometry'])
+    result_df = gp.GeoDataFrame(result_df, crs=df_query.crs)
+    # print summary of overlaps
+    # get info about consecutive intersections, TODO not sure how right this is but at first glance seems okay
+    streak_df= con.sql("""
+    WITH numbered AS (
+      SELECT 
+        fid,
+        intersects_prior,
+        row_number() OVER (PARTITION BY intersects_prior ORDER BY fid) AS rn_bool
+      FROM temp_final
+    ),
+    grouped AS (
+      SELECT 
+        intersects_prior,
+        fid - rn_bool AS grp,       -- Constant for each streak.
+        COUNT(*) AS streak_length   -- Length of the streak.
+      FROM numbered
+      GROUP BY intersects_prior, fid - rn_bool
+    )
+    SELECT 
+      intersects_prior,
+      streak_length,
+      COUNT(*) AS streak_count  -- Number of streaks with that length.
+    FROM grouped
+    GROUP BY intersects_prior, streak_length
+    ORDER BY intersects_prior, streak_length;
+    """).df()
+    print('Streaks for true and false to help understand bundle adjust "window" width:')
+    print(streak_df)
+    print(f'Overlap prior: {result_df['intersects_prior'].sum()}, out of {len(result_df)}')
+    return result_df
+
 
 def plot_footprints(df: gp.GeoDataFrame, query: gp.GeoDataFrame, title: str, provenance: str = None, use_stereographic=False):
     if use_stereographic:
@@ -150,7 +253,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         data_indices = bin_indices == i
         # now plot
         stem = ax.stem(
-            np.radians(df_results['solar_bearing'].iloc[data_indices]), 
+            np.radians(df_results['SUB_SOLAR_GROUND_AZIMUTH'].iloc[data_indices]), 
             df_results['fraction_area'].iloc[data_indices],
             markerfmt=" ",
             basefmt=" ",
@@ -161,7 +264,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         legend_labels.append(label)
     # apply colors
     ax.set_theta_zero_location("N")
-    ax.set_rmax(1.0)
+    ax.set_rmax(min(1.0, df_results['fraction_area'].max()))
     ax.set_rlabel_position(180)  # Move radial labels
     # ax.grid(True)
     ax.set_thetagrids(np.arange(0, 360, 45), ['N', '', 'W', '', 'S', '', 'E', ''])
@@ -300,7 +403,9 @@ def main():
     # get embedded provenance info
     embedded_provenance = get_embedded_provenance(args.db_path)
     # perform query for downselection and prepare output geodataframe
-    df_results = perform_geo_selection(df, df_query)
+    # TODO refactor the above to just pass the query wkt directly rather than create a dataframe
+    # TODO refactor below to avoid use of pandas at all, see find_stereo_pairs.py
+    df_results = perform_geo_selection_duckdb(args.db_path, df_query)
     # get provenance for results based on the database used
     provenance = get_provenance(df)
     ## Begin Reports
@@ -311,7 +416,7 @@ def main():
         args.output,
         index=False,
         columns=(
-            "PRODUCT_ID", "INCIDENCE_ANGLE", "fraction_area", "solar_bearing",
+            "PRODUCT_ID", "INCIDENCE_ANGLE", "fraction_area", "SUB_SOLAR_GROUND_AZIMUTH",
             "RESOLUTION"
         )
     )
