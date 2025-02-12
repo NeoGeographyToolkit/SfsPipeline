@@ -44,7 +44,7 @@ TMPFILE=$(mktemp /nobackup/aannex/calibrate_edr_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
-find "$INPUT_DIR" -type f -name '*.IMG' -exec echo "/home7/aannex/bin/calibrate_edr.sh {}" \; >> "$TMPFILE"
+find "$INPUT_DIR" -type f -name '*.IMG' -exec echo "calibrate_edr.sh {}" \; >> "$TMPFILE"
 # log we are about to start 
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
