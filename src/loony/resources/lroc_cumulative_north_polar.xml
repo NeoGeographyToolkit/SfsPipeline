@@ -1,0 +1,11 @@
+<OGRVRTDataSource>
+    <OGRVRTWarpedLayer>
+        <OGRVRTLayer name="LROCNAC_NORTH_POLE">
+            <SrcDataSource>/tmp/lroc_cumulative.parquet</SrcDataSource>
+            <SrcLayer>lroc_cumulative</SrcLayer>
+            <SrcRegion clip="false">POLYGON((-180 80, 180 80, 180 90, -180 90, -180 80))</SrcRegion>
+            <SrcSQL dialect="sqlite">SELECT * FROM lroc_cumulative</SrcSQL>
+        </OGRVRTLayer>
+        <TargetSRS>https://www.opengis.net/def/crs/IAU/2015/30130</TargetSRS>
+    </OGRVRTWarpedLayer>
+</OGRVRTDataSource>

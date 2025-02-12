@@ -1,0 +1,10 @@
+*.aux.xml
+*.parquet
+*.gpkg
+*.png
+*.fgb
+*.DS_STORE
+sfs_cover.csv
+__pycache__/
+*.egg-info/
+dist/

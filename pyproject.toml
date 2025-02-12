@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=62.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loony"
+description = "Ames Stereo Pipeline SfS tools"
+requires-python = ">=3.12"
+dynamic = ["version", "readme"]
+classifiers = [
+    "Private :: Do Not Upload",
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+authors = [
+    {name = "Dr. Andrew Annex", email="andrew.m.annex@nasa.gov"}
+]
+keywords = ["SfS", "Tools"]
+dependencies = [
+    "sh",
+    "rasterio",
+    "duckdb",
+    "fiona",
+    "pyproj",
+    "geopandas",
+    "polars",
+    "fire",
+    "shapely",
+    "numpy",
+    "pyarrow"
+]
+
+[project.urls]
+Repository = "https://github.com/NeoGeographyToolkit/sfstools.git"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+[tool.setuptools.dynamic]
+version = {attr = "loony.__version__"}
+readme = {file = "README.md"}
+
+[tool.setuptools.package-data]
+"*" = ["*.xml"]
+
+
+[project.scripts]
+get-current-provenance = "loony.get_current_provenance:main"
+sfs-cover = "loony.new_sfs_cover:main"
+preprocess-cumulative-index = "loony.process_lroc_cumulative_index:main"
+process-cumulative-index = "loony.resources.process:main"
+find-stereo-pairs = "loony.find_stereo_pairs:main"
+animate-solar-az = "loony.solar_az_animate:main"
+wkt-to-ullr      = "loony.wkt_to_ullr:main"
+wkt-to-projwin   = "loony.wkt_to_projwin:main"
+wkt-round-out    = "loony.wkt_round_out:main"
