@@ -108,3 +108,29 @@ into URLs that by default use the USGS AWS mirror of LROC NAC PDS data, which ha
 
 You can pass those to xargs and wget them in parallel, an example that downloaded almost 600 Gb only took a few minutes (maybe 10-15)
 
+## Get the list of Product Id's and their sub solar ground azimuths as a list
+
+This will just output two columns with no header due to the sed call
+```bash
+gr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional' | sed '1d'
+```
+
+
+## Get the projected extent of a raster (eg the DEM) 
+
+```bash
+rio bounds M2M_mons_mouton_lola_5mpp_erode_blend.tif --projected | jq -c '.bbox'
+```
+
+## Convert a bounds to a WKT polygon
+```bash
+python -m fire shapely box 72470.0 119030.0 128310.0 158820.0
+
+POLYGON ((128310 119030, 128310 158820, 72470 158820, 72470 119030, 128310 119030))
+```
+
+## Expand projwin by half a meter
+```bash
+wkt-round-out 'POLYGON ((128310 119030, 128310 158820, 72470 158820, 72470 119030, 128310 119030))'
+72469.5 119029.5 128310.5 158820.5
+```

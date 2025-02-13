@@ -37,6 +37,12 @@ if [ -z "$CAMERAS" ]; then
     exit 1
 fi
 echo "Path to cameras list: $CAMERAS"
+# Ensure the map projected images + the DEM as the last file are included as a list
+if [ -z "$MAPPROJ_DATA" ]; then
+    echo "Error: IMAGES is not set. Use $USAGE"
+    exit 1
+fi
+echo "Path to mapprojected data list: $MAPPROJ_DATA"
 # Ensure a output prefix is provided
 if [ -z "$OUT" ]; then
     echo "Error: OUT is not set. Use $USAGE"
@@ -75,6 +81,7 @@ parallel_bundle_adjust      \
   --image-list ${IMAGES}    \
   --camera-list ${CAMERAS}  \
   --mapproj-dem ${DEM}      \
+  --mapprojected-data ${MAPPROJ_DATA} \
   --nodata-value 0.001      \
   --ip-per-tile  400        \
   --ip-per-image 20000      \

@@ -18,7 +18,7 @@ if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
 # define usage once
-USAGE="qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files/,BA_PREFIX=ba/run0,PROJWIN_EXTENT='0 0 100 100' $0"
+USAGE="qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files/,BA_PREFIX=ba0/ba0 $0"
 # Ensure a DEM was provided
 if [ -z "$DEM" ]; then
     echo "Error: DEM is not set. Use $USAGE"
@@ -31,22 +31,18 @@ if [ -z "$INPUT_DIR" ]; then
     exit 1
 fi
 echo "Path to CUBs: $INPUT_DIR"
-# Ensure a projwin extent was provided
-if [ -z "$PROJWIN_EXTENT" ]; then 
-    echo "Error: PROJWIN_EXTENT is not set. Use $USAGE"
-    exit 1
-fi
-echo "Projection extent: $PROJWIN_EXTENT"
 # Ensure bundle adjust prefix was provided
 if [ -z "$BA_PREFIX" ]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
     exit 1
 fi
-echo "Projection extent: $BA_PREFIX"
+echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX:0:3}.tif"
 ##############################################
 # Change to the working directory
 echo Working directory is $PBS_O_WORKDIR
-cd $PBS_O_WORKDIR
+if [[ -n $PBS_O_WORKDIR ]]; then
+    cd $PBS_O_WORKDIR
+fi
 echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
 # get the number of unique nodes 
@@ -78,7 +74,8 @@ trap 'rm -f "$TMPFILE"' EXIT
 {
     trap '' DEBUG
     for file in "$INPUT_DIR"*.ech.cub; do
-        echo "$MAPPROJ $DEM $file ${file%%.cub}.json --tr 1 --bundle-adjust-prefix $BA_PREFIX --t_projwin $PROJWIN_EXTENT" >> "$TMPFILE";
+        # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
+        echo "$MAPPROJ $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -90,9 +87,9 @@ echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        parallel --joblog pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
     else
-        parallel --joblog pbs_mapproj_ba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log  < "$TMPFILE"
     fi
 else
     # we are in debug mode so just log out the commands that would
