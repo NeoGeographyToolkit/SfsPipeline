@@ -75,7 +75,7 @@ trap 'rm -f "$TMPFILE"' EXIT
     trap '' DEBUG
     for file in "$INPUT_DIR"*.ech.cub; do
         # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
-        echo "$MAPPROJ $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
+        echo "$MAPPROJ --parallel-options \"--sshdely 2.0\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -87,9 +87,9 @@ echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --sshdelay 0.2 --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --sshdelay 2.0 --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --sshdelay 0.2 --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log  < "$TMPFILE"
     fi
 else
     # we are in debug mode so just log out the commands that would
