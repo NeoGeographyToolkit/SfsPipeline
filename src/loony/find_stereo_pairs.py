@@ -503,6 +503,7 @@ def main():
         dst.update_tag_item('PROVENANCE', embedded_provenance or "None")
     print(f"Wrote {args.gpkg}\n Done!")
     # Filter out skinny slivers
+    con.close()
 
 
 if __name__ == '__main__':
