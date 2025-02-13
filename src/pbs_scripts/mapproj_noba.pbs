@@ -11,7 +11,6 @@
 #PBS -S /bin/bash               
 #PBS -V                         
 #PBS -W group_list=e2305        
-# group list for job
 
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
