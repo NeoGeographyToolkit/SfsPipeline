@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=10:ncpus=20:model=ivy,walltime=50:00:00        
-#PBS -q normal                  
+#PBS -l select=2:ncpus=20:model=ivy,walltime=00:30:00        
+#PBS -q debug                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1.log   
@@ -70,7 +70,7 @@ fi
 ##############################################
 # IF we are actually on PBS do another unset on DEBUG 
 # just in case to avoid long waits for quick exits
-if [[ -n $PBS_O_WORKDIR ]]; then
+if [[ -n $PBS_JOBID ]]; then
     # log
     echo "Checking current DEBUG variable value: $DEBUG"
     # unset it
@@ -87,6 +87,7 @@ echo "machine file is $PBS_NODEFILE"
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
     NUM_NODES=1
 else
+    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
 fi
 echo "running on $NUM_NODES nodes"
@@ -102,47 +103,41 @@ echo PATH is $PATH
 
 # https://stereopipeline.readthedocs.io/en/latest/tools/parallel_bundle_adjust.html
 # --stop-point 2 should stop before optimization which only works on 1 node
-
-parallel_bundle_adjust       \
-  --stop-point 2             \
-  --nodes-list ${PBS_NODEFILE} \
-  --image-list ${IMAGES}    \
-  --camera-list ${CAMERAS}  \
-  --mapproj-dem ${DEM}      \
-  --mapprojected-data ${MAPPROJ_DATA} \
-  --processes 20            \
-  --threads 20              \
-  --nodata-value 0.001      \
-  --ip-detect-method 1      \
-  --ip-per-tile  400        \
-  --ip-per-image 20000      \
-  --overlap-limit 50        \
-  --match-first-to-last     \
-  --num-iterations 50       \
-  --matches-per-tile 100    \
-  --num-passes 2            \
-  --min-matches 10          \
-  --max-pairwise-matches 2000 \
-  --camera-weight 0           \
-  --save-intermediate-cameras \
-  --robust-threshold 2.0      \
-  --tri-weight 0.1            \
-  --tri-robust-threshold 0.25 \
-  --min-triangulation-angle 0.1 \
-  --remove-outliers-params "75.0 3.0 100 100" \
-  --parallel-options "--sshdelay 0.5 --resume-failed --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" \
-  -o ${BA_PREFIX} 
-
-# The jobs have actually completed 
-echo "Parallel has finished with all jobs at $(date)"
-# move the joblog file to preserve its state and to avoid re-running it
-mv "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
-
-if [[ -z "$DEBUG" ]]; then 
-  # now start part 2, using same input parameters as part 1
-  qsub -W depend=afterok:${PBS_JOBID} -v DEM="$DEM",IMAGES="$IMAGES",CAMERAS="$CAMERAS",BA_PREFIX="$BA_PREFIX" bundle_adjust_pt2.pbs
-  # we are now done!
-  echo "Part 2 job submitted at $(date)"
+if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
+    parallel_bundle_adjust       \
+      --entry-point 0            \
+      --stop-point 3             \
+      --nodes-list ${PBS_NODEFILE} \
+      --image-list ${IMAGES}    \
+      --camera-list ${CAMERAS}  \
+      --mapproj-dem ${DEM}      \
+      --mapprojected-data-list ${MAPPROJ_DATA} \
+      --processes 20            \
+      --threads 20              \
+      --nodata-value 0.001      \
+      --ip-detect-method 1      \
+      --ip-per-tile  400        \
+      --ip-per-image 20000      \
+      --overlap-limit 50        \
+      --match-first-to-last     \
+      --num-iterations 50       \
+      --matches-per-tile 100    \
+      --num-passes 2            \
+      --min-matches 10          \
+      --max-pairwise-matches 2000 \
+      --camera-weight 0           \
+      --save-intermediate-cameras \
+      --robust-threshold 2.0      \
+      --tri-weight 0.1            \
+      --tri-robust-threshold 0.25 \
+      --min-triangulation-angle 0.1 \
+      --remove-outliers-params "75.0 3.0 100 100" \
+      --parallel-options "--sshdelay 0.5 --resume-failed --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" \
+      -o ${BA_PREFIX} 
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
 fi
 # we are now done!
 echo "Job finished at $(date)"

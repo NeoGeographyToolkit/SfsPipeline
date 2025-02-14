@@ -134,3 +134,15 @@ POLYGON ((128310 119030, 128310 158820, 72470 158820, 72470 119030, 128310 11903
 wkt-round-out 'POLYGON ((128310 119030, 128310 158820, 72470 158820, 72470 119030, 128310 119030))'
 72469.5 119029.5 128310.5 158820.5
 ```
+
+
+## First round ba0 bundle adjust make lists of good images/cameras/mapprojected images
+
+```bash
+cd folder/with/cubsandtifsandjsons
+# images.txt is the sub solar ground azimuth ordered list of product ids
+cat ../images.txt | prepare_ba0_lists.sh 
+# IMAGES.txt, CAMERAS.txt, MAPPROJ_DATA.txt will be made
+# append the dem
+echo "path/to/dem.tif" >> MAPPROJ_DATA.txt
+```
