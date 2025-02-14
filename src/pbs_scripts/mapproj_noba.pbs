@@ -2,8 +2,8 @@
 #PBS -N pbs_mapproj_noba
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=12:ncpus=20:model=ivy,walltime=06:00:00        
-#PBS -q normal              
+#PBS -l select=16:ncpus=10:model=ivy,walltime=06:00:00        
+#PBS -q normal             
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_mapproj_noba.log   
@@ -42,6 +42,8 @@ echo "machine file is $PBS_NODEFILE"
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
     NUM_NODES=1
 else
+    echo "Node file contents: "
+    cat $PBS_NODEFILE
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
 fi
 echo "running on $NUM_NODES nodes"
@@ -60,7 +62,7 @@ MAPPROJ=`which mapproject`
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp /nobackup/aannex/mapproj_noba_cmds.XXXXXX)
+TMPFILE=$(mktemp ~/mapproj_noba_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
@@ -73,20 +75,20 @@ trap 'rm -f "$TMPFILE"' EXIT
     for file in "$INPUT_DIR"*.ech.cub; do
         # --t_projwin $PROJWIN_EXTENT remove 
         # TODO: Change the output dtype to be UInt16 to save IO
-        echo "$MAPPROJ --processes 20 --parallel-options \"--sshdely 2.0\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.noba.tif --tr 1" >> "$TMPFILE";
+        echo "$MAPPROJ --processes 10 --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.noba.tif --tr 1" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
 }
 # log we are about to start (TODO move below to new script)
-echo "launching jobs"
+echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --controlmaster --sshdelay 2.0 --sshloginfile $PBS_NODEFILE --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_noba_job.log   < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_noba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
     fi
 else
     # we are in debug mode so just log out the commands that would

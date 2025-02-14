@@ -2,8 +2,8 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=10:ncpus=20:model=ivy,walltime=08:00:00        
-#PBS -q normal                  
+#PBS -l select=2:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -q debug                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_mapproj_ba.log   
@@ -49,6 +49,7 @@ echo "machine file is $PBS_NODEFILE"
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
     NUM_NODES=1
 else
+    echo "machines are: $(cat $PBS_NODEFILE)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
 fi
 echo "running on $NUM_NODES nodes"
@@ -67,7 +68,7 @@ MAPPROJ=`which mapproject`
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp /nobackup/aannex/mapproj_ba_cmds.XXXXXX)
+TMPFILE=$(mktemp ~/mapproj_ba_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
@@ -75,7 +76,8 @@ trap 'rm -f "$TMPFILE"' EXIT
     trap '' DEBUG
     for file in "$INPUT_DIR"*.ech.cub; do
         # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
-        echo "$MAPPROJ --parallel-options \"--sshdely 2.0\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
+        # TODO do the work in /tmp and then move back to lustre after completion
+        echo "$MAPPROJ --parallel-options \"--delay 0 --sshdelay 0.4\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -83,13 +85,13 @@ trap 'rm -f "$TMPFILE"' EXIT
 }
 
 # log we are about to start (TODO move below to new script)
-echo "launching jobs"
+echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --sshdelay 2.0 --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --tagstring '{= 'date "+%Y-%m-%d %H:%M:%S" ' =} {#}' --controlmaster --delay 0 --sshdelay 0.4 --jobs $NUM_NODES --eta --progress --line-buffer --joblog ~/pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog pbs_mapproj_ba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE"
     fi
 else
     # we are in debug mode so just log out the commands that would
