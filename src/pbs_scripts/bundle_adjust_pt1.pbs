@@ -140,7 +140,7 @@ mv "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%
 
 if [[ -z "$DEBUG" ]]; then 
   # now start part 2, using same input parameters as part 1
-  qsub -W depend=afterok:${PBS_JOBID} -v DEM=$DEM,IMAGES=$IMAGES,CAMERAS=$CAMERAS,BA_PREFIX=$BA_PREFIX bundle_adjust_pt2.pbs
+  qsub -W depend=afterok:${PBS_JOBID} -v DEM="$DEM",IMAGES="$IMAGES",CAMERAS="$CAMERAS",BA_PREFIX="$BA_PREFIX" bundle_adjust_pt2.pbs
   # we are now done!
   echo "Part 2 job submitted at $(date)"
 fi
