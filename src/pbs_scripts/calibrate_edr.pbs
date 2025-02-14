@@ -10,7 +10,7 @@
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
-#PBS -W group_list=e2305        
+#PBS -W group_list=e2305  
 
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
@@ -23,6 +23,34 @@ if [ -z "$INPUT_DIR" ]; then
 fi
 echo "Path to CUBs: $INPUT_DIR"
 ##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # actually sleep
+    sleep 15
+    # submit to qsub
+    exec qsub -v INPUT_DIR="$INPUT_DIR" "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
 # Change to the working directory
 echo Working directory is $PBS_O_WORKDIR
 if [[ -n $PBS_O_WORKDIR ]]; then
@@ -47,14 +75,19 @@ trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
 find "$INPUT_DIR" -type f -name '*.IMG' -exec echo "calibrate_edr.sh {}" \; >> "$TMPFILE"
 # log we are about to start 
+# https://www.gnu.org/software/parallel/parallel.html#options
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --sshdelay 0.2 --eta --progress --line-buffer --joblog pbs_calibrate_edr_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed --sshdelay 0.2 --eta --progress --line-buffer --joblog pbs_calibrate_edr_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --sshdelay 0.2 --eta --progress --line-buffer --joblog pbs_calibrate_edr_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed --sshdelay 0.2 --eta --progress --line-buffer --joblog pbs_calibrate_edr_job.log  < "$TMPFILE"
     fi
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$HOME/pbs_calibrate_edr_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_calibrate_edr_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

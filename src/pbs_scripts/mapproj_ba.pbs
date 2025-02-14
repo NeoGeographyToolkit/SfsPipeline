@@ -2,8 +2,8 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=2:ncpus=20:model=ivy,walltime=08:00:00        
-#PBS -q debug                  
+#PBS -l select=16:ncpus=10:model=ivy,walltime=08:00:00        
+#PBS -q normal                 
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_mapproj_ba.log   
@@ -38,6 +38,34 @@ if [ -z "$BA_PREFIX" ]; then
 fi
 echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX:0:3}.tif"
 ##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # actually sleep
+    sleep 15
+    # submit to qsub
+    exec qsub -v DEM="$DEM",INPUT_DIR="$INPUT_DIR",BA_PREFIX="$BA_PREFIX" "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
 # Change to the working directory
 echo Working directory is $PBS_O_WORKDIR
 if [[ -n $PBS_O_WORKDIR ]]; then
@@ -77,7 +105,7 @@ trap 'rm -f "$TMPFILE"' EXIT
     for file in "$INPUT_DIR"*.ech.cub; do
         # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
         # TODO do the work in /tmp and then move back to lustre after completion
-        echo "$MAPPROJ --parallel-options \"--delay 0 --sshdelay 0.4\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
+        echo "$MAPPROJ --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -89,10 +117,14 @@ echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --tagstring '{= 'date "+%Y-%m-%d %H:%M:%S" ' =} {#}' --controlmaster --delay 0 --sshdelay 0.4 --jobs $NUM_NODES --eta --progress --line-buffer --joblog ~/pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --eta --progress --joblog ~/pbs_mapproj_ba_job.log   < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --eta --progress --line-buffer --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE"
     fi
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$HOME/pbs_mapproj_ba_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

@@ -31,6 +31,34 @@ if [ -z "$INPUT_DIR" ]; then
 fi
 echo "Path to CUBs: $INPUT_DIR"
 ##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # actually sleep
+    sleep 15
+    # submit to qsub
+    exec qsub -v DEM="$DEM",INPUT_DIR="$INPUT_DIR" "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
 # Change to the working directory
 echo Working directory is $PBS_O_WORKDIR
 if [[ -n $PBS_O_WORKDIR ]]; then
@@ -42,8 +70,7 @@ echo "machine file is $PBS_NODEFILE"
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
     NUM_NODES=1
 else
-    echo "Node file contents: "
-    cat $PBS_NODEFILE
+    echo "machines are: $(cat $PBS_NODEFILE)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
 fi
 echo "running on $NUM_NODES nodes"
@@ -81,15 +108,21 @@ trap 'rm -f "$TMPFILE"' EXIT
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
 }
+# TODO how to resume processing of parallel if I get the time bounds wrong?
+# https://www.gnu.org/software/parallel/parallel.html#options either --resume --resume-failed, likely the latter
 # log we are about to start (TODO move below to new script)
 echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --eta --progress --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --jobs $NUM_NODES --eta --progress --line-buffer --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --eta --progress --line-buffer --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
     fi
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$HOME/pbs_mapproj_noba_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_noba_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

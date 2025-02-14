@@ -11,7 +11,7 @@
 #PBS -S /bin/bash               
 #PBS -V                         
 #PBS -W group_list=e2305     
-
+# TODO run this on the AMD nodes?
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -44,12 +44,40 @@ if [ -z "$MAPPROJ_DATA" ]; then
 fi
 echo "Path to mapprojected data list: $MAPPROJ_DATA"
 # Ensure a output prefix is provided
-if [ -z "$OUT" ]; then
-    echo "Error: OUT is not set. Use $USAGE"
+if [ -z "$BA_PREFIX" ]; then
+    echo "Error: BA_PREFIX is not set. Use $USAGE"
     exit 1
 fi
-echo "Output Prefix: $OUT"
+echo "Output Prefix: $BA_PREFIX"
 ##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # actually sleep
+    sleep 15
+    # submit to qsub
+    exec qsub -v DEM="$DEM",IMAGES="$IMAGES",CAMERAS="$CAMERAS",MAPPROJ_DATA="$MAPPROJ_DATA",BA_PREFIX="$BA_PREFIX" "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
 # Change to the working directory
 echo Working directory is $PBS_O_WORKDIR
 cd $PBS_O_WORKDIR
@@ -82,7 +110,10 @@ parallel_bundle_adjust      \
   --camera-list ${CAMERAS}  \
   --mapproj-dem ${DEM}      \
   --mapprojected-data ${MAPPROJ_DATA} \
+  --processes 20            \
+  --threads 20              \
   --nodata-value 0.001      \
+  --ip-detect-method 1      \
   --ip-per-tile  400        \
   --ip-per-image 20000      \
   --overlap-limit 50        \
@@ -91,15 +122,22 @@ parallel_bundle_adjust      \
   --matches-per-tile 100    \
   --num-passes 2            \
   --min-matches 10          \
-  --max-pairwise-matches 1000 \
+  --max-pairwise-matches 2000 \
   --camera-weight 0           \
   --save-intermediate-cameras \
-  --robust-threshold 0.5      \
+  --robust-threshold 2        \
   --tri-weight 0.1            \
   --tri-robust-threshold 0.25 \
   --min-triangulation-angle 0.1 \
   --remove-outliers-params "75.0 3.0 100 100"    \
-  -o ${OUT} 
+  --parallel-options "--sshdelay 0.5 --resume-failed --joblog $HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log" \
+  -o ${BA_PREFIX} 
+
+# The jobs have actually completed 
+echo "Parallel has finished with all jobs at $(date)"
+# move the joblog file to preserve its state and to avoid re-running it
+mv "$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"
+
 
 # we are now done!
 echo "Job finished at $(date)"
