@@ -1,12 +1,12 @@
 #!/bin/bash
-#PBS -N pbs_mapproj_noba
+#PBS -N pbs_gdal_footprints
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=16:ncpus=10:model=ivy,walltime=06:00:00        
+#PBS -l select=10:ncpus=20:model=ivy,walltime=00:30:00        
 #PBS -q normal             
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
-#PBS -o pbs_mapproj_noba.log   
+#PBS -o pbs_gdal_footprints.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
@@ -17,13 +17,8 @@ if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
 # define usage once
-USAGE="qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files/ $0"
-# Ensure a DEM was provided
-if [ -z "$DEM" ]; then
-    echo "Error: DEM is not set. Use $USAGE"
-    exit 1
-fi
-echo "DEM file: $DEM"
+USAGE="qsub -v INPUT_DIR=/path/to/tif/files/ $0"
+
 # Ensure an input directory is provided
 if [ -z "$INPUT_DIR" ]; then
     echo "Error: INPUT_DIR is not set. Use $USAGE"
@@ -44,7 +39,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -v DEM="$DEM",INPUT_DIR="$INPUT_DIR" "$0"
+    exec qsub -v INPUT_DIR="$INPUT_DIR" "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -83,26 +78,20 @@ echo ISIS data is $ISISDATA
 echo ISIS root is $ISISROOT
 # echo out PATH
 echo PATH is $PATH
-# save the path to mapproject
-MAPPROJ=`which mapproject`
+# save the path to gdal_footprint
+GDAL_FOOTPRINT=`which GDAL_FOOTPRINT`
 ################################################
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp ~/mapproj_noba_cmds.XXXXXX)
+TMPFILE=$(mktemp ~/gdal_footprints_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
-# okay wait mapproj uses gnu parallel internally to farm out work 
-# is it better for me to use gnu parallel directly or to just 
-# run each command and pass in the node list and let gnu parallel handle it?
-# to me it doesn't make 
 {
     trap '' DEBUG
-    for file in "$INPUT_DIR"*.ech.cub; do
-        # --t_projwin $PROJWIN_EXTENT remove 
-        # TODO: Change the output dtype to be UInt16 to save IO
-        echo "$MAPPROJ --processes 10 --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.noba.tif --tr 1 && gdal_footprint -q -write_absolute_path -of GeoJSON ${file%%.cub}.map.noba.tif ${file%%.cub}.map.noba.geojson" >> "$TMPFILE";
+    for file in "$INPUT_DIR"*.tif; do
+        echo "$GDAL_FOOTPRINT -q -write_absolute_path -of GeoJSON ${file} ${file%.tif}.geojson" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -115,14 +104,14 @@ echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --eta --progress --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --eta --progress --joblog ~/pbs_gdal_footprints_job.log  < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --eta --progress --line-buffer --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --eta --progress --line-buffer --joblog ~/pbs_gdal_footprints_job.log  < "$TMPFILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_mapproj_noba_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_noba_job.log"
+    mv "$HOME/pbs_gdal_footprints_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_gdal_footprints_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel
