@@ -18,7 +18,7 @@ if [[ "$DEBUG" == "true" ]]; then
 fi
 
 # define usage once
-USAGE="qsub -v DEM=/path/to/dem.tif,IMAGES=/path/to/list/of/tifs.txt,CAMERAS=/path/to/list/of/jsons.txt,OUT=ba0/run $0"
+USAGE="qsub -v DEM=/path/to/dem.tif,IMAGES=/path/to/list/of/tifs.txt,CAMERAS=/path/to/list/of/jsons.txt,MAPPROJ_DATA=/path/to/mapproj_data.txt,OVERLAP_LIST=/path/to/overlap_list.txt,BA_PREFIX=ba0/run $0"
 # Ensure a DEM was provided
 if [ -z "$DEM" ]; then
     echo "Error: DEM is not set. Use $USAGE"
@@ -118,14 +118,12 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
       --mapproj-dem ${DEM}      \
       --mapprojected-data-list ${MAPPROJ_DATA} \
       --overlap-list ${OVERLAP_LIST} \
-      --overlap-limit 50        \
       --processes 10            \
       --threads 10              \
       --nodata-value 0.001      \
       --ip-detect-method 1      \
       --ip-per-tile  400        \
       --ip-per-image 20000      \
-      --match-first-to-last     \
       --num-iterations 500      \
       --num-passes 2            \
       --min-matches 10          \
