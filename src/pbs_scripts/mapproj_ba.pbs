@@ -105,7 +105,7 @@ trap 'rm -f "$TMPFILE"' EXIT
     for file in "$INPUT_DIR"*.ech.cub; do
         # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
         # TODO do the work in /tmp and then move back to lustre after completion
-        echo "$MAPPROJ --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX" >> "$TMPFILE";
+        echo "$MAPPROJ --processes 10 --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX  && gdal_footprint -q -write_absolute_path -of GeoJSON ${file%%.cub}.map.${BA_PREFIX:0:3}.tif ${file%%.cub}.map.${BA_PREFIX:0:3}.geojson" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
