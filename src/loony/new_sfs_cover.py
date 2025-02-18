@@ -104,7 +104,7 @@ def _perform_geo_selection_sql(con, wkt_geometry: str):
     CREATE TEMPORARY TABLE numbered_ordered AS 
     SELECT
         *,
-        ROW_NUMBER() OVER (ORDER BY SUB_SOLAR_GROUND_AZIMUTH,INCIDENCE_ANGLE,ST_Hilbert(ST_Centroid(geometry)),fraction_area) AS fid,
+        ROW_NUMBER() OVER (ORDER BY SUB_SOLAR_GROUND_AZIMUTH,INCIDENCE_ANGLE,ST_Hilbert(ST_Centroid(geometry)),fraction_area) AS orderid,
     FROM temp_intersection;
     CREATE TEMPORARY TABLE temp_final AS 
     SELECT 
@@ -112,11 +112,11 @@ def _perform_geo_selection_sql(con, wkt_geometry: str):
         ST_AsText(geometry) as geometry,
         -- determine if the previous geometry intersects the current row
         COALESCE(
-            ST_Intersects(geometry, LAG(geometry) OVER (ORDER BY fid)),
+            ST_Intersects(geometry, LAG(geometry) OVER (ORDER BY orderid)),
             false
         ) AS intersects_prior,
     FROM numbered_ordered
-    ORDER BY fid;
+    ORDER BY orderid;
     """)
     pass
 
@@ -145,18 +145,18 @@ def perform_geo_selection_duckdb(df_src_path: str, wkt_geometry: str)-> gp.GeoDa
         streak_df= con.sql("""
         WITH numbered AS (
           SELECT 
-            fid,
+            orderid,
             intersects_prior,
-            row_number() OVER (PARTITION BY intersects_prior ORDER BY fid) AS rn_bool
+            row_number() OVER (PARTITION BY intersects_prior ORDER BY orderid) AS rn_bool
           FROM temp_final
         ),
         grouped AS (
           SELECT 
             intersects_prior,
-            fid - rn_bool AS grp,       -- Constant for each streak.
+            orderid - rn_bool AS grp,       -- Constant for each streak.
             COUNT(*) AS streak_length   -- Length of the streak.
           FROM numbered
-          GROUP BY intersects_prior, fid - rn_bool
+          GROUP BY intersects_prior, orderid - rn_bool
         )
         SELECT 
           intersects_prior,
