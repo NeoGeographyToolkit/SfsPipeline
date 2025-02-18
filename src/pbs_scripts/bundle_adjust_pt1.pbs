@@ -2,7 +2,7 @@
 #PBS -N pbs_ba_pt1
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=2:ncpus=20:model=ivy,walltime=00:30:00        
+#PBS -l select=1:ncpus=10:model=ivy,walltime=01:00:00        
 #PBS -q debug                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -104,24 +104,22 @@ echo PATH is $PATH
 # https://stereopipeline.readthedocs.io/en/latest/tools/parallel_bundle_adjust.html
 # --stop-point 2 should stop before optimization which only works on 1 node
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    parallel_bundle_adjust       \
-      --entry-point 0            \
-      --stop-point 3             \
-      --nodes-list ${PBS_NODEFILE} \
+    set -x
+    paralle_bundle_adjust       \
+      --stop-point 2            \
       --image-list ${IMAGES}    \
       --camera-list ${CAMERAS}  \
       --mapproj-dem ${DEM}      \
       --mapprojected-data-list ${MAPPROJ_DATA} \
-      --processes 20            \
-      --threads 20              \
+      --processes 10            \
+      --threads 10              \
       --nodata-value 0.001      \
       --ip-detect-method 1      \
       --ip-per-tile  400        \
       --ip-per-image 20000      \
       --overlap-limit 50        \
       --match-first-to-last     \
-      --num-iterations 50       \
-      --matches-per-tile 100    \
+      --num-iterations 500      \
       --num-passes 2            \
       --min-matches 10          \
       --max-pairwise-matches 2000 \
@@ -138,6 +136,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     mv "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
+    set +x
 fi
 # we are now done!
 echo "Job finished at $(date)"
