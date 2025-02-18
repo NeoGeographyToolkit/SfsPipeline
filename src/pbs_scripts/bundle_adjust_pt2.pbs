@@ -43,6 +43,12 @@ if [ -z "$MAPPROJ_DATA" ]; then
     exit 1
 fi
 echo "Path to mapprojected data list: $MAPPROJ_DATA"
+# get overlap list file
+if [ -z "$OVERLAP_LIST" ]; then
+    echo "Error: OVERLAP_LIST is not set. Use $USAGE"
+    exit 1
+fi
+echo "Path to overlap list: $OVERLAP_LIST"
 # Ensure a output prefix is provided
 if [ -z "$BA_PREFIX" ]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
@@ -63,7 +69,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -v DEM="$DEM",IMAGES="$IMAGES",CAMERAS="$CAMERAS",MAPPROJ_DATA="$MAPPROJ_DATA",BA_PREFIX="$BA_PREFIX" "$0"
+    exec qsub -v DEM="$DEM",IMAGES="$IMAGES",CAMERAS="$CAMERAS",MAPPROJ_DATA="$MAPPROJ_DATA",OVERLAP_LIST="$OVERLAP_LIST",BA_PREFIX="$BA_PREFIX" "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -112,13 +118,14 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
       --camera-list ${CAMERAS}  \
       --mapproj-dem ${DEM}      \
       --mapprojected-data-list ${MAPPROJ_DATA} \
+      --overlap-list ${OVERLAP_LIST} \
+      --overlap-limit 50        \
       --processes 10            \
       --threads 10              \
       --nodata-value 0.001      \
       --ip-detect-method 1      \
       --ip-per-tile  400        \
       --ip-per-image 20000      \
-      --overlap-limit 50        \
       --match-first-to-last     \
       --num-iterations 50       \
       --matches-per-tile 100    \
