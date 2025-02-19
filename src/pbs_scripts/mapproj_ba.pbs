@@ -105,7 +105,7 @@ trap 'rm -f "$TMPFILE"' EXIT
     for file in "$INPUT_DIR"*.ech.cub; do
         # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
         # TODO do the work in /tmp and then move back to lustre after completion
-        echo "$MAPPROJ --processes 10 --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX  && gdal_footprint -q -write_absolute_path -of GeoJSON ${file%%.cub}.map.${BA_PREFIX:0:3}.tif ${file%%.cub}.map.${BA_PREFIX:0:3}.geojson" >> "$TMPFILE";
+        echo "$MAPPROJ --processes 10 --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX && gdal_footprint -q -write_absolute_path -of GeoJSON ${file%%.cub}.map.${BA_PREFIX:0:3}.tif ${file%%.cub}.map.${BA_PREFIX:0:3}.geojson" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -117,9 +117,9 @@ echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --eta --progress --joblog ~/pbs_mapproj_ba_job.log   < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_ba_job.log   < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --eta --progress --line-buffer --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"

@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=00:30:00        
-#PBS -q debug                
+#PBS -l select=1:ncpus=20:model=ivy,walltime=12:00:00        
+#PBS -q normal                
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt2.log   
@@ -111,7 +111,6 @@ echo PATH is $PATH
 # --entry-point 2 should mean only optimization occurs, which is limited to 1 node
 # don't bother providing the nodelist as now we only need to use 1 node for pt 2
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    set -x
     parallel_bundle_adjust      \
       --entry-point 2           \
       --image-list ${IMAGES}    \
@@ -119,8 +118,8 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
       --mapproj-dem ${DEM}      \
       --mapprojected-data-list ${MAPPROJ_DATA} \
       --overlap-list ${OVERLAP_LIST} \
-      --processes 10            \
-      --threads 10              \
+      --processes 8             \
+      --threads 20              \
       --nodata-value 0.001      \
       --ip-detect-method 1      \
       --ip-per-tile  400        \
@@ -135,15 +134,15 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
       --tri-weight 0.1            \
       --tri-robust-threshold 0.25 \
       --min-triangulation-angle 0.1 \
+      --verbose \
       --remove-outliers-params "75.0 3.0 100 100"    \
-      --parallel-options "--sshdelay 0.5 --resume-failed --joblog $HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log" \
-      -o ${BA_PREFIX} 
+      --parallel-options "--memfree 30G --joblog $HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"\
+      -o ${BA_PREFIX} | grep -E -v "Writing|Saving"
 
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     mv "$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"
-    set +x
 fi
 
 # we are now done!

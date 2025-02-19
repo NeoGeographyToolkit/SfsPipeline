@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=10:model=ivy,walltime=01:00:00        
-#PBS -q debug                  
+#PBS -l select=12:ncpus=20:model=ivy,walltime=01:00:00        
+#PBS -q normal                 
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1.log   
@@ -11,7 +11,7 @@
 #PBS -S /bin/bash               
 #PBS -V                         
 #PBS -W group_list=e2305     
-
+# twelve nodes for 286 images and 1600 pairs took about 45 minutes wall time
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -110,16 +110,16 @@ echo PATH is $PATH
 # https://stereopipeline.readthedocs.io/en/latest/tools/parallel_bundle_adjust.html
 # --stop-point 2 should stop before optimization which only works on 1 node
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    set -x
-    paralle_bundle_adjust       \
-      --stop-point 2            \
+    parallel_bundle_adjust         \
+      --stop-point 2               \
+      --nodes-list ${PBS_NODEFILE} \
       --image-list ${IMAGES}    \
       --camera-list ${CAMERAS}  \
       --mapproj-dem ${DEM}      \
       --mapprojected-data-list ${MAPPROJ_DATA} \
       --overlap-list ${OVERLAP_LIST} \
-      --processes 10            \
-      --threads 10              \
+      --processes 4             \
+      --threads 4               \
       --nodata-value 0.001      \
       --ip-detect-method 1      \
       --ip-per-tile  400        \
@@ -134,14 +134,14 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
       --tri-weight 0.1            \
       --tri-robust-threshold 0.25 \
       --min-triangulation-angle 0.1 \
+      --verbose \
       --remove-outliers-params "75.0 3.0 100 100" \
-      --parallel-options "--sshdelay 0.5 --resume-failed --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" \
-      -o ${BA_PREFIX} 
+      --parallel-options "--sshdelay 0.5 --memfree 30G --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"\
+      -o ${BA_PREFIX} | grep -E -v "Writing|Saving"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     mv "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
-    set +x
 fi
 # we are now done!
 echo "Job finished at $(date)"

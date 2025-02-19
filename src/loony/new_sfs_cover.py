@@ -116,6 +116,8 @@ def _perform_geo_selection_sql(con, wkt_geometry: str):
             false
         ) AS intersects_prior,
     FROM numbered_ordered
+    WHERE
+        fraction_area > .0025 -- exclude images that don't contribute enough to the coverage as they won't bundle adjust well
     ORDER BY orderid;
     """)
     pass

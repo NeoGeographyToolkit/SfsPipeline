@@ -80,9 +80,9 @@ echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --resume-failed --sshdelay 0.2 --eta --progress --line-buffer --joblog pbs_calibrate_edr_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel -u --resume-failed --sshdelay 0.5 --joblog pbs_calibrate_edr_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed --sshdelay 0.2 --eta --progress --line-buffer --joblog pbs_calibrate_edr_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel -u --resume-failed --joblog pbs_calibrate_edr_job.log  < "$TMPFILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
