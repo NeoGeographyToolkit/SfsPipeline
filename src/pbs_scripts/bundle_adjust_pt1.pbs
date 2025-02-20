@@ -2,7 +2,7 @@
 #PBS -N pbs_ba_pt1
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=12:ncpus=20:model=ivy,walltime=01:00:00        
+#PBS -l select=6:ncpus=20:model=ivy,walltime=04:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -109,39 +109,49 @@ echo PATH is $PATH
 
 # https://stereopipeline.readthedocs.io/en/latest/tools/parallel_bundle_adjust.html
 # --stop-point 2 should stop before optimization which only works on 1 node
+
+# construct args
+args=(
+      --stop-point 2          
+      --nodes-list "$PBS_NODEFILE"    
+      --image-list "$IMAGES" 
+      --camera-list "$CAMERAS"
+      --mapproj-dem "$DEM"      
+      --mapprojected-data-list "$MAPPROJ_DATA" 
+      --overlap-list "$OVERLAP_LIST"
+      --processes 4             
+      --threads 4               
+      --nodata-value 0.001      
+      --ip-detect-method 1      
+      --ip-per-tile  400        
+      --ip-per-image 20000      
+      --num-iterations 500      
+      --num-passes 2            
+      --min-matches 10          
+      --max-pairwise-matches 2000 
+      --camera-weight 0           
+      --save-intermediate-cameras 
+      --robust-threshold 2.0      
+      --tri-weight 0.1            
+      --tri-robust-threshold 0.25 
+      --min-triangulation-angle 0.1 
+      --verbose 
+      --remove-outliers-params "75.0 3.0 100 100"
+      -o "$BA_PREFIX"
+)
+# for annoying reasons I can't seem to pass this in the array
+parallel_opts="--resume-failed --sshdelay 0.5 --memfree 30G --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
+# start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    parallel_bundle_adjust         \
-      --stop-point 2               \
-      --nodes-list ${PBS_NODEFILE} \
-      --image-list ${IMAGES}    \
-      --camera-list ${CAMERAS}  \
-      --mapproj-dem ${DEM}      \
-      --mapprojected-data-list ${MAPPROJ_DATA} \
-      --overlap-list ${OVERLAP_LIST} \
-      --processes 4             \
-      --threads 4               \
-      --nodata-value 0.001      \
-      --ip-detect-method 1      \
-      --ip-per-tile  400        \
-      --ip-per-image 20000      \
-      --num-iterations 500      \
-      --num-passes 2            \
-      --min-matches 10          \
-      --max-pairwise-matches 2000 \
-      --camera-weight 0           \
-      --save-intermediate-cameras \
-      --robust-threshold 2.0      \
-      --tri-weight 0.1            \
-      --tri-robust-threshold 0.25 \
-      --min-triangulation-angle 0.1 \
-      --verbose \
-      --remove-outliers-params "75.0 3.0 100 100" \
-      --parallel-options "--sshdelay 0.5 --memfree 30G --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"\
-      -o ${BA_PREFIX} | grep -E -v "Writing|Saving"
+    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     mv "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
+else
+    # I am debugging of a pfe or something
+    echo "would have run: "
+    echo "parallel_bundle_adjust ${args[@]}"
 fi
 # we are now done!
 echo "Job finished at $(date)"

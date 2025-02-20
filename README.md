@@ -161,3 +161,23 @@ TODO recompute fractional area
 ```bash
 duckdb -c "LOAD spatial; CREATE TEMP TABLE df AS SELECT * FROM ST_READ('/tmp/buffered_1km_mons_mouton_regional.gpkg'); CREATE TEMP TABLE ov AS SELECT split_part(parse_filename(O.location, true),'.',1) as PRODUCT_ID, ST_ConvexHull(geom) as geom FROM ST_READ('./all_footprints.geojson') O; CREATE TEMP TABLE merged AS SELECT * EXCLUDE (geom), ov.geom FROM df JOIN ov ON df.PRODUCT_ID == ov.PRODUCT_ID; COPY merged TO 'mapprojected_footprints_noba.gpkg' WITH (FORMAT GDAL, DRIVER 'GPKG', SRS 'IAU:30135');"
 ```
+
+
+## get the image ids that had high mean residuals as a CSV
+
+```bash
+duckdb -csv -c "SELECT \"# Image\" FROM read_csv('./ba0/ba0-final_residuals_stats.txt', skip=1, header=True) WHERE mean > 2"
+```
+
+
+### various untested bash commands
+
+```bash
+# evict images that had high error
+grep -F -x -v -f bad_images.txt all_images.txt
+
+# get good images only (might be kinda useless, just use the good list at this point)
+grep -F -x -f good_images.txt all_images.txt
+
+
+```

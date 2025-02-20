@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=12:00:00        
-#PBS -q normal                
+#PBS -l select=1:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -q normal
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt2.log   
@@ -13,6 +13,9 @@
 #PBS -W group_list=e2305     
 # TODO run this on the AMD nodes?
 # Enable stepwise debugging if DEBUG is set to "true"
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
@@ -110,40 +113,65 @@ echo PATH is $PATH
 # https://stereopipeline.readthedocs.io/en/latest/tools/parallel_bundle_adjust.html
 # --entry-point 2 should mean only optimization occurs, which is limited to 1 node
 # don't bother providing the nodelist as now we only need to use 1 node for pt 2
-if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    parallel_bundle_adjust      \
-      --entry-point 2           \
-      --image-list ${IMAGES}    \
-      --camera-list ${CAMERAS}  \
-      --mapproj-dem ${DEM}      \
-      --mapprojected-data-list ${MAPPROJ_DATA} \
-      --overlap-list ${OVERLAP_LIST} \
-      --processes 8             \
-      --threads 20              \
-      --nodata-value 0.001      \
-      --ip-detect-method 1      \
-      --ip-per-tile  400        \
-      --ip-per-image 20000      \
-      --num-iterations 500      \
-      --num-passes 2            \
-      --min-matches 10          \
-      --max-pairwise-matches 2000 \
-      --camera-weight 0           \
-      --save-intermediate-cameras \
-      --robust-threshold 2.0      \
-      --tri-weight 0.1            \
-      --tri-robust-threshold 0.25 \
-      --min-triangulation-angle 0.1 \
-      --verbose \
-      --remove-outliers-params "75.0 3.0 100 100"    \
-      --parallel-options "--memfree 30G --joblog $HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"\
-      -o ${BA_PREFIX} | grep -E -v "Writing|Saving"
+# https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#validation-of-bundle-adjustment
+# consider higher robust threshold value and --input-adjustments-prefix with  --match-files-prefix
+# then re-run with robust threshold 2
+# think --input-adjustments-prefix  would be ba0/ba0 for the first round
+# think --match-files-prefix would also be ba0/ba0, although if I enter only at optimization I don't think I need this as it implies skip matching
+# later I can consider --fixed-image-list so I can "lock in" images that have low residuals
 
+# construct args
+args=(
+      --entry-point 2           
+      --image-list "$IMAGES"    
+      --camera-list "$CAMERAS"  
+      --mapproj-dem "$DEM"     
+      --mapprojected-data-list "$MAPPROJ_DATA"
+      --overlap-list "$OVERLAP_LIST"
+      --processes 4            
+      --threads 20              
+      --nodata-value 0.001      
+      --ip-detect-method 1      
+      --ip-per-tile  400        
+      --ip-per-image 20000      
+      --num-iterations 500      
+      --num-passes 2            
+      --min-matches 10          
+      --max-pairwise-matches 2000 
+      --camera-weight 0           
+      --save-intermediate-cameras 
+      --robust-threshold 2.0      
+      --tri-weight 0.1            
+      --tri-robust-threshold 0.25 
+      --min-triangulation-angle 0.1 
+      --verbose 
+      --remove-outliers-params "75.0 3.0 100 100"    
+      -o "$BA_PREFIX" 
+)
+# for annoying reasons I can't seem to pass this in the array
+parallel_opts="--resume-failed --memfree 30G --joblog $HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"
+
+if [[ -n $RESUME_PREFIX ]]; then
+    # TODO presumably if I resume a bundle adjust I'd want to continue using the 
+    # same prefix as the input BA_PREFIX, or if I want more flexibility I could 
+    # allow a different prefix to be used
+    echo "We are resuming bundle adjust ${RESUME_PREFIX:0:3}"
+    args+=(--input-adjustments-prefix "$RESUME_PREFIX")
+fi
+
+# TODO add optional appending of fixed image list 
+
+
+if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
+    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     mv "$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"
+else
+    # I am debugging of a pfe or something
+    echo "would have run: "
+    echo "parallel_bundle_adjust ${args[@]}"
 fi
-
 # we are now done!
 echo "Job finished at $(date)"
