@@ -159,8 +159,11 @@ if [[ -n $RESUME_PREFIX ]]; then
     args+=(--input-adjustments-prefix "$RESUME_PREFIX")
 fi
 
-# TODO add optional appending of fixed image list 
-
+if [[ -n $FIXED_IMAGES ]]; then
+    # add fixed images list if defined
+    echo "We are assuming certain cameras are good to go and fixing their position in ${FIXED_IMAGES}"
+    args+=(--fixed-image-list "$FIXED_IMAGES")
+fi
 
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving"
