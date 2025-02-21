@@ -13,27 +13,59 @@ if [ -z "$DEM" ]; then
     exit 1
 fi
 echo "DEM file: $DEM"
-# Ensure an input directory is provided
-if [ -z "$INPUT_GPKG" ]; then
-    echo "Error: INPUT_GPKG is not set. Use $USAGE"
+# Ensure a pair list file is provided (simply left and right map projected image file paths seperated by a space)
+if [ -z "$IMAGE_PAIR_LIST" ]; then
+    echo "Error: IMAGE_PAIR_LIST is not set. Use $USAGE"
     exit 1
 fi
-echo "Path to GPKGs: $INPUT_GPKG"
-# get the base file name
-filenameext="${INPUT_GPKG##*/}"
-LAYER_NAME=$"{filenameext%.gpkg}"
-echo "\t Layername in GPKG: $LAYER_NAME"
-# Ensure a projwin extent was provided
-if [ -z "$PROJWIN_EXTENT" ]; then
-    echo "Error: PROJWIN_EXTENT is not set. Use $USAGE"
+echo "Image Pair list file: $IMAGE_PAIR_LIST"
+
+# similar list this time with the bundle adjust prefix and .adjusted_state.json postfix for the adjusted CSM models
+if [ -z "$CAMERA_PAIR_LIST" ]; then
+    echo "Error: CAMERA_PAIR_LIST is not set. Use $USAGE"
     exit 1
 fi
-echo "Projection extent: $PROJWIN_EXTENT"
+echo "Camera Pair list file: $CAMERA_PAIR_LIST"
+
+# Ensure a output prefix is provided
+if [ -z "$BA_PREFIX" ]; then
+    echo "Error: BA_PREFIX is not set. Use $USAGE"
+    exit 1
+fi
+echo "Output Prefix: $BA_PREFIX"
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
+# Change to the working directory
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+echo "machine is $(uname -a)"
+echo "machine file is $PBS_NODEFILE"
+# get the number of unique nodes 
+if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
+    NUM_NODES=1
+else
+    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
+    NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+fi
+echo "running on $NUM_NODES nodes"
+echo
 ##############################################
 # source asap environment
 source init_asap.sh
-# verify ogr2ogr/ogrinfo is there
-# verify jq and jo is there
+# echo out ISISDATA and ISISROOT
+echo ISIS data is $ISISDATA 
+echo ISIS root is $ISISROOT
+# echo out PATH
+echo PATH is $PATH
 ##############################################
 # Create a temp file
 TMPFILE=$(mktemp /nobackup/aannex/launch_stereo_cmds.XXXXXX)
@@ -42,28 +74,44 @@ trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG
-    # use ogr2ogr to print out each Left and Right product id
-    # something like
-    # ogr2ogr -sql 'SELECT ORBIT_NUMBER, VOLUME_ID, PRODUCT_ID, STRFTIME("%Y%j", START_TIME) FROM buffered_1km_mons_mouton_regional' -f CSV /vsistdout/ /tmp/buffered_1km_mons_mouton_regional.gpkg
-    # use GeoJSONSeq to get lines like { "type": "Feature", "properties": { "L_PRODUCT_ID": "M1141983027RE", "R_PRODUCT_ID": "M1461112282LE" }, "geometry": null }
-    #ogr2ogr -sql "SELECT L_PRODUCT_ID, R_PRODUCT_ID from ${LAYER_NAME}"  -f GeoJSONSeq /vsistdout/ $INPUT_GPKG
-    # or just build the command directly in the sql statement
-    # below will make "qsub -v L=M1282487784RE,R=M1461112282LE loony_stereo.sh" like lines
-    ogr2ogr -sql "SELECT concat('qsub -v L=', L_PRODUCT_ID, ',R=', R_PRODUCT_ID, ' loony_stereo.sh') as lr from ${filenameext%%.gpkg}"  -f CSV /vsistdout/ $INPUT_GPKG > "$TMPFILE";
-    # may need to strip quotes from file but that's easy...
+    while read LIMG RIMG LCAM RCAM; do
+        LBASE=$(basename "$LIMG")
+        RBASE=$(basename "$RIMG")
+        out_dir="run_stereo/${LBASE%%.*}__${RBASE%%.*}"
+        # re-use match files from bundle adjust https://stereopipeline.readthedocs.io/en/latest/tools/bundle_adjust.html#match-files
+        # stereo.default docs claim the normal match-files-prefix works only with non-mapprojected images.
+        args=(
+            "$LIMG" "$RIMG" "$LCAM" "$RCAM"
+            --stereo-algorithm asp_mgm
+            --nodes-list "$PBS_NODEFILE" 
+            --subpixel-mode 9 --ip-per-tile 400 
+            "$out_dir/run" "$DEM"
+        )
+        # for annoying reasons I can't seem to pass this in the array
+        parallel_opts="\"--resume-failed --memfree 20G --joblog $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_job.log\""
+        # TODO I need to make sure the quotes for the parallel opts don't expand prematurely
+        echo "parallel_stereo ${args[@]}" --parallel-options "${parallel_opts} &> $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
+        # I could have seperate queues and run point2dem all at the end over the nodes in order to have less dead air time
+        echo "point2dem --errorimage --tr 1 $out_dir/run-PC.tif &> $out_dir/pbs_point2dem_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
+        # okay 
+    done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
+    #
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
 }
+
 # log we are about to start (TODO move below to new script)
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
-    if [[ $NUM_NODES -gt 1 ]]; then
-        parallel --joblog pbs_launch_stereo_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
-    else
-        parallel --joblog pbs_launch_stereo_job.log  < "$TMPFILE"
-    fi
+    # as we will run each stereo pair one at a time, we will only use parallel here
+    # to spawn one job at a time. Later it could make sense to qsub these and have sub jobs instead
+    ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_stereo_job.log  < "$TMPFILE" &> "$HOME/pbs_stereo_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$HOME/pbs_stereo_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_stereo_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

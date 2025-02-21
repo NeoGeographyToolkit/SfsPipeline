@@ -174,13 +174,26 @@ column2 is the 25% value for the convergence angle (conservative)
 and column5 is the number of matches between the two images.
 
 ```bash
-duckdb  -c "SELECT * FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10"
+duckdb  -c "SELECT * FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10 ORDER BY column5 DESC"
 ```
 note this will return the image files, not the map projected images so to get a more usable list do
 
 ```bash
 duckdb -csv -c "SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10"
 ```
+
+and to get a usable list file:
+
+```bash
+duckdb -csv -c "SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10  ORDER BY column5 DESC"  | sed 's/,/ /g' | tail -n +2 > IMAGE_PAIR_LIST.txt
+```
+
+and the adjusted camera list file
+
+```bash
+duckdb -csv -c "SELECT replace(replace(column0,'.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-'), replace(replace(column1, '.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10  ORDER BY column5 DESC"  | sed 's/,/ /g' | tail -n +2 > CAMERA_PAIR_LIST.txt
+```
+
 
 ### various untested bash commands
 
