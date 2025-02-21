@@ -143,7 +143,7 @@ args=(
 parallel_opts="--resume-failed --sshdelay 0.5 --memfree 30G --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving"
+    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$HOME/pbs_ba_pt1_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it

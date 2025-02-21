@@ -166,9 +166,21 @@ duckdb -c "LOAD spatial; CREATE TEMP TABLE df AS SELECT * FROM ST_READ('/tmp/buf
 ## get the image ids that had high mean residuals as a CSV
 
 ```bash
-duckdb -csv -c "SELECT \"# Image\" FROM read_csv('./ba0/ba0-final_residuals_stats.txt', skip=1, header=True) WHERE mean > 2"
+duckdb -csv -c "SELECT \"# Image\" FROM read_csv('./ba0/ba0-final_residuals_stats.txt', skip=1, header=True) WHERE median > 2 AND isfinite(median)"
 ```
 
+## get the good stereo pair options from the convergence angle file
+column2 is the 25% value for the convergence angle (conservative)
+and column5 is the number of matches between the two images.
+
+```bash
+duckdb  -c "SELECT * FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10"
+```
+note this will return the image files, not the map projected images so to get a more usable list do
+
+```bash
+duckdb -csv -c "SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10"
+```
 
 ### various untested bash commands
 
@@ -178,6 +190,5 @@ grep -F -x -v -f bad_images.txt all_images.txt
 
 # get good images only (might be kinda useless, just use the good list at this point)
 grep -F -x -f good_images.txt all_images.txt
-
-
 ```
+

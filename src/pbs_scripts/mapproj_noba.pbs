@@ -115,9 +115,9 @@ echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
