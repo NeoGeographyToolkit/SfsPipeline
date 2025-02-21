@@ -1,5 +1,20 @@
 #!/bin/bash
-# this script will use qsub to launch a bunch of stereo jobs 
+#PBS -N pbs_launch_stereo
+#PBS -j oe                      
+#PBS -k oe                      
+#PBS -l select=8:ncpus=16:model=ivy,walltime=08:00:00        
+#PBS -q normal
+#PBS -m abe                     
+#PBS -M andrew.m.annex@nasa.gov 
+#PBS -o pbs_launch_stereo.log   
+#PBS -r y                       
+#PBS -S /bin/bash               
+#PBS -V                         
+#PBS -W group_list=e2305     
+# Enable stepwise debugging if DEBUG is set to "true"
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours
 
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
@@ -26,13 +41,24 @@ if [ -z "$CAMERA_PAIR_LIST" ]; then
     exit 1
 fi
 echo "Camera Pair list file: $CAMERA_PAIR_LIST"
-
-# Ensure a output prefix is provided
-if [ -z "$BA_PREFIX" ]; then
-    echo "Error: BA_PREFIX is not set. Use $USAGE"
-    exit 1
+##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # actually sleep
+    sleep 15
+    # submit to qsub
+    exec qsub -v DEM="$DEM",IMAGE_PAIR_LIST="$IMAGE_PAIR_LIST",CAMERA_PAIR_LIST="$CAMERA_PAIR_LIST" "$0"
+    # be sure to exit the script at this point
+    exit 0
 fi
-echo "Output Prefix: $BA_PREFIX"
 ##############################################
 # IF we are actually on PBS do another unset on DEBUG 
 # just in case to avoid long waits for quick exits
@@ -68,7 +94,7 @@ echo ISIS root is $ISISROOT
 echo PATH is $PATH
 ##############################################
 # Create a temp file
-TMPFILE=$(mktemp /nobackup/aannex/launch_stereo_cmds.XXXXXX)
+TMPFILE=$(mktemp /home7/aannex/launch_stereo_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
@@ -83,16 +109,21 @@ trap 'rm -f "$TMPFILE"' EXIT
         args=(
             "$LIMG" "$RIMG" "$LCAM" "$RCAM"
             --stereo-algorithm asp_mgm
+            --nodata-value 0.001      
+            --ip-detect-method 1      
+            --ip-per-tile  400        
+            --ip-per-image 20000 
             --nodes-list "$PBS_NODEFILE" 
-            --subpixel-mode 9 --ip-per-tile 400 
+            --subpixel-mode 9 
+            --min-triangulation-angle 0.1 
             "$out_dir/run" "$DEM"
         )
         # for annoying reasons I can't seem to pass this in the array
-        parallel_opts="\"--resume-failed --memfree 20G --joblog $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_job.log\""
-        # TODO I need to make sure the quotes for the parallel opts don't expand prematurely
-        echo "parallel_stereo ${args[@]}" --parallel-options "${parallel_opts} &> $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
+        parallel_opts="\"--joblog $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_job.log\""
+        # first write out the parallel stereo command but first make the output dir so I can capture the logs per job
+        echo "mkdir -p $out_dir && parallel_stereo ${args[@]}" --parallel-options "${parallel_opts} &> $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
         # I could have seperate queues and run point2dem all at the end over the nodes in order to have less dead air time
-        echo "point2dem --errorimage --tr 1 $out_dir/run-PC.tif &> $out_dir/pbs_point2dem_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
+        echo "point2dem --threads 8 --errorimage --tr 1 $out_dir/run-PC.tif &> $out_dir/pbs_point2dem_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
         # okay 
     done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
     #
@@ -103,7 +134,7 @@ trap 'rm -f "$TMPFILE"' EXIT
 
 # log we are about to start (TODO move below to new script)
 echo "launching jobs"
-if [[ -z "$DEBUG" ]]; then 
+if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     # as we will run each stereo pair one at a time, we will only use parallel here
     # to spawn one job at a time. Later it could make sense to qsub these and have sub jobs instead
