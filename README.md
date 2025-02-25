@@ -194,6 +194,61 @@ and the adjusted camera list file
 duckdb -csv -c "SELECT replace(replace(column0,'.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-'), replace(replace(column1, '.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10  ORDER BY column5 DESC"  | sed 's/,/ /g' | tail -n +2 > CAMERA_PAIR_LIST.txt
 ```
 
+## get metadata for product ids used in convergence angle file
+
+we need to join the two csvs and make an output similar to the find_stereo_pairs overlap file preferably as a geopackage output. For best results use the updated map projected footprints database file.
+
+```sql
+INSTALL SPATIAL;
+LOAD SPATIAL;
+CREATE TEMP TABLE conv AS SELECT * FROM  read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ');
+CREATE TEMP TABLE md AS SELECT * FROM ST_Read('./buffered_1km_mons_mouton_regional.gpkg');
+CREATE TEMP TABLE 
+            pairs
+    AS SELECT
+            L.PRODUCT_ID      as L_PRODUCT_ID,
+            L.VOLUME_ID       as L_VOLUME_ID,
+            L.ORBIT_NUMBER    as L_ORBIT_NUMBER,
+            L.PHASE_ANGLE     as L_PHASE_ANGLE,
+            L.EMISSION_ANGLE  as L_EMISSION_ANGLE,
+            L.INCIDENCE_ANGLE as L_INCIDENCE_ANGLE,
+            L.SUB_SOLAR_GROUND_AZIMUTH as L_SUB_SOLAR_GROUND_AZIMUTH,
+            L.SUB_SPACECRAFT_GROUND_AZIMUTH as L_SUB_SPACECRAFT_GROUND_AZIMUTH,
+            L.RESOLUTION      as L_RESOLUTION,
+            ST_AREA(L.geom)   as L_area,
+            R.PRODUCT_ID      as R_PRODUCT_ID,
+            R.VOLUME_ID       as R_VOLUME_ID,
+            R.ORBIT_NUMBER    as R_ORBIT_NUMBER,
+            R.PHASE_ANGLE     as R_PHASE_ANGLE,
+            R.EMISSION_ANGLE  as R_EMISSION_ANGLE,
+            R.INCIDENCE_ANGLE as R_INCIDENCE_ANGLE,
+            R.SUB_SOLAR_GROUND_AZIMUTH as R_SUB_SOLAR_GROUND_AZIMUTH,
+            R.SUB_SPACECRAFT_GROUND_AZIMUTH as R_SUB_SPACECRAFT_GROUND_AZIMUTH,
+            R.RESOLUTION      as R_RESOLUTION,
+            ST_AREA(R.geom)   as R_area,
+            ST_INTERSECTION(L.geom, R.geom) as geom,
+            ABS(L.EMISSION_ANGLE - R.EMISSION_ANGLE) as EMISSION_DIFF,
+            conv.column2 as angle_percentiles_25,
+            conv.column3 as angle_percentiles_50,
+            conv.column4 as angle_percentiles_75,
+            conv.column5 as num_angles_per_pair,
+    FROM 
+        conv 
+    JOIN 
+        md AS L ON CONTAINS(conv.column0,L.PRODUCT_ID) 
+    JOIN
+        md AS R ON CONTAINS(conv.column1,R.PRODUCT_ID)
+    WHERE 
+      conv.column2 > 10 AND conv.column5 > 10  
+    ORDER BY 
+      conv.column5 DESC; 
+COPY (SELECT * FROM pairs) TO '~/mons_mouton_convergence_angles.gpkg'         
+    WITH (FORMAT GDAL, DRIVER 'GPKG', SRS 'IAU:30135');
+```
+
+
+
+
 
 ### various untested bash commands
 
