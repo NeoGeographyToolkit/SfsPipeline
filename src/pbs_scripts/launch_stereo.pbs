@@ -2,7 +2,7 @@
 #PBS -N pbs_launch_stereo
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=8:ncpus=16:model=ivy,walltime=08:00:00        
+#PBS -l select=4:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -115,7 +115,9 @@ trap 'rm -f "$TMPFILE"' EXIT
             --ip-per-image 20000 
             --nodes-list "$PBS_NODEFILE" 
             --subpixel-mode 9 
-            --min-triangulation-angle 0.1 
+            --threads-singleprocess 8
+            --threads-multiprocess 8
+            --processes 2
             "$out_dir/run" "$DEM"
         )
         # for annoying reasons I can't seem to pass this in the array

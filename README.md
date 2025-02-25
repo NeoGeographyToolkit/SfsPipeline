@@ -194,6 +194,19 @@ and the adjusted camera list file
 duckdb -csv -c "SELECT replace(replace(column0,'.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-'), replace(replace(column1, '.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10  ORDER BY column5 DESC"  | sed 's/,/ /g' | tail -n +2 > CAMERA_PAIR_LIST.txt
 ```
 
+#### TODO: 
+
+Cross reference this with the main metadata db file (the one used to download image) to ensure pairs are ordered by increassing emission angle
+
+
+### geodiff for stereo pairs
+
+```bash
+source init_asap.sh
+for i in ./*/*DEM.tif; do ; geodiff $i $DEM  -o "${i%/*}/run"; done
+# then
+for i in ./*/*diff.tif; do echo $i $(gim $i); done
+```
 
 ### various untested bash commands
 

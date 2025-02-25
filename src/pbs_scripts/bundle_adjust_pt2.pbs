@@ -71,8 +71,8 @@ if [[ -n $SUBMIT ]]; then
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
     # actually sleep
     sleep 15
-    # submit to qsub
-    exec qsub -v DEM="$DEM",IMAGES="$IMAGES",CAMERAS="$CAMERAS",MAPPROJ_DATA="$MAPPROJ_DATA",OVERLAP_LIST="$OVERLAP_LIST",BA_PREFIX="$BA_PREFIX" "$0"
+    # submit to qsub # Use -V to pass in all environment variables!
+    exec qsub -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -118,6 +118,7 @@ echo PATH is $PATH
 # then re-run with robust threshold 2
 # think --input-adjustments-prefix  would be ba0/ba0 for the first round
 # think --match-files-prefix would also be ba0/ba0, although if I enter only at optimization I don't think I need this as it implies skip matching
+# well, actually I may want to expose it if for example I want to refine a bundle adjustment
 # later I can consider --fixed-image-list so I can "lock in" images that have low residuals
 
 # construct args
@@ -163,6 +164,17 @@ if [[ -n $FIXED_IMAGES ]]; then
     echo "We are assuming certain cameras are good to go and fixing their position in ${FIXED_IMAGES}"
     args+=(--fixed-image-list "$FIXED_IMAGES")
 fi
+
+if [[ -n $USE_DEM_HEIGHTS ]]; then
+    echo "We will use heights from the dem: ${DEM} as a constraint"
+    args+=(--heights-from-dem "$DEM" --heights-from-dem-uncertainty 10.0 --heights-from-dem-robust-threshold 0.1)
+fi
+
+if [[ -n $MATCH_FILES_PREFIX ]]; then
+    echo "We will use match files from a previous bundle adjust ${MATCH_FILES_PREFIX}"
+    args+=(--match-files-prefix $MATCH_FILES_PREFIX)
+fi
+
 
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$HOME/pbs_ba_pt2_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
