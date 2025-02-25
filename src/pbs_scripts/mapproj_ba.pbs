@@ -67,6 +67,7 @@ if [[ -n $PBS_O_WORKDIR ]]; then
     echo "If DEBUG was not unset it should now be not set: $DEBUG"
 fi
 # Change to the working directory
+# TODO set the work dir to be the parent to the IMAGES directory
 echo Working directory is $PBS_O_WORKDIR
 if [[ -n $PBS_O_WORKDIR ]]; then
     cd $PBS_O_WORKDIR
@@ -96,16 +97,31 @@ MAPPROJ=`which mapproject`
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp ~/mapproj_ba_cmds.XXXXXX)
+TMPFILE=$(mktemp $HOME/mapproj_ba_cmds.XXXXXX)
 # Ensure cleanup on exit or error
-trap 'rm -f "$TMPFILE"' EXIT
+#trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG
     for file in "$INPUT_DIR"*.ech.cub; do
         # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
         # TODO do the work in /tmp and then move back to lustre after completion
-        echo "$MAPPROJ --processes 10 --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.${BA_PREFIX:0:3}.tif --tr 1 --bundle-adjust-prefix $BA_PREFIX && gdal_footprint -q -write_absolute_path -of GeoJSON ${file%%.cub}.map.${BA_PREFIX:0:3}.tif ${file%%.cub}.map.${BA_PREFIX:0:3}.geojson" >> "$TMPFILE";
+        args=(
+            "$MAPPROJ" "$DEM" "$file" "${file%%.cub}.json" "${file%%.cub}.map.${BA_PREFIX:0:3}.tif"
+            --nodes-list "$PBS_NODEFILE" 
+            --processes 10 
+            --threads 4 
+            --bundle-adjust-prefix "$BA_PREFIX" 
+            --tr 1
+            "&&" 
+            /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
+            -q 
+            -write_absolute_path 
+            -of GeoJSON 
+            "${file%%.cub}.map.${BA_PREFIX:0:3}.tif" 
+            "${file%%.cub}.map.${BA_PREFIX:0:3}.geojson"
+        )      
+        echo "${args[@]}" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -114,17 +130,19 @@ trap 'rm -f "$TMPFILE"' EXIT
 
 # log we are about to start (TODO move below to new script)
 echo "launching jobs at $(date)"
-if [[ -z "$DEBUG" ]]; then 
+if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_ba_job.log   < "$TMPFILE" &> "$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        # run 1 job at a time
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --joblog ~/pbs_mapproj_ba_job.log < "$TMPFILE" &> "$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_mapproj_ba_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_job.log"
+    # TODO need to set the output log name as a variable to make this work
+    #mv "$HOME/pbs_mapproj_ba_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel
