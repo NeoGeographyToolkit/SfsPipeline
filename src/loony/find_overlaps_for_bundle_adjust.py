@@ -98,6 +98,8 @@ def main():
                 L_PRODUCT_ID < R_PRODUCT_ID  -- Ensures no duplicate pairs and excludes self-matches or repeates
             AND
                 SOLAR_AZ_ACOS_DIFF < {args.max_diff_slrgaz}
+            AND
+                LEFT(L_PRODUCT_ID, LENGTH(L_PRODUCT_ID) - 2) != LEFT(R_PRODUCT_ID, LENGTH(R_PRODUCT_ID) - 2) -- Ensure left and right images for an observation aren't matched to themselves as the overlap is too small for ASP
             ORDER BY
                 L_SUB_SOLAR_GROUND_AZIMUTH ASC,
                 SOLAR_AZ_ACOS_DIFF ASC;
