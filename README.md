@@ -247,9 +247,6 @@ COPY (SELECT * FROM pairs) TO '~/mons_mouton_convergence_angles.gpkg'
 ```
 
 
-
-
-
 #### TODO: 
 
 Cross reference this with the main metadata db file (the one used to download image) to ensure pairs are ordered by increassing emission angle
@@ -258,10 +255,20 @@ Cross reference this with the main metadata db file (the one used to download im
 ### geodiff for stereo pairs
 
 ```bash
+function gim {                                    
+  gdalinfo -stats $1 | grep -i Maximum | grep -i mean
+}
+
+function jim {
+  gdalinfo $1 -stats -json | jq -c '.bands[0].metadata | .[""]'
+}
+
 source init_asap.sh
 for i in ./*/*DEM.tif; do ; geodiff $i $DEM  -o "${i%/*}/run"; done
 # then
 for i in ./*/*diff.tif; do echo $i $(gim $i); done
+
+for i in ./*/*IntersectionErr.tif; do echo $i $(jim $i); done
 ```
 
 
