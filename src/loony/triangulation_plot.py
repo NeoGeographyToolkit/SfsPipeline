@@ -6,9 +6,15 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.colors import LightSource
 import rasterio
 from rasterio.enums import Resampling
+# Shade from the northwest, with the sun 45 degrees from horizontal
+ls = LightSource(azdeg=315, altdeg=45)
 
+def do_hillshade(img, ve=1.0):
+    # todo given that I decimate the data I need to get a sense of what the new resolution is for accurate virtical exaggeration
+    return ls.hillshade(img, vert_exag=ve)
 
 def read_and_downsample(filepath, pixel_height:int = 250):
     """
@@ -21,7 +27,7 @@ def read_and_downsample(filepath, pixel_height:int = 250):
         data = ds.read(1, masked=True, out_shape=(pixel_height, new_width), resampling=Resampling.bilinear)
     return data
 
-def _plot_on_axes(axes, images, titles, start_index, global_scale, global_min, global_max, cmap):
+def _plot_on_axes(axes, images, titles, start_index, global_scale, global_min, global_max, cmap, hillshade):
     """
     Helper function to plot images on a list of axes.
     
@@ -31,7 +37,7 @@ def _plot_on_axes(axes, images, titles, start_index, global_scale, global_min, g
         img_index = start_index + idx
         if img_index < len(images):
             img = images[img_index]
-            if global_scale:
+            if global_scale or hillshade:
                 im = ax.imshow(img, cmap=cmap, vmin=global_min, vmax=global_max)
             else:
                 im = ax.imshow(img, cmap=cmap)
@@ -42,7 +48,7 @@ def _plot_on_axes(axes, images, titles, start_index, global_scale, global_min, g
             ax.axis('off')
 
 def plot_images(filepaths, global_scale=False, page_mode=False, cmap='viridis',
-                interactive_cols=4, cell_size=2.0, max_dim=500):
+                interactive_cols=4, cell_size=2.0, max_dim=250, hillshade=False, prefix='page'):
     """
     Reads provided GeoTIFF files and plots them in a grid.
     
@@ -56,12 +62,16 @@ def plot_images(filepaths, global_scale=False, page_mode=False, cmap='viridis',
     titles = []
     for fp in filepaths:
         data = read_and_downsample(fp, pixel_height=max_dim)
+        if hillshade:
+            data = do_hillshade(data)
         images.append(data)
         titles.append(os.path.relpath(fp))
     
     # Compute global vmin/vmax if a singular color scale is desired.
     global_min, global_max = None, None
-    if global_scale:
+    if hillshade:
+        global_min, global_max = 0, 1
+    elif global_scale:
         global_min = min(np.nanmin(img) for img in images)
         global_max = max(np.nanmax(img) for img in images)
 
@@ -78,9 +88,9 @@ def plot_images(filepaths, global_scale=False, page_mode=False, cmap='viridis',
             # Create a flat list of axes from the gridspec.
             axes = [fig.add_subplot(gs[i]) for i in range(nrows * ncols)]
             _plot_on_axes(axes, images, titles, start_index=page * images_per_page,
-                          global_scale=global_scale, global_min=global_min, global_max=global_max, cmap=cmap)
+                          global_scale=global_scale, global_min=global_min, global_max=global_max, cmap=cmap, hillshade=hillshade)
             plt.tight_layout()
-            out_file = f'page_{page+1}.png'
+            out_file = f'{prefix}_{page+1}.png'
             plt.savefig(out_file)
             plt.close(fig)
             print(f"Saved {out_file}")
@@ -91,7 +101,7 @@ def plot_images(filepaths, global_scale=False, page_mode=False, cmap='viridis',
         fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * cell_size, nrows * cell_size))
         axes = np.atleast_1d(axes).flatten()
         _plot_on_axes(axes, images, titles, start_index=0,
-                      global_scale=global_scale, global_min=global_min, global_max=global_max)
+                      global_scale=global_scale, global_min=global_min, global_max=global_max, cmap=cmap, hillshade=hillshade)
         plt.tight_layout()
         plt.show()
 
@@ -112,6 +122,11 @@ def main():
         help="Save output as 8.5x11 inch pages (PNG files) instead of displaying in one window."
     )
     parser.add_argument(
+        "--hillshade",
+        action="store_true",
+        help="If true assume the inputs are DEMs and apply hillshading to them"
+    )
+    parser.add_argument(
         "--alt-layout",
         action="store_true",
         help="Use alternate layout: 3 columns with 2.5x2.5 inch cells instead of the default 4 columns with 2x2 inch cells."
@@ -121,6 +136,12 @@ def main():
         type=str,
         default='viridis',
         help='Matplotlib colormap name to se'
+    )
+    parser.add_argument(
+        '--out-prefix',
+        type=str,
+        default='page',
+        help='Output file name prefix to save page(s) as if not interactive'
     )
     parser.add_argument(
         "--max-dim",
@@ -144,8 +165,10 @@ def main():
         page_mode=args.page_mode,
         interactive_cols=interactive_cols,
         cell_size=cell_size,
-        cmap=args.cmap,
-        max_dim=args.max_dim
+        cmap='gray' if args.hillshade else args.cmap,
+        max_dim=args.max_dim,
+        hillshade=args.hillshade,
+        prefix=args.out
     )
 
 if __name__ == '__main__':
