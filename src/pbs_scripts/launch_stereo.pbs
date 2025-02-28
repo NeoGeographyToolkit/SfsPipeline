@@ -116,8 +116,8 @@ trap 'rm -f "$TMPFILE"' EXIT
             --nodes-list "$PBS_NODEFILE" 
             --subpixel-mode 9 
             --threads-singleprocess 8
-            --threads-multiprocess 8
-            --processes 2
+            --threads-multiprocess 4
+            --processes 5
             "$out_dir/run" "$DEM"
         )
         # for annoying reasons I can't seem to pass this in the array
