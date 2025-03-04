@@ -3,6 +3,7 @@
 
 # https://duckdb.org/docs/api/python/function
 import abc
+import os
 import argparse
 import numpy as np
 import numpy.core.multiarray
@@ -48,6 +49,11 @@ def arg_parser():
         type=str, default='.ech.cub',
         help='file extensions for image ids to append'
     )
+    parser.add_argument(
+        "--image_dir",
+        type=str, default='',
+        help='default file path to prepend to image ids, set to CWD to call os.cwd()'
+    )
     return parser
 
 
@@ -56,7 +62,7 @@ def main():
     args = parser.parse_args()
     # Connect to DuckDB
     with duckdb.connect(config = {'threads': 4}) as con:
-        con.sql('SET enable_progress_bar = true;')
+        con.sql('SET enable_progress_bar = false;')
         con.sql('SET memory_limit = "4GB";')
         con.install_extension("spatial")
         con.load_extension("spatial")
@@ -117,8 +123,13 @@ def main():
                 print(f'missed {len(missed_ids)} images in the intersections, if a lot considering raising max_diff_slrgaz', flush=True)
                 print(missed_ids)
                 print('', flush=True)
+        # get the prefix for the image id paths
+        path_prefix = args.image_dir
+        if path_prefix == 'CWD':
+            path_prefix = os.getcwd()+'/'
+        
         # get the final output for stdout
-        pair_output = con.sql(f"SELECT CONCAT(L_PRODUCT_ID, '{args.image_filename_postfix} ', R_PRODUCT_ID, '{args.image_filename_postfix}') as lines FROM pairs_raw;").fetchnumpy()
+        pair_output = con.sql(f"SELECT CONCAT('{path_prefix}', L_PRODUCT_ID, '{args.image_filename_postfix} ', '{path_prefix}', R_PRODUCT_ID, '{args.image_filename_postfix}') as lines FROM pairs_raw;").fetchnumpy()
         for row in pair_output['lines']:
             print(row, flush=True)
 

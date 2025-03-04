@@ -2,7 +2,7 @@
 #PBS -N pbs_gdal_footprints
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=00:30:00        
+#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
 #PBS -q normal             
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -79,7 +79,7 @@ echo ISIS root is $ISISROOT
 # echo out PATH
 echo PATH is $PATH
 # save the path to gdal_footprint
-GDAL_FOOTPRINT=`which gdal_footprint`
+GDAL_FOOTPRINT='/vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint'
 ################################################
 ##############################################
 # find the CUB files and parallel the jobs

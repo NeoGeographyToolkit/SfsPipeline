@@ -112,7 +112,7 @@ You can pass those to xargs and wget them in parallel, an example that downloade
 
 This will just output two columns with no header due to the sed call
 ```bash
-ogr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional' | sed '1d'
+ogr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional ORDER BY SUB_SOLAR_GROUND_AZIMUTH ASC' | sed '1d'
 ```
 
 

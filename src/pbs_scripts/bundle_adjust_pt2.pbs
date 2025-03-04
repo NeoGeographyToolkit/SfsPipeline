@@ -72,7 +72,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub # Use -V to pass in all environment variables!
-    exec qsub -V "$0"
+    exec qsub -N "pbs_ba_pt2_${BA_PREFIX:0:3}" -o "pbs_ba_pt2_${BA_PREFIX:0:3}.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -177,7 +177,7 @@ fi
 
 
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$HOME/pbs_ba_pt2_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
