@@ -112,7 +112,7 @@ You can pass those to xargs and wget them in parallel, an example that downloade
 
 This will just output two columns with no header due to the sed call
 ```bash
-gr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional' | sed '1d'
+ogr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional' | sed '1d'
 ```
 
 
@@ -264,7 +264,7 @@ function jim {
 }
 
 source init_asap.sh
-for i in ./*/*DEM.tif; do ; geodiff $i $DEM  -o "${i%/*}/run"; done
+for i in ./*/*DEM.tif; do ; geodiff --threads 8 $i $DEM  -o "${i%/*}/run"; done
 # then
 for i in ./*/*diff.tif; do echo $i $(gim $i); done
 
@@ -282,3 +282,36 @@ grep -F -x -v -f bad_images.txt all_images.txt
 grep -F -x -f good_images.txt all_images.txt
 ```
 
+## dem mosaic
+first decide which are good
+
+```bash
+function gim {                                    
+  gdalinfo -stats $1 | grep -i Maximum | grep -i mean
+}
+dem_mosaic ./*/run-DEM.tif -o all_dem_mosaic.tif
+for i in ./*/*DEM.tif; do gdal_translate -r average -outsize 50% 50% $i ${i%.tif}.h.tif; done
+for i in ./*/*DEM.tif; do ; geodiff --threads 8 $i $DEM -o "${i%/*}/run-ref"; done
+for i in ./*/*DEM.tif; do; geodiff --threads 8 $i all_dem_mosaic.tif -o "${i%/*}/run-all"; done
+for i in <good images>; do; geodiff --threads 8 $i good_dem_mosaic.tif -o "${i%/*}/run-good"; done
+# look for the ones with low mean differences here
+for i in ./*/run-all-diff.tif; do echo $i $(gim $i); done
+for i in ./*/run-ref-diff.tif; do echo $i $(gim $i); done
+# cross reference with low triangulation error
+for i in ./*/*IntersectionErr.tif; do echo $i $(gim $i); done
+# then make the good_dem_mosaic
+dem_mosaic <good dems only> -o good_dem_mosaic.tif
+# then diff again
+for i in `cat good_list.txt`; do geodiff --threads 8 $i good_dem_mosaic.tif -o "${i%/*}/run-good"; done
+
+for i in ./*/run-good-diff.tif; do echo $i $(gim $i); done
+
+
+```
+
+## pc align
+```bash
+pc_align --threads 8 --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mouton_lola_5mpp_erode_blend.tif --save-inv-transformed-reference-points -o run_align_good/run 
+
+pc_align --threads 8 --alignment-method nuth --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mouton_lola_5mpp_erode_blend.tif --save-inv-transformed-reference-points -o run_align_good_nuth/run 
+```

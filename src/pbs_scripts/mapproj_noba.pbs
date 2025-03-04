@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_noba
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=16:ncpus=10:model=ivy,walltime=06:00:00        
+#PBS -l select=16:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal             
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -102,7 +102,21 @@ trap 'rm -f "$TMPFILE"' EXIT
     for file in "$INPUT_DIR"*.ech.cub; do
         # --t_projwin $PROJWIN_EXTENT remove 
         # TODO: Change the output dtype to be UInt16 to save IO
-        echo "$MAPPROJ --processes 10 --parallel-options \"--sshdelay 0.5\" $DEM $file ${file%%.cub}.json ${file%%.cub}.map.noba.tif --tr 1 && gdal_footprint -q -write_absolute_path -of GeoJSON ${file%%.cub}.map.noba.tif ${file%%.cub}.map.noba.geojson" >> "$TMPFILE";
+        args=(
+            "$MAPPROJ" "$DEM" "$file" "${file%%.cub}.json" "${file%%.cub}.map.noba.tif"
+            --nodes-list "$PBS_NODEFILE" 
+            --processes 10 
+            --threads 4 
+            --tr 1
+            "&&" 
+            /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
+            -q 
+            -write_absolute_path 
+            -of GeoJSON 
+            "${file%%.cub}.map.noba.tif" 
+            "${file%%.cub}.map.noba.geojson"
+        )      
+        echo "${args[@]}" >> "$TMPFILE";
     done;
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -115,9 +129,9 @@ echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 1 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 2 --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
