@@ -30,6 +30,12 @@ if [ -z "$INPUT_DIR" ]; then
     exit 1
 fi
 echo "Path to CUBs: $INPUT_DIR"
+# get the optional semi-unique job NAME if it's not set
+if [ -z "$JOB_NAME_POSTFIX" ]; then
+    # get a job name postfix from the city names file
+    export JOB_NAME_POSTFIX=`shuf ~/cities.csv | head -n 1`
+fi
+echo "JOB_NAME_POSTFIX will be $JOB_NAME_POSTFIX"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -44,7 +50,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -v DEM="$DEM",INPUT_DIR="$INPUT_DIR" "$0"
+    exec qsub -N "pbs_mapproj_noba_${JOB_NAME_POSTFIX}" -o "pbs_mapproj_noba_${JOB_NAME_POSTFIX}.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -129,14 +135,14 @@ echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_mapproj_noba_${JOB_NAME_POSTFIX}_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_${JOB_NAME_POSTFIX}_log.txt"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_noba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_noba_${JOB_NAME_POSTFIX}_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_noba_$(date +"%Y-%m-%d_%H-%M-%S")_${JOB_NAME_POSTFIX}_log.txt"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_mapproj_noba_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_noba_job.log"
+    mv "$HOME/pbs_mapproj_noba_${JOB_NAME_POSTFIX}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_noba_${JOB_NAME_POSTFIX}_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

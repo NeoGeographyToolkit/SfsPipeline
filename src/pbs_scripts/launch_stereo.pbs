@@ -21,7 +21,7 @@ if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
 # define usage
-USAGE="DEM=/path/to/dem.tif;INPUT_GPKG=/path/to/CUB/files/;PROJWIN_EXTENT='0 0 100 100'; $0"
+USAGE="DEM=/path/to/dem.tif;IMAGE_PAIR_LIST=/path/to/list.txt;CAMERA_PAIR_LIST=/path/to/list.txt $0"
 # Ensure a DEM was provided
 if [ -z "$DEM" ]; then
     echo "Error: DEM is not set. Use $USAGE"
@@ -34,13 +34,18 @@ if [ -z "$IMAGE_PAIR_LIST" ]; then
     exit 1
 fi
 echo "Image Pair list file: $IMAGE_PAIR_LIST"
-
 # similar list this time with the bundle adjust prefix and .adjusted_state.json postfix for the adjusted CSM models
 if [ -z "$CAMERA_PAIR_LIST" ]; then
     echo "Error: CAMERA_PAIR_LIST is not set. Use $USAGE"
     exit 1
 fi
 echo "Camera Pair list file: $CAMERA_PAIR_LIST"
+# get the optional semi-unique job NAME if it's not set
+if [ -z "$JOB_NAME_POSTFIX" ]; then
+    # get a job name postfix from the city names file
+    export JOB_NAME_POSTFIX=`shuf ~/cities.csv | head -n 1`
+fi
+echo "JOB_NAME_POSTFIX will be $JOB_NAME_POSTFIX"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -55,7 +60,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -v DEM="$DEM",IMAGE_PAIR_LIST="$IMAGE_PAIR_LIST",CAMERA_PAIR_LIST="$CAMERA_PAIR_LIST" "$0"
+    exec qsub -N "pbs_launch_stereo_${JOB_NAME_POSTFIX}" -o "pbs_launch_stereo_${JOB_NAME_POSTFIX}.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -109,7 +114,6 @@ trap 'rm -f "$TMPFILE"' EXIT
         args=(
             "$LIMG" "$RIMG" "$LCAM" "$RCAM"
             --stereo-algorithm asp_mgm
-            --nodata-value 0.001      
             --ip-detect-method 1      
             --ip-per-tile  400        
             --ip-per-image 20000 
@@ -140,11 +144,11 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     # Run GNU Parallel with the temp file if not in debug mode
     # as we will run each stereo pair one at a time, we will only use parallel here
     # to spawn one job at a time. Later it could make sense to qsub these and have sub jobs instead
-    ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_stereo_job.log  < "$TMPFILE" &> "$HOME/pbs_stereo_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_stereo_job_$JOB_NAME_POSTFIX.log  < "$TMPFILE" &> "$HOME/pbs_stereo_$(date +"%Y-%m-%d_%H-%M-%S")_log_$JOB_NAME_POSTFIX.txt"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_stereo_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_stereo_job.log"
+    mv "$HOME/pbs_stereo_job_$JOB_NAME_POSTFIX.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_stereo_job_$JOB_NAME_POSTFIX.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

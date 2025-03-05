@@ -58,6 +58,11 @@ if [ -z "$BA_PREFIX" ]; then
     exit 1
 fi
 echo "Output Prefix: $BA_PREFIX"
+# Set Robust Threshold, use "5.0" first then re-run at "2.0" with RESUME_PREFIX set to the BA prefix
+if [ -z "$ROBUST_THRESHOLD"]
+    export ROBUST_THRESHOLD=2.0
+    echo "Using ROBUST_TRESHOLD: $ROBUST_THRESHOLD"
+fi
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -130,7 +135,7 @@ args=(
       --mapprojected-data-list "$MAPPROJ_DATA"
       --overlap-list "$OVERLAP_LIST"
       --processes 4            
-      --threads 20              
+      --threads 36              
       --nodata-value 0.001      
       --ip-detect-method 1      
       --ip-per-tile  400        
@@ -141,7 +146,7 @@ args=(
       --max-pairwise-matches 2000 
       --camera-weight 0           
       --save-intermediate-cameras 
-      --robust-threshold 2.0      
+      --robust-threshold $ROBUST_THRESHOLD     
       --tri-weight 0.1            
       --tri-robust-threshold 0.25 
       --min-triangulation-angle 0.1 

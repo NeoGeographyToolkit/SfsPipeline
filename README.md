@@ -169,6 +169,25 @@ duckdb -c "LOAD spatial; CREATE TEMP TABLE df AS SELECT * FROM ST_READ('/tmp/buf
 duckdb -csv -c "SELECT \"# Image\" FROM read_csv('./ba0/ba0-final_residuals_stats.txt', skip=1, header=True) WHERE median > 2 AND isfinite(median)"
 ```
 
+
+## inspect the mapproj_match_offset_stats and mapproj_match_offset_pair_stats.txt files
+
+```bash
+duckdb -c "SELECT * FROM read_csv('./baA/baA-mapproj_match_offset_stats.txt', skip=0, sep=' ',  header=False);"
+
+
+duckdb -c "SELECT * FROM read_csv('./baA/baA-mapproj_match_offset_pair_stats.txt', skip=0, sep=' ',  header=False) WHERE column5 <= 1.75 AND column5 > 0"
+
+```
+
+
+## Verify the bundle adjustment to look at graph connectivity
+
+```bash
+python ~/projects/sfstools/src/loony/verify_bundle_adjust.py 'baB/baB' --min_match_count=10 --max_residual_error=2.0 | jq '.component_sizes'
+```
+
+
 ## get the good stereo pair options from the convergence angle file
 column2 is the 25% value for the convergence angle (conservative)
 and column5 is the number of matches between the two images.
@@ -315,3 +334,17 @@ pc_align --threads 8 --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mout
 
 pc_align --threads 8 --alignment-method nuth --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mouton_lola_5mpp_erode_blend.tif --save-inv-transformed-reference-points -o run_align_good_nuth/run 
 ```
+
+
+## compute valid pixels for avoiding shadowed images
+
+todo I suspect bundle adjust basically computes this already, but we could potentially
+pre-filter the images we use to ensure at least some of the pixels are actually illuminated after map projection to 
+the reference DEM.
+
+```bash
+# todo move to funct
+gdal_calc -A $1.noba.tif --calc="A>0.001" --outfile ~/$1_mask.tif --NoData=0 --type Byte --overwrite --co=COMPRESS=LZW
+gdalinfo ~/$1_mask.tif -stats # get the valid pixels from here
+```
+

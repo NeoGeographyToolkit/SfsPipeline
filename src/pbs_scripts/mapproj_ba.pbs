@@ -51,7 +51,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -v DEM="$DEM",INPUT_DIR="$INPUT_DIR",BA_PREFIX="$BA_PREFIX" "$0"
+    exec qsub -N "pbs_mapproj_${BA_PREFIX:0:3}" -o "pbs_mapproj_${BA_PREFIX:0:3}.log" -v DEM="$DEM",INPUT_DIR="$INPUT_DIR",BA_PREFIX="$BA_PREFIX" "$0"
     # be sure to exit the script at this point
     exit 0
 fi
