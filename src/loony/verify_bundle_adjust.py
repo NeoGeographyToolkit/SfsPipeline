@@ -13,6 +13,7 @@ import fire
 import networkx as nx
 import numpy as np
 
+
 def check_connectivity(pairs):
     """
     construct the newtorkx graph and determine if there is connectivity or not
@@ -35,6 +36,9 @@ def check_connectivity(pairs):
     # likely the best path forward is to take the largest of these and use that only
     # or to treat each connected component as a isolated part and independently do stereo
     # and pc_align for each
+    #
+    # it could be interesting to plot the footprints and illumination plots for each 
+    # component to get a sense of how good the remaining data will be for SfS 
     return {
         'is_connected': nx.is_connected(G),
         'num_components': len(components_sizes),
@@ -44,7 +48,7 @@ def check_connectivity(pairs):
 
 
 
-def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25):
+def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, plot: bool = False, db: str | None = None):
     # parse in the match pairs file #TODO use https://duckdb.org/docs/stable/sql/query_syntax/prepared_statements.html
     matches = duckdb.sql(f"""
         SELECT 
@@ -86,6 +90,26 @@ def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25):
     df = duckdb.sql('SELECT * FROM val_pairs;').fetchnumpy()
     # compute the graph and determine the checks
     res = check_connectivity(np.vstack((df['left'],df['right'])).T)
+    if plot and db:
+        import matplotlib.pyplot as plt
+        from loony.new_sfs_cover import plot_footprints, plot_illumination_coverage
+        import geopandas as gp
+        from pathlib import Path
+        gdf = gp.read_file(db)
+        # plot each component
+        for i, c in enumerate(res['components']):
+            # get product_ids from component
+            product_ids = [Path(_).name.split('.')[0] for _ in c]
+            indexes = [_ in product_ids for _ in gdf['PRODUCT_ID']]
+            # plot the footprints
+            plot_footprints(gdf.iloc[indexes], None, title=f'Component {i}', to_crs=gdf.crs)
+            plt.savefig(f'map_{i}.png', dpi=150)
+            #plt.show()
+            # plot the illumination
+            plot_illumination_coverage(gdf.iloc[indexes], None, title=f'Component {i}')
+            plt.savefig(f'illum_{i}.png', dpi=150)
+            #plt.show()
+
     # dump to stdout the json
     return json.dumps(res)
 

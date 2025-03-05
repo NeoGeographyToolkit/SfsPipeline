@@ -175,15 +175,16 @@ def perform_geo_selection_duckdb(df_src_path: str, wkt_geometry: str)-> gp.GeoDa
     return result_df
 
 
-def plot_footprints(df: gp.GeoDataFrame, query: gp.GeoDataFrame, title: str, provenance: str = None, use_stereographic=False):
+def plot_footprints(df: gp.GeoDataFrame, query: gp.GeoDataFrame, title: str, provenance: str = None, use_stereographic=False, to_crs = None):
     if use_stereographic:
         # reproject the centroid to the geographic crs then grab it's lon lat
         centroid = query.centroid.to_crs(moon_crs_ge).iloc[0]
         crs = make_stereographic_moon_projection(centroid.x, centroid.y)
     else:
-        crs = query.crs
+        crs = to_crs or query.crs
     ax=df.to_crs(crs).plot(alpha=0.2, cmap='Set1')
-    query.to_crs(crs).plot(ax=ax, edgecolor='black', facecolor='None')
+    if query is not None:
+        query.to_crs(crs).plot(ax=ax, edgecolor='black', facecolor='None')
     # Text labels
     ax.set_title(f"{title} LROC Coverage", va='bottom')
     # updated the dpi
@@ -199,6 +200,9 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
     cmap = matplotlib.colormaps['plasma_r']
     # define the bins
     bins = np.arange(np.floor(min(df_results['INCIDENCE_ANGLE'])),np.ceil(max(df_results['INCIDENCE_ANGLE'])))
+    if len(bins) == 1:
+        # we had too little data for the bins so split it
+        bins = np.linspace(np.floor(min(df_results['INCIDENCE_ANGLE'])),np.ceil(max(df_results['INCIDENCE_ANGLE'])), num=10)
     norm = matplotlib.colors.BoundaryNorm(bins, len(bins))
     # get data to bin assignments
     bin_indices = np.digitize(df_results['INCIDENCE_ANGLE'], bins)
@@ -238,12 +242,13 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         fontsize=10)
     ax_legend.set_title(f"{title} LROC Coverage", va='bottom')
     # more text
-    plt.figtext(
-        0.5, 0.01,
-        f"""The area analyzed is {query.geometry.iloc[0].wkt}""",
-        ha="center",
-        fontsize="xx-small"
-    )
+    if query:
+        plt.figtext(
+            0.5, 0.01,
+            f"""The area analyzed is {query.geometry.iloc[0].wkt}""",
+            ha="center",
+            fontsize="xx-small"
+        )
     plt.figtext(0.01, 0.05, provenance, fontsize="small")
     plt.figtext(0.01, 0.85, tw.fill(
         f"Each line represents 1 of {df_results.shape[0]} LROC images.",
