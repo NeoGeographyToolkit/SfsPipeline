@@ -2,7 +2,7 @@
 #PBS -N pbs_ba_pt1
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=16:ncpus=20:model=ivy,walltime=04:30:00        
+#PBS -l select=16:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -138,15 +138,26 @@ args=(
       --remove-outliers-params "75.0 3.0 100 100"
       -o "$BA_PREFIX"
 )
+# set log file names
+LOG_FILE="$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
 # for annoying reasons I can't seem to pass this in the array
-parallel_opts="--resume-failed --sshdelay 0.5 --memfree 30G --joblog $HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
+parallel_opts="--resume-failed --sshdelay 0.75 --memfree 20G --joblog $JOB_FILE"
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    echo "Environment Variables: "
+    env
+    echo "Args: "
+    echo "${args[@]}"
+    echo "Parallel options: "
+    echo "$parallel_opts"
+    echo "Parallel has started at $(date)"
+    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving|stats:" &> $LOG_FILE
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
+    # todo move log files in the ba folder to a sub directory
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
+    mv "$JOB_FILE" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_${JOB_FILE##*/}"
 else
     # I am debugging of a pfe or something
     echo "would have run: "

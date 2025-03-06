@@ -179,14 +179,23 @@ if [[ -n $MATCH_FILES_PREFIX ]]; then
     echo "We will use match files from a previous bundle adjust ${MATCH_FILES_PREFIX}"
     args+=(--match-files-prefix $MATCH_FILES_PREFIX)
 fi
-
+# set log file names
+LOG_FILE="$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"
 
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    echo "Environment Variables: "
+    env
+    echo "Args: "
+    echo "${args[@]}"
+    echo "Parallel options: "
+    echo "$parallel_opts"
+    echo "Parallel has started at $(date)"
+    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$LOG_FILE"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_ba_pt2_${BA_PREFIX:0:3}_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_ba_pt2_${BA_PREFIX:0:3}_job.log"
+    mv "$JOB_FILE" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_${JOB_FILE##*/}"
 else
     # I am debugging of a pfe or something
     echo "would have run: "
