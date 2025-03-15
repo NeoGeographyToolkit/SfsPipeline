@@ -37,8 +37,6 @@ def check_connectivity(pairs):
     # or to treat each connected component as a isolated part and independently do stereo
     # and pc_align for each
     #
-    # it could be interesting to plot the footprints and illumination plots for each 
-    # component to get a sense of how good the remaining data will be for SfS 
     return {
         'is_connected': nx.is_connected(G),
         'num_components': len(components_sizes),
@@ -90,6 +88,10 @@ def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, 
     df = duckdb.sql('SELECT * FROM val_pairs;').fetchnumpy()
     # compute the graph and determine the checks
     res = check_connectivity(np.vstack((df['left'],df['right'])).T)
+    # add query params
+    res['db'] = db
+    res['min_match_count'] = min_match_count
+    res['max_residual_error'] = max_residual_error
     if plot and db:
         import matplotlib.pyplot as plt
         from loony.new_sfs_cover import plot_footprints, plot_illumination_coverage
@@ -109,6 +111,7 @@ def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, 
             plot_illumination_coverage(gdf.iloc[indexes], None, title=f'Component {i}')
             plt.savefig(f'illum_{i}.png', dpi=150)
             #plt.show()
+            plt.close('all') 
 
     # dump to stdout the json
     return json.dumps(res)

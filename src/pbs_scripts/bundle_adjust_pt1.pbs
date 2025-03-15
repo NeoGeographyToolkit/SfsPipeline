@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=16:ncpus=20:model=ivy,walltime=08:00:00        
-#PBS -q normal                 
+#PBS -l select=24:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -q normal                
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1.log   
@@ -109,9 +109,27 @@ echo PATH is $PATH
 
 # https://stereopipeline.readthedocs.io/en/latest/tools/parallel_bundle_adjust.html
 # --stop-point 2 should stop before optimization which only works on 1 node
-
+# bug in parallel_bundle_adjust prevents allocating more than the number of nodes jobs to run simultaenously 
+# eg, you have 16 nodes, want to run 4 per, you can only ever run 1 per (max 16), but then --processes can lower that
+# so you can almost never run more than 1 job per node, solution allocate many nodes but with 1 process or fix via pr
 # construct args
+
+## internally parallel_bundle_adjust uses --max-jobs parameter for processes
+## if you have 16 nodes with 40 cores each (20 physical) and want 16*20 jobs running in parallel, you need to set --max-jobs to 320
+## then you would set --process to 320 and --threads to 2
+## if you want 4 threads per job, for 1 node you can have 5 jobs (4*5=20), and then 5 jobs * 16 nodes is 80 concurrent jobs
+## if 4 per node but want some buffer, then 4*16 = 64
+## I think I want 3 jobs per node, with 5 threads per job, so ask for more nodes, assume only 60 gb of ram 
+## per node, so request more cpus than you need to expand memory capacity (todo ask hec if I can request fewer cores but get the same ram)
+## with 3 jobs per node, approx 20 gb per job should be available. 
+
+# for debug 
+# ~/sw/tools/asp/bin/parallel -u --max-procs 3 -M --sshloginfile $PBS_NODEFILE -u \
+#    "echo \$(date) Node: \$(hostname) Job Slot: {#} PID: \$$ Running Jobs: \$(pgrep -cf sleep); sleep 5"
+
+
 args=(
+      --entry-point 1
       --stop-point 2          
       --nodes-list "$PBS_NODEFILE"    
       --image-list "$IMAGES" 
@@ -119,8 +137,8 @@ args=(
       --mapproj-dem "$DEM"      
       --mapprojected-data-list "$MAPPROJ_DATA" 
       --overlap-list "$OVERLAP_LIST"
-      --processes 4             
-      --threads 4               
+      --processes 3            
+      --threads 5               
       --nodata-value 0.001      
       --ip-detect-method 1      
       --ip-per-tile  400        
@@ -142,7 +160,7 @@ args=(
 LOG_FILE="$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 JOB_FILE="$HOME/pbs_ba_pt1_${BA_PREFIX:0:3}_job.log"
 # for annoying reasons I can't seem to pass this in the array
-parallel_opts="--resume-failed --sshdelay 0.75 --memfree 20G --joblog $JOB_FILE"
+parallel_opts="--resume-failed --sshdelay 0.75 --memfree 22G --joblog $JOB_FILE"
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Environment Variables: "

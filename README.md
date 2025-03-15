@@ -187,6 +187,26 @@ duckdb -c "SELECT * FROM read_csv('./baA/baA-mapproj_match_offset_pair_stats.txt
 python ~/projects/sfstools/src/loony/verify_bundle_adjust.py 'baB/baB' --min_match_count=10 --max_residual_error=2.0 | jq '.component_sizes'
 ```
 
+for the largest group identified, ensure you only select stereo pairs from it and drop further use of images that remain
+in future stereo/bundle_adjust/sfs as those groups are disconnected islands
+
+Be sure to iterate a few times with min match count, 10 may be too conservative, try 4,5,6, etc to see how size of largest component changes
+
+Finally export the json to a file for later use 
+
+```bash
+python ~/projects/sfstools/src/loony/verify_bundle_adjust.py 'baB/baB' --min_match_count=10 --max_residual_error=2.0 > baB_comps.json
+```
+
+You will need to use this in joins later on like so
+
+```bash
+duckdb -csv -c "INSTALL json; LOAD json; WITH comp AS (SELECT UNNEST(components[1]) as product_ids FROM read_json_auto('./test_delta/bundle_adjust_components.json')) SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./baD/baD-convergence_angles.txt', skip=2, header=False, sep=' ') JOIN comp ON comp.product_ids = column1 WHERE column2 > 10 AND column5 > 1000 ORDER BY column5 DESC;" | sed 's/,/ /g' | tail -n +2 > ./test_delta/CAMERA_PAIR_LIST.txt
+```
+
+TODO don't I have a generic utility for plotting anticipated stereo pairs? 
+
+
 
 ## get the good stereo pair options from the convergence angle file
 column2 is the 25% value for the convergence angle (conservative)
@@ -268,7 +288,6 @@ COPY (SELECT * FROM pairs) TO '~/mons_mouton_convergence_angles.gpkg'
 
 #### TODO: 
 
-Cross reference this with the main metadata db file (the one used to download image) to ensure pairs are ordered by increassing emission angle
 
 
 ### geodiff for stereo pairs
