@@ -40,7 +40,7 @@ trap 'rm -f "$TMPFILE"' EXIT
 {
     trap '' DEBUG
     while read LIMG RIMG LCAM RCAM; do
-        echo "SUBMIT=true; NOSLEEP=true; DEM=$DEM; LIMG=$LIMG; RIMG=$RIMG; LCAM=$LCAM; RCAM=$RCAM run_individual_stereo.pbs" >> "$TMPFILE";
+        echo "export SUBMIT=true; export NOSLEEP=true; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; run_individual_stereo.pbs" >> "$TMPFILE";
         # okay 
     done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
     #
@@ -48,13 +48,13 @@ trap 'rm -f "$TMPFILE"' EXIT
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
 }
-
-# log we are about to start (TODO move below to new script)
+# log we are about to start 
 echo "launching jobs"
-if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
+if [[ -z "$DEBUG" && -n $SUBMIT ]]; then 
     # Launch each job with Qsub
     while IFS= read -r line; do
         eval "$line"
+        sleep 1
     done < "$TMPFILE"
 else
     # we are in debug mode so just log out the commands that would

@@ -200,9 +200,16 @@ python ~/projects/sfstools/src/loony/verify_bundle_adjust.py 'baB/baB' --min_mat
 
 You will need to use this in joins later on like so
 
+TODO join also with residuals to pick low residuals only
+
 ```bash
 duckdb -csv -c "INSTALL json; LOAD json; WITH comp AS (SELECT UNNEST(components[1]) as product_ids FROM read_json_auto('./test_delta/bundle_adjust_components.json')) SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./baD/baD-convergence_angles.txt', skip=2, header=False, sep=' ') JOIN comp ON comp.product_ids = column1 WHERE column2 > 10 AND column5 > 1000 ORDER BY column5 DESC;" | sed 's/,/ /g' | tail -n +2 > ./test_delta/CAMERA_PAIR_LIST.txt
 ```
+
+```bash
+duckdb -csv -c "INSTALL json; LOAD json; WITH comp AS (SELECT UNNEST(components[1]) as product_ids FROM read_json_auto('./test_delta/bundle_adjust_components.json')), final_resid AS (SELECT \"# Image\" as product_ids FROM read_csv('./baD/baD-final_residuals_stats.txt', skip=1, header=True) WHERE median < 1.5 AND isfinite(median)) SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./baD/baD-convergence_angles.txt', skip=2, header=False, sep=' ') JOIN final_resid AS fr0 ON fr0.product_ids = column0 JOIN final_resid AS fr1 ON fr1.product_ids = column1 JOIN comp AS c0 ON c0.product_ids = column0 JOIN comp AS c1 ON c1.product_ids = column1  WHERE column2 > 10 AND column5 > 1000 ORDER BY column5 DESC;" | sed 's/,/ /g' | tail -n +2 > ./test_delta/CAMERA_PAIR_LIST.txt
+```
+
 
 TODO don't I have a generic utility for plotting anticipated stereo pairs? 
 
@@ -240,8 +247,8 @@ we need to join the two csvs and make an output similar to the find_stereo_pairs
 ```sql
 INSTALL SPATIAL;
 LOAD SPATIAL;
-CREATE TEMP TABLE conv AS SELECT * FROM  read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ');
-CREATE TEMP TABLE md AS SELECT * FROM ST_Read('./buffered_1km_mons_mouton_regional.gpkg');
+CREATE TEMP TABLE conv AS SELECT * FROM  read_csv('./baD/baD-convergence_angles.txt', skip=2, header=False, sep=' ');
+CREATE TEMP TABLE md AS SELECT * FROM ST_Read('./mapprojected_footprints_noba_mons_mouton_10k.gpkg');
 CREATE TEMP TABLE 
             pairs
     AS SELECT
@@ -281,7 +288,7 @@ CREATE TEMP TABLE
       conv.column2 > 10 AND conv.column5 > 10  
     ORDER BY 
       conv.column5 DESC; 
-COPY (SELECT * FROM pairs) TO '~/mons_mouton_convergence_angles.gpkg'         
+COPY (SELECT * FROM pairs) TO './mons_mouton_10k_baD_convergence_angles.gpkg'         
     WITH (FORMAT GDAL, DRIVER 'GPKG', SRS 'IAU:30135');
 ```
 

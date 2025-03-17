@@ -134,7 +134,7 @@ args=(
 # for annoying reasons I can't seem to pass this in the array
 parallel_opts="\"--joblog $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_job.log\""
 # first write out the parallel stereo command but first make the output dir so I can capture the logs per job
-STEREO_RUN="mkdir -p $out_dir && parallel_stereo ${args[@]}" --parallel-options "${parallel_opts} &> $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt"
+STEREO_RUN="mkdir -p $out_dir && parallel_stereo ${args[@]} --parallel-options ${parallel_opts} &> $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt"
 # I could have seperate queues and run point2dem all at the end over the nodes in order to have less dead air time
 POST_PROCESS="point2dem --threads 8 --errorimage --tr 1 $out_dir/run-PC.tif &> $out_dir/pbs_point2dem_${LBASE%%.*}_${RBASE%%.*}_log.txt"
 # log we are about to start (TODO move below to new script)
