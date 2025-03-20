@@ -241,7 +241,7 @@ get_stereo_pairs_from_bundle_adjust.py baD/baD ./test_delta/bundle_adjust_compon
 and then use SED to get the corresponding adjusted_cameras for the CAMERA_PAIR_LIST.txt:
 
 ```bash
-cat ./test_delta/STEREO_PAIR_LIST_NOBA.txt | sed 's/.map.noba.tif/.adjusted_state.json/g' > ./test_delta/CAMERA_PAIR_LIST.txt 
+cat ./test_delta/STEREO_PAIR_LIST_NOBA.txt | sed 's/IMAGES\//baD\/baD-/g' | sed 's/.map.noba.tif/.adjusted_state.json/g' > ./test_delta/CAMERA_PAIR_LIST.txt 
 ```
 
 ## running stereo pairs as individual jobs
@@ -250,13 +250,12 @@ we will use the launch_individual_stereo_jobs.sh script to parse the image and c
 
 ```bash
 export DEM=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/m2m_mons_mouton_10k.tif
-export IMAGE_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/STEREO_PAIR_LIST_BA.txt
+export IMAGE_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/STEREO_PAIR_LIST_NOBA.txt
 export CAMERA_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/CAMERA_PAIR_LIST.txt
 export BA_PREFIX='baD/baD'
 export SUBMIT=true
 launch_individual_stereo_jobs.sh
 ```
-
 
 
 ## get metadata for product ids used in convergence angle file

@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=4:ncpus=20:model=ivy,walltime=04:00:00        
+#PBS -l select=4:ncpus=20:model=ivy,walltime=06:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -109,7 +109,7 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_cmds.XXXXXX)
         args=(
             "$MAPPROJ" "$DEM" "$file" "${file%%.cub}.json" "${file%%.cub}.map.${BA_PREFIX:0:3}.tif"
             --nodes-list "$PBS_NODEFILE" 
-            --processes 10 
+            --processes 8 
             --threads 4 
             --bundle-adjust-prefix "$BA_PREFIX" 
             --tr 1
@@ -131,18 +131,20 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_cmds.XXXXXX)
 # log we are about to start (TODO move below to new script)
 echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    # Run GNU Parallel with the temp file if not in debug mode
+    # get output name
+    export OUTPUT_LOG="$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    # Run GNU Parallel with the temp file if not in debug mode   
     if [[ $NUM_NODES -gt 1 ]]; then
         # run 1 job at a time
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --joblog ~/pbs_mapproj_ba_job.log < "$TMPFILE" &> "$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --joblog ~/pbs_mapproj_ba_job.log < "$TMPFILE" &> "$OUTPUT_LOG"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE" &> "$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE" &> "$OUTPUT_LOG"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     # TODO need to set the output log name as a variable to make this work
-    #mv "$HOME/pbs_mapproj_ba_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_job.log"
+    mv "$OUTPUT_LOG" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

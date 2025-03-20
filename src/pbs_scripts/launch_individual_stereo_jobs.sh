@@ -40,6 +40,23 @@ trap 'rm -f "$TMPFILE"' EXIT
 {
     trap '' DEBUG
     while read LIMG RIMG LCAM RCAM; do
+        if [ ! -f $LIMG ]; then
+            echo "LEFT image not found!: $LIMG"
+            continue
+        fi
+        if [ ! -f $RIMG ]; then
+            echo "RIGHT image not found!: $LIMG"
+            continue
+        fi
+        if [ ! -f $LCAM ]; then
+            echo "LEFT camera not found!: $LCAM"
+            continue
+        fi
+        if [ ! -f $LCAM ]; then
+            echo "RIGHT camera not found!: $RCAM"
+            continue
+        fi
+        # should only get here if all files exist
         echo "export SUBMIT=true; export NOSLEEP=true; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; run_individual_stereo.pbs" >> "$TMPFILE";
         # okay 
     done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
