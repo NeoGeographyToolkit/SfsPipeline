@@ -2,10 +2,8 @@
 #PBS -N pbs_launch_stereo
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=04:00:00        
+#PBS -l select=1:ncpus=20:model=ivy,walltime=02:00:00        
 #PBS -q low
-#PBS -m abe                     
-#PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_launch_stereo.log   
 #PBS -r y                       
 #PBS -S /bin/bash               

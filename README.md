@@ -228,17 +228,36 @@ note this will return the image files, not the map projected images so to get a 
 duckdb -csv -c "SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10"
 ```
 
-and to get a usable list file:
+to get a stereo pair list file use the `get_stereo_pairs_from_bundle_adjust.py` script
 
 ```bash
-duckdb -csv -c "SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10  ORDER BY column5 DESC"  | sed 's/,/ /g' | tail -n +2 > IMAGE_PAIR_LIST.txt
+# first get the list assuming bundle-adjusted map projected images
+get_stereo_pairs_from_bundle_adjust.py baD/baD ./test_delta/bundle_adjust_components.json --use_ba_mapproj_tifs  --max_residual_error 1.25 --max_mapproj_error 1.75 > ./test_delta/STEREO_PAIR_LIST_BA.txt 
+# and next from raw cameras
+get_stereo_pairs_from_bundle_adjust.py baD/baD ./test_delta/bundle_adjust_components.json --max_residual_error 1.25 --max_mapproj_error 1.75 > ./test_delta/STEREO_PAIR_LIST_NOBA.txt 
 ```
+(these files are the IMAGE_PAIR_LIST.txt files to use)
 
-and the adjusted camera list file
+and then use SED to get the corresponding adjusted_cameras for the CAMERA_PAIR_LIST.txt:
 
 ```bash
-duckdb -csv -c "SELECT replace(replace(column0,'.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-'), replace(replace(column1, '.cub', '.adjusted_state.json'), 'IMAGES/', 'ba0/ba0-') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10  ORDER BY column5 DESC"  | sed 's/,/ /g' | tail -n +2 > CAMERA_PAIR_LIST.txt
+cat ./test_delta/STEREO_PAIR_LIST_NOBA.txt | sed 's/.map.noba.tif/.adjusted_state.json/g' > ./test_delta/CAMERA_PAIR_LIST.txt 
 ```
+
+## running stereo pairs as individual jobs
+
+we will use the launch_individual_stereo_jobs.sh script to parse the image and camera pairs and launch a bunch of small low priority jobs 
+
+```bash
+export DEM=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/m2m_mons_mouton_10k.tif
+export IMAGE_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/STEREO_PAIR_LIST_BA.txt
+export CAMERA_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/CAMERA_PAIR_LIST.txt
+export BA_PREFIX='baD/baD'
+export SUBMIT=true
+launch_individual_stereo_jobs.sh
+```
+
+
 
 ## get metadata for product ids used in convergence angle file
 
