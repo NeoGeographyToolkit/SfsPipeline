@@ -8,6 +8,45 @@ We will use this as the reference document, but there are many practical aspects
 
 
 
+# Workflow for scripts
+
+Here is the high level ordering of the commands used end-to-end 
+
+Symbols:
+💻 : run locally or on single PFE node
+☁️ : run PBS script (so needs to be on PFE node)
+
+1. process-cumulative-index (💻)
+  - Local script for preparing geoparquet cumulative index files
+2. sfs-cover (💻)
+  - Local script for using geoparquet index to get images relevant to ROI 
+3. find-stereo-pairs (💻)
+  - Optional script to investigate "good stereo" availability prior to BA (you can skip entirely)
+4. db_to_urls.sh (💻/☁️)
+  - Given sfs-cover output get S3 urls to images/labels for downloading via wget
+5. calibrate_edr.pbs (☁️)
+  - PBS batch job for calibrating/spiceinit'ing images, making CSM models, etc, run on PFE to submit job.
+6. mapproj_noba.pbs (☁️)
+  - PBS batch job for map projecting CUB files given CSM models
+7. prepare_ba0_lists.sh (💻)
+  - Given folder of cubs and csm cameras generate most of the list text files bundle adjust needs (may be deprecated)
+8. find_overlaps_for_bundle_adjust.py (💻)
+  - Given sfs cover output determine likely matching images by overlap and lighting geometry to feed pairs list to bundle adjust
+9. solar_az_animate.py (💻)
+  - Optional script to view footprint coverage given solar ground azimuth bins via animation in matplotlib
+10. bundle_adjust_pt1.pbs (☁️)
+  - PBS batch job First pass bundle adjust that just computes statistics and matches for bundle adjust
+11. bundle_adjust_pt2.pbs (☁️)
+  - PBS batch job that only runs 1 node to perform bundle adjust optimization
+12. mapproj_ba.pbs (☁️)
+13. verify_bundle_adjust.py (💻)
+14. get_stereo_pairs_from_bundle_adjust.py (💻)
+15. launch_individual_stereo_jobs.sh (☁️)
+  - Script that launches individual stereo jobs each as PBS jobs that use 1 node each 
+16. triangulation_plot.py (💻)
+  - utility plot tool to plot triangulation error images in python without stereo-gui
+
+
 
 ## Command Line Tools
 

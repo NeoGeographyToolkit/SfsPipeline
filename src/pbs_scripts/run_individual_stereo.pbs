@@ -2,7 +2,7 @@
 #PBS -N pbs_launch_stereo
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=02:00:00        
+#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
 #PBS -q low
 #PBS -o pbs_launch_stereo.log   
 #PBS -r y                       
@@ -21,37 +21,44 @@ fi
 # define usage
 USAGE="DEM=/path/to/dem.tif;IMAGE_PAIR_LIST=/path/to/list.txt;CAMERA_PAIR_LIST=/path/to/list.txt $0"
 # Ensure a DEM was provided
-if [ -z "$DEM" ]; then
+if [[ -z "$DEM" ]]; then
     echo "Error: DEM is not set. Use $USAGE"
     exit 1
 fi
 echo "DEM file: $DEM"
 # Left Image
-if [ -z "$LIMG" ]; then
+if [[ -z "$LIMG" ]]; then
     echo "Error: LIMG is not set. Use $USAGE"
     exit 1
 fi
 echo "Left Image file: $LIMG"
 # Right Image
-if [ -z "$RIMG" ]; then
+if [[ -z "$RIMG" ]]; then
     echo "Error: RIMG is not set. Use $USAGE"
     exit 1
 fi
 echo "Right Image file: $RIMG"
 # Left Camera
-if [ -z "$LCAM" ]; then
+if [[ -z "$LCAM" ]]; then
     echo "Error: LCAM is not set. Use $USAGE"
     exit 1
 fi
 echo "Left Image file: $LCAM"
 # Right Camera
-if [ -z "$RCAM" ]; then
+if [[ -z "$RCAM" ]]; then
     echo "Error: RCAM is not set. Use $USAGE"
     exit 1
 fi
-echo "Left Image file: $RCAM"
+echo "Right Image file: $RCAM"
+# Bundle Adjust prefix
+if [[ -z "$BA_PREFIX" ]]; then
+    echo "Error: BA_PREFIX is not set. Use $USAGE"
+    exit 1
+fi
+echo "Bundle Adjust Prefix: $BA_PREFIX"
+
 # get the optional semi-unique job NAME if it's not set
-if [ -z "$JOB_NAME_POSTFIX" ]; then
+if [[ -z "$JOB_NAME_POSTFIX" ]]; then
     # get a job name postfix from the city names file
     export JOB_NAME_POSTFIX=`shuf ~/cities.csv | head -n 1`
 fi
@@ -113,7 +120,7 @@ echo PATH is $PATH
 # Process parameters
 LBASE=$(basename "$LIMG")
 RBASE=$(basename "$RIMG")
-out_dir="run_stereo/${LBASE%%.*}__${RBASE%%.*}"
+out_dir="run_stereo_${BA_PREFIX:0:3}/${LBASE%%.*}__${RBASE%%.*}"
 # re-use match files from bundle adjust https://stereopipeline.readthedocs.io/en/latest/tools/bundle_adjust.html#match-files
 # stereo.default docs claim the normal match-files-prefix works only with non-mapprojected images.
 args=(
