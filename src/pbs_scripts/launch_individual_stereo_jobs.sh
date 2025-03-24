@@ -49,21 +49,31 @@ trap 'rm -f "$TMPFILE"' EXIT
         if [[ ! -f $LIMG ]]; then
             echo "LEFT image not found!: $LIMG"
             continue
-        fi
-        if [[ ! -f $RIMG ]]; then
-            echo "RIGHT image not found!: $LIMG"
+        elif [[ ! -f $RIMG ]]; then
+            echo "RIGHT image not found!: $RIMG"
             continue
-        fi
-        if [[ ! -f $LCAM ]]; then
+        elif [[ ! -f $LCAM ]]; then
             echo "LEFT camera not found!: $LCAM"
             continue
-        fi
-        if [[ ! -f $LCAM ]]; then
+        elif [[ ! -f $RCAM ]]; then
             echo "RIGHT camera not found!: $RCAM"
             continue
+        else
+            l_img_id=`echo "${LIMG##*/}" | cut -d. -f1`
+            r_img_id=`echo "${RIMG##*/}" | cut -d. -f1`
+            l_cam_id=`echo "${LCAM##*/}" | cut -c 5- | cut -d. -f1`
+            r_cam_id=`echo "${RCAM##*/}" | cut -c 5- | cut -d. -f1`
+            if [[ $l_img_id != $l_cam_id ]]; then
+                echo "LEFT IMG and CAM don't match!"
+                echo $l_img_id $l_cam_id
+            elif [[ $r_img_id != $r_cam_id ]]; then
+                echo "RIGHT IMG and CAM don't match!"
+                echo $r_img_id $r_cam_id
+            else 
+                # should only get here if all files exist and match correctly
+                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; run_individual_stereo.pbs" >> "$TMPFILE";
+            fi
         fi
-        # should only get here if all files exist
-        echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; run_individual_stereo.pbs" >> "$TMPFILE";
         # okay 
     done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
     #

@@ -120,7 +120,7 @@ echo PATH is $PATH
 # Process parameters
 LBASE=$(basename "$LIMG")
 RBASE=$(basename "$RIMG")
-out_dir="run_stereo_${BA_PREFIX:0:3}/${LBASE%%.*}__${RBASE%%.*}"
+out_dir="run_stereo_${BA_PREFIX:0:3}/${JOB_NAME_POSTFIX}_${LBASE%%.*}__${RBASE%%.*}"
 # re-use match files from bundle adjust https://stereopipeline.readthedocs.io/en/latest/tools/bundle_adjust.html#match-files
 # stereo.default docs claim the normal match-files-prefix works only with non-mapprojected images.
 args=(
