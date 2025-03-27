@@ -41,7 +41,7 @@ def _plot_on_axes(axes, images, titles, start_index, global_scale, global_min, g
                 im = ax.imshow(img, cmap=cmap, vmin=global_min, vmax=global_max)
             else:
                 im = ax.imshow(img, cmap=cmap)
-            ax.set_title(titles[img_index], fontsize=8)
+            ax.set_title(titles[img_index].split('_')[0], fontsize=8)
             ax.axis('off')
             plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         else:
@@ -91,7 +91,7 @@ def plot_images(filepaths, global_scale=False, page_mode=False, cmap='viridis',
                           global_scale=global_scale, global_min=global_min, global_max=global_max, cmap=cmap, hillshade=hillshade)
             plt.tight_layout()
             out_file = f'{prefix}_{page+1}.png'
-            plt.savefig(out_file)
+            plt.savefig(out_file, dpi=150)
             plt.close(fig)
             print(f"Saved {out_file}")
     else:
@@ -168,7 +168,7 @@ def main():
         cmap='gray' if args.hillshade else args.cmap,
         max_dim=args.max_dim,
         hillshade=args.hillshade,
-        prefix=args.out
+        prefix=args.out_prefix
     )
 
 if __name__ == '__main__':

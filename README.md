@@ -368,9 +368,6 @@ function jim {
 source init_asap.sh
 for i in ./*/*DEM.tif; do ; geodiff --threads 8 $i $DEM  -o "${i%/*}/run"; done
 # then
-for i in ./*/*diff.tif; do echo $i $(gim $i); done
-
-for i in ./*/*IntersectionErr.tif; do echo $i $(jim $i); done
 ```
 
 
@@ -388,19 +385,25 @@ grep -F -x -f good_images.txt all_images.txt
 first decide which are good
 
 ```bash
-function gim {                                    
-  gdalinfo -stats $1 | grep -i Maximum | grep -i mean
+function jim {
+  gdalinfo $1 -stats -json | jq -c ".bands[0].metadata | .[""] + {file: \"$1\"}"
 }
 dem_mosaic ./*/run-DEM.tif -o all_dem_mosaic.tif
-for i in ./*/*DEM.tif; do gdal_translate -r average -outsize 50% 50% $i ${i%.tif}.h.tif; done
-for i in ./*/*DEM.tif; do ; geodiff --threads 8 $i $DEM -o "${i%/*}/run-ref"; done
-for i in ./*/*DEM.tif; do; geodiff --threads 8 $i all_dem_mosaic.tif -o "${i%/*}/run-all"; done
-for i in <good images>; do; geodiff --threads 8 $i good_dem_mosaic.tif -o "${i%/*}/run-good"; done
+for i in ./*/*DEM.tif; do gdal_translate -r average -outsize 50% 50% $i ${i%.tif}.half.tif; done
+#for i in ./*/*DEM.half.tif; do; geodiff --threads 8 $i $DEM -o "${i%/*}/run-ref"; done
+for i in ./*/*DEM.half.tif; do; geodiff --threads 8 $i all_dem_mosaic.tif -o "${i%/*}/run-all"; done
+#for i in <good images>; do; geodiff --threads 8 $i good_dem_mosaic.tif -o "${i%/*}/run-good"; done
 # look for the ones with low mean differences here
-for i in ./*/run-all-diff.tif; do echo $i $(gim $i); done
-for i in ./*/run-ref-diff.tif; do echo $i $(gim $i); done
 # cross reference with low triangulation error
-for i in ./*/*IntersectionErr.tif; do echo $i $(gim $i); done
+for i in ./*/run-all-diff.tif; do echo $(jim $i) >> diff_all_jim.txt; done
+for i in ./*/*IntersectionErr.tif; do echo $(jim $i) >> inter_all_jim.txt; done 
+# remove diffs with means larger than 10/less than-10
+# remove intersection errors larger than 1 meter mean
+
+
+
+
+
 # then make the good_dem_mosaic
 dem_mosaic <good dems only> -o good_dem_mosaic.tif
 # then diff again
@@ -411,9 +414,28 @@ for i in ./*/run-good-diff.tif; do echo $i $(gim $i); done
 
 ```
 
+## triangulation error plotting
+I needed more control over error plotting so I AI-slopped the script `triangulation_plot.py`
+```bash
+# plot the hillshades
+python ~/projects/sfstools/src/loony/triangulation_plot.py ./*/*DEM.half.tif --hillshade
+# plot the intersection errors
+python ~/projects/sfstools/src/loony/triangulation_plot.py ./*/*IntersectionErr.tif --out-prefix intersec
+```
+
+
+
 ## pc align
 ```bash
+pc_align --threads 8 --max-displacement 500 all_dem_mosaic_baD.tif $DEM --save-inv-transformed-reference-points -o run_align_all/run 
+
+pc_align --threads 8 --alignment-method nuth --max-displacement 500 all_dem_mosaic_baD.tif $DEM --save-inv-transformed-reference-points -o run_align_all_nuth/run 
+
+
+
 pc_align --threads 8 --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mouton_lola_5mpp_erode_blend.tif --save-inv-transformed-reference-points -o run_align_good/run 
+
+
 
 pc_align --threads 8 --alignment-method nuth --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mouton_lola_5mpp_erode_blend.tif --save-inv-transformed-reference-points -o run_align_good_nuth/run 
 ```

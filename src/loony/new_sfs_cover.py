@@ -242,7 +242,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         fontsize=10)
     ax_legend.set_title(f"{title} LROC Coverage", va='bottom')
     # more text
-    if query:
+    if query is not None:
         plt.figtext(
             0.5, 0.01,
             f"""The area analyzed is {query.geometry.iloc[0].wkt}""",
