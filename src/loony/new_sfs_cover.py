@@ -393,9 +393,7 @@ def main():
         parser.error(str(err))
     except argparse.ArgumentError as err:
         parser.error(str(err))
-    except Exception as err:
-        parser.error(str(err))
-   
+
 
 if __name__ == '__main__':
     main()

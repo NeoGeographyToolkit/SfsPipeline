@@ -6,6 +6,35 @@ https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html
 
 We will use this as the reference document, but there are many practical aspects of generating DEMs via SfS that are not necessarily documented. 
 
+## Installation Instructions
+
+1. [Install micromamba.](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) If you already have conda/mamba installed and running on your system you can ignore this.
+
+2. Clone sfstools repo to your computer and CD into the project
+  ```bash
+  git clone https://github.com/NeoGeographyToolkit/sfstools.git
+  cd sfstools
+  ```
+
+3. Install sfstools to a new conda environment using conda/mamba/micromamba:
+   ```bash
+   micromamba env create -n sfstools -f environment.yaml 
+   ```
+
+4. Add `base_scripts` and `src/pbs_scripts` to your PATH environment by editing your .bashrc/.zshrc file
+
+```bash
+# within your .bashrc/.zshrc file add:
+export PATH="$PATH:/path/to/sfstools/base_scripts:/path/to/sfstools/src/pbs_scripts"
+# advanced users may want to modify their 
+
+```
+
+5. Install ASP by downloading the precompiled binarys file [following these instructions.](https://stereopipeline.readthedocs.io/en/latest/installation.html#precompiled-binaries)
+
+
+6. Install ISIS to a new conda environment and set up the data area [following these instructions (suggest calling the environment `isis`)](https://astrogeology.usgs.gov/docs/how-to-guides/environment-setup-and-maintenance/installing-isis-via-anaconda/)
+
 
 
 # Workflow for scripts
