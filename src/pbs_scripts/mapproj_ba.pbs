@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=4:ncpus=20:model=ivy,walltime=06:00:00        
+#PBS -l select=8:ncpus=20:model=ivy,walltime=03:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -36,7 +36,7 @@ if [ -z "$BA_PREFIX" ]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
     exit 1
 fi
-echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX:0:3}.tif"
+echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX%/*}.tif"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -51,7 +51,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -N "pbs_mapproj_${BA_PREFIX:0:3}" -o "pbs_mapproj_${BA_PREFIX:0:3}.log" -v DEM="$DEM",INPUT_DIR="$INPUT_DIR",BA_PREFIX="$BA_PREFIX" "$0"
+    exec qsub -N "pbs_mapproj_${BA_PREFIX%/*}" -o "pbs_mapproj_${BA_PREFIX%/*}.log" -v DEM="$DEM",INPUT_DIR="$INPUT_DIR",BA_PREFIX="$BA_PREFIX" "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -97,7 +97,7 @@ MAPPROJ=`which mapproject`
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp $HOME/mapproj_ba_cmds.XXXXXX)
+TMPFILE=$(mktemp $HOME/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 #trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
@@ -107,7 +107,7 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_cmds.XXXXXX)
         # TODO if BA folder isn't in images folder give absolute path to ba prefix? or nah?
         # TODO do the work in /tmp and then move back to lustre after completion
         args=(
-            "$MAPPROJ" "$DEM" "$file" "${file%%.cub}.json" "${file%%.cub}.map.${BA_PREFIX:0:3}.tif"
+            "$MAPPROJ" "$DEM" "$file" "${file%%.cub}.json" "${file%%.cub}.map.${BA_PREFIX%/*}.tif"
             --nodes-list "$PBS_NODEFILE" 
             --processes 8 
             --threads 4 
@@ -118,8 +118,8 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_cmds.XXXXXX)
             -q 
             -write_absolute_path 
             -of GeoJSON 
-            "${file%%.cub}.map.${BA_PREFIX:0:3}.tif" 
-            "${file%%.cub}.map.${BA_PREFIX:0:3}.geojson"
+            "${file%%.cub}.map.${BA_PREFIX%/*}.tif" 
+            "${file%%.cub}.map.${BA_PREFIX%/*}.geojson"
         )      
         echo "${args[@]}" >> "$TMPFILE";
     done;
@@ -132,19 +132,20 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_cmds.XXXXXX)
 echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     # get output name
-    export OUTPUT_LOG="$HOME/pbs_mapproj_ba_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    export OUTPUT_LOG="$HOME/pbs_mapproj_ba_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     # Run GNU Parallel with the temp file if not in debug mode   
     if [[ $NUM_NODES -gt 1 ]]; then
         # run 1 job at a time
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --joblog ~/pbs_mapproj_ba_job.log < "$TMPFILE" &> "$OUTPUT_LOG"
+        # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes!
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 8 --sshdelay 0.5 --joblog ~/pbs_mapproj_ba_${BA_PREFIX%/*}_job.log < "$TMPFILE" &> "$OUTPUT_LOG"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_ba_job.log  < "$TMPFILE" &> "$OUTPUT_LOG"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_ba_${BA_PREFIX%/*}_job.log  < "$TMPFILE" &> "$OUTPUT_LOG"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     # TODO need to set the output log name as a variable to make this work
-    mv "$OUTPUT_LOG" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_job.log"
+    mv "$OUTPUT_LOG" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_${BA_PREFIX%/*}_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

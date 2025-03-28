@@ -8,33 +8,37 @@ We will use this as the reference document, but there are many practical aspects
 
 ## Installation Instructions
 
-1. [Install micromamba.](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) If you already have conda/mamba installed and running on your system you can ignore this.
+Note sfstools contains both utilities intended to be run on your local machine (denoted by 💻) and scripts intended for the NASA HECC HPC (denoted by ☁️). This repository should be installed in both locations, but only some of the steps below are necessary for HECC, and they are denoted by the ☁️ emoji. Otherwise the step needs to be run both locally and on HECC.
 
-2. Clone sfstools repo to your computer and CD into the project
+
+1. (☁️) Install ASP by downloading the precompiled binarys file [following these instructions and note the folder for step 6.](https://stereopipeline.readthedocs.io/en/latest/installation.html#precompiled-binaries)
+
+2. [Install micromamba.](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) If you already have conda/mamba installed and running on your system you can skip this step.
+
+3. (☁️) Install ISIS to a new conda environment and set up the data area [following these instructions (suggest calling the environment `isis`)](https://astrogeology.usgs.gov/docs/how-to-guides/environment-setup-and-maintenance/installing-isis-via-anaconda/)
+
+4. Clone sfstools repo to your computer and CD into the project
   ```bash
   git clone https://github.com/NeoGeographyToolkit/sfstools.git
   cd sfstools
   ```
 
-3. Install sfstools to a new conda environment using conda/mamba/micromamba:
+5. Install sfstools to a new conda environment using conda/mamba/micromamba:
    ```bash
    micromamba env create -n sfstools -f environment.yaml 
    ```
 
-4. Add `base_scripts` and `src/pbs_scripts` to your PATH environment by editing your .bashrc/.zshrc file
+6. (☁️) Add `base_scripts` and `src/pbs_scripts` to your PATH environment by editing your .bashrc/.zshrc file and set ASP_ROOT, ISIS_ROOT, and ISIS_DATA variables to paths you created in steps 1 and 3.
 
 ```bash
 # within your .bashrc/.zshrc file add:
 export PATH="$PATH:/path/to/sfstools/base_scripts:/path/to/sfstools/src/pbs_scripts"
-# advanced users may want to modify their 
-
+export ISISDATA=/path/to/your/ISISDATA/
+export ISISROOT=/path/to/your/conda/envs/isis
+export ASPROOT=/path/to/your/extracted/ASP/ 
 ```
 
-5. Install ASP by downloading the precompiled binarys file [following these instructions.](https://stereopipeline.readthedocs.io/en/latest/installation.html#precompiled-binaries)
-
-
-6. Install ISIS to a new conda environment and set up the data area [following these instructions (suggest calling the environment `isis`)](https://astrogeology.usgs.gov/docs/how-to-guides/environment-setup-and-maintenance/installing-isis-via-anaconda/)
-
+7. To run the commands below simply activate the `sfstools` conda environment. The bash and PBS scripts however shouldn't need this and they should be available in your PATH regardless of the conda environment. 
 
 
 # Workflow for scripts

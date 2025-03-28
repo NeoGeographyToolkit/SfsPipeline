@@ -85,7 +85,7 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub # Use -V to pass in all environment variables!
-    exec qsub -N "pbs_ba_${KIND}_${BA_PREFIX:0:3}" -o "pbs_ba_${KIND}_${BA_PREFIX:0:3}.log" -V "$0"
+    exec qsub -N "pbs_ba_${KIND}_${BA_PREFIX%/*}" -o "pbs_ba_${KIND}_${BA_PREFIX%/*}.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -162,13 +162,13 @@ args=(
       -o "$BA_PREFIX" 
 )
 # for annoying reasons I can't seem to pass this in the array
-parallel_opts="--resume-failed --memfree 30G --joblog $HOME/pbs_ba_${KIND}_${BA_PREFIX:0:3}_job.log"
+parallel_opts="--resume-failed --memfree 30G --joblog $HOME/pbs_ba_${KIND}_${BA_PREFIX%/*}_job.log"
 
 if [[ -n $RESUME_PREFIX ]]; then
     # TODO presumably if I resume a bundle adjust I'd want to continue using the 
     # same prefix as the input BA_PREFIX, or if I want more flexibility I could 
     # allow a different prefix to be used
-    echo "We are resuming bundle adjust ${RESUME_PREFIX:0:3}"
+    echo "We are resuming bundle adjust ${RESUME_PREFIX%/*}"
     args+=(--input-adjustments-prefix "$RESUME_PREFIX")
 fi
 
@@ -192,8 +192,8 @@ if [[ -n $MATCH_FILES_PREFIX ]]; then
     args+=(--match-files-prefix $MATCH_FILES_PREFIX)
 fi
 # set log file names
-LOG_FILE="$HOME/pbs_ba_${KIND}_${BA_PREFIX:0:3}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-JOB_FILE="$HOME/pbs_ba_${KIND}_${BA_PREFIX:0:3}_job.log"
+LOG_FILE="$HOME/pbs_ba_${KIND}_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$HOME/pbs_ba_${KIND}_${BA_PREFIX%/*}_job.log"
 
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Environment Variables: "
