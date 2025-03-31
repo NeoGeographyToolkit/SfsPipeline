@@ -9,7 +9,9 @@ dependencies:
   - fire
   - gdal
   - geopandas
+  - fiona
   - libgdal-arrow-parquet
+  - lark
   - matplotlib-base
   - numpy
   - pvl

@@ -23,7 +23,7 @@ Note sfstools contains both utilities intended to be run on your local machine (
   cd sfstools
   ```
 
-5. Install sfstools to a new conda environment using conda/mamba/micromamba:
+5. Install sfstools to a new conda environment using conda/mamba/micromamba, please name this environment 'sfstools':
    ```bash
    micromamba env create -n sfstools -f environment.yaml 
    ```
@@ -32,13 +32,15 @@ Note sfstools contains both utilities intended to be run on your local machine (
 
 ```bash
 # within your .bashrc/.zshrc file add:
-export PATH="$PATH:/path/to/sfstools/base_scripts:/path/to/sfstools/src/pbs_scripts"
+export PATH="$PATH:/path/to/sfstools/base_scripts/:/path/to/sfstools/src/pbs_scripts/"
 export ISISDATA=/path/to/your/ISISDATA/
 export ISISROOT=/path/to/your/conda/envs/isis
 export ASPROOT=/path/to/your/extracted/ASP/ 
 ```
 
 7. To run the commands below simply activate the `sfstools` conda environment. The bash and PBS scripts however shouldn't need this and they should be available in your PATH regardless of the conda environment. 
+
+8. To run ISIS or ASP commands invoke `source init_asp.sh`, to run sfstool tools and GDAL use `source init_sfstools.sh`.
 
 
 # Workflow for scripts
@@ -409,7 +411,7 @@ function jim {
   gdalinfo $1 -stats -json | jq -c '.bands[0].metadata | .[""]'
 }
 
-source init_asap.sh
+source init_asp.sh
 for i in ./*/*DEM.tif; do ; geodiff --threads 8 $i $DEM  -o "${i%/*}/run"; done
 # then
 ```

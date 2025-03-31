@@ -5,7 +5,7 @@ if [ -n "$PBS_NODEFILE" ]; then
 fi
 ##############################################
 # source asap environment
-source init_asap.sh
+source init_asp.sh
 # echo out ISISDATA and ISISROOT
 echo ISIS data is $ISISDATA 
 echo ISIS root is $ISISROOT
