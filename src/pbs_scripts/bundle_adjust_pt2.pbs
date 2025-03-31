@@ -40,34 +40,38 @@ if [ -z "$CAMERAS" ]; then
     exit 1
 fi
 echo "Path to cameras list: $CAMERAS"
-# Ensure the map projected images + the DEM as the last file are included as a list
-if [ -z "$MAPPROJ_DATA" ]; then
-    echo "Error: IMAGES is not set. Use $USAGE"
-    exit 1
-fi
-echo "Path to mapprojected data list: $MAPPROJ_DATA"
-# get overlap list file
-if [ -z "$OVERLAP_LIST" ]; then
-    echo "Error: OVERLAP_LIST is not set. Use $USAGE"
-    exit 1
+# If we aren't refining a existing bundle adjust using terrain ignore these
+if [[ -z $USE_DEM_HEIGHTS ]]; then
+    # Ensure the map projected images + the DEM as the last file are included as a list
+    if [[ -z "$MAPPROJ_DATA" ]]; then
+        echo "Error: IMAGES is not set. Use $USAGE"
+        exit 1
+    fi
+    echo "Path to mapprojected data list: $MAPPROJ_DATA"
+    # get overlap list file
+    if [[ -z "$OVERLAP_LIST" ]]; then
+        echo "Error: OVERLAP_LIST is not set. Use $USAGE"
+        exit 1
+    fi
 fi
 echo "Path to overlap list: $OVERLAP_LIST"
 # Ensure a output prefix is provided
-if [ -z "$BA_PREFIX" ]; then
+if [[ -z "$BA_PREFIX" ]]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
     exit 1
 fi
 echo "Output Prefix: $BA_PREFIX"
 # Set Robust Threshold, use "5.0" first then re-run at "2.0" with RESUME_PREFIX set to the BA prefix
-if [ -z "$ROBUST_THRESHOLD"]; then
+if [[ -z "$ROBUST_THRESHOLD" ]]; then
     export ROBUST_THRESHOLD=2.0
     echo "Using ROBUST_TRESHOLD: $ROBUST_THRESHOLD"
 fi
 # determine if this is a refinement pass with DEM 
 if [[ -n $USE_DEM_HEIGHTS ]]; then
     export KIND='ref'
-elif [[ -n $RESUME_PREFIX ]]
-else
+elif [[ -n $RESUME_PREFIX ]]; then
+    export KIND='res'
+else 
     export KIND='pt2'
 fi
 echo "This is a $KIND run"
@@ -140,8 +144,6 @@ args=(
       --image-list "$IMAGES"    
       --camera-list "$CAMERAS"  
       --mapproj-dem "$DEM"     
-      --mapprojected-data-list "$MAPPROJ_DATA"
-      --overlap-list "$OVERLAP_LIST"
       --processes 4            
       --threads 36              
       --nodata-value 0.001      
@@ -161,10 +163,19 @@ args=(
       --remove-outliers-params "75.0 3.0 100 100"    
       -o "$BA_PREFIX" 
 )
+
+if [[ -n "$MAPPROJ_DATA" ]]; then
+    args+=(--mapprojected-data-list "$MAPPROJ_DATA")
+fi
+
+if [[ -n "$OVERLAP_LIST" ]]; then
+    args+=(--overlap-list "$OVERLAP_LIST")
+fi
+
 # for annoying reasons I can't seem to pass this in the array
 parallel_opts="--resume-failed --memfree 30G --joblog $HOME/pbs_ba_${KIND}_${BA_PREFIX%/*}_job.log"
 
-if [[ -n $RESUME_PREFIX ]]; then
+if [[ -n "$RESUME_PREFIX" ]]; then
     # TODO presumably if I resume a bundle adjust I'd want to continue using the 
     # same prefix as the input BA_PREFIX, or if I want more flexibility I could 
     # allow a different prefix to be used
@@ -196,12 +207,14 @@ LOG_FILE="$HOME/pbs_ba_${KIND}_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.
 JOB_FILE="$HOME/pbs_ba_${KIND}_${BA_PREFIX%/*}_job.log"
 
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    echo "Environment Variables: "
-    env
     echo "Args: "
     echo "${args[@]}"
     echo "Parallel options: "
     echo "$parallel_opts"
+    echo "Log File: "
+    echo $LOG_FILE
+    echo "Job File: "
+    echo $JOB_FILE
     echo "Parallel has started at $(date)"
     parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$LOG_FILE"
     # The jobs have actually completed 

@@ -283,6 +283,17 @@ duckdb -csv -c "INSTALL json; LOAD json; WITH comp AS (SELECT UNNEST(components[
 ```
 
 
+### print out just the largest component list to txt list
+
+```bash
+cat bundle_adjust_components.json | jq  -r '.["components"][0][]' > BEST_IMAGES.txt
+# use sed to generate cameras
+cat bundle_adjust_components.json | jq  -r '.["components"][0][]' | sed 's/cub/json/g' > BEST_CAMERAS.txt
+# and get the best bundle adjusted versions of these cameras
+
+```
+
+
 TODO don't I have a generic utility for plotting anticipated stereo pairs? 
 
 
@@ -486,3 +497,12 @@ gdal_calc -A $1.noba.tif --calc="A>0.001" --outfile ~/$1_mask.tif --NoData=0 --t
 gdalinfo ~/$1_mask.tif -stats # get the valid pixels from here
 ```
 
+
+
+## get lists of files after bundle adjust refinement for maximally lit mosaics
+
+```bash
+duckdb -csv -c "WITH tbl AS (SELECT * FROM read_csv('../baD_align_ref/baD-mapproj_match_offset_pair_stats.txt', skip=0, sep=' ',  header=False) WHERE column5 < 1.0 AND column5 > 0 AND column7 > 1000 ORDER BY column5) SELECT column0 as img FROM tbl UNION SELECT column1 FROM tbl AS img;" | tail -n +2 | sort > max_list_list_limit_1.txt
+```
+
+from testing, raising the max 85% error value (column5) past 1 meter didn't add as many images as changing the tolerance on the number of matches (column7). For that, a value of 100 was found to be too permissive. 500 was found to be just on the edge (maybe a bad image or two is included), while 1000 seemed perfect, although some illumination diversity was lost.

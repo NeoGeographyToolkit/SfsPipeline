@@ -20,7 +20,18 @@ fi
 in_img=$1
 echo IN IMG is $in_img
 # use asap to calibrate EDR
-asap lrocnac calibrate_edr $1
+# convert the IMG to a cUB
+lronac2isis from="${in_img}" to="${in_img%.IMG}.raw.cub"
+# run spiceinit with smithed kernels, fallback to recon otherwise
+spiceinit from="${in_img%.IMG}.raw.cub" spksmithed=true spkrecon=true web=true
+# run lro nac calibration
+lronaccal from="${in_img%.IMG}.raw.cub" to="${in_img%.IMG}.cal.cub"
+# cleanup raw cub
+rm "${in_img%.IMG}.raw.cub"
+# run echo correction
+lronacecho from="${in_img%.IMG}.cal.cub" to="${in_img%.IMG}.ech.cub"
+# cleanup cal cub
+rm "${in_img%.IMG}.cal.cub"
 # get the final cub name
 ech_cub="${in_img%.IMG}.ech.cub"
 # use isd_generate to generate CSM camera model using only spiceinit info from ISIS

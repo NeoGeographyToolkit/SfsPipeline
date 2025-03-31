@@ -19,6 +19,7 @@ dependencies:
   - pyproj
   - rasterio
   - sh
+  - fzf
   - shapely
   - pip:
     - --editable .
