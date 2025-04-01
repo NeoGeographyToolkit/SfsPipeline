@@ -25,27 +25,32 @@ fi
 echo "Camera Pair list file: $CAMERA_PAIR_LIST"
 # Bundle Adjust prefix
 if [[ -z "$BA_PREFIX" ]]; then
-    echo "Error: BA_PREFIX is not set. Use $USAGE"
-    exit 1
+    export BA_PREFIX='noba'
 fi
 echo "Bundle Adjust Prefix: $BA_PREFIX"
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
 ##############################################
 # source asap environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 ##############################################
 # Create a temp file
-TMPFILE=$(mktemp /home7/aannex/launch_mapproj_cmds.XXXXXX)
+TMPFILE=$(mktemp "$WORKDIR/launch_mapproj_cmds.XXXXXX")
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG
-    while read IMG CAM; do
+    while read -r IMG CAM; do
         if [[ ! -f $IMG ]]; then
             echo "Image not found!: $IMG"
             continue
@@ -53,18 +58,18 @@ trap 'rm -f "$TMPFILE"' EXIT
             echo "Camera not found!: $CAM"
             continue
         else
-            img_id=`echo "${IMG##*/}" | cut -d. -f1`
-            cam_id=`echo "${CAM##*/}" | cut -c 5- | cut -d. -f1`
-            if [[ $img_id != $cam_id ]]; then
+            img_id=$(echo "${IMG##*/}" | cut -d. -f1)
+            cam_id=$(echo "${CAM##*/}" | cut -c 5- | cut -d. -f1)
+            if [[ "$img_id" != "$cam_id" ]]; then
                 echo "IMG and CAM don't match!"
-                echo $img_id $cam_id
+                echo "$img_id" "$cam_id"
             else 
                 # should only get here if all files exist and match correctly
-                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export IMG=$IMG; export CAM=$CAM; run_individual_mapproj.pbs" >> "$TMPFILE";
+                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export IMG=$IMG; export CAM=$CAM; export WORKDIR=$WORKDIR; run_individual_mapproj.pbs" >> "$TMPFILE";
             fi
         fi
         # okay 
-    done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
+    done < <(paste "$IMAGE_PAIR_LIST" "$CAMERA_PAIR_LIST")
     #
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG

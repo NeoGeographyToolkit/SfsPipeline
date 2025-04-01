@@ -40,17 +40,15 @@ fi
 echo "Camera file: $CAM"
 # Bundle Adjust prefix
 if [[ -z "$BA_PREFIX" ]]; then
-    echo "Error: BA_PREFIX is not set. Use $USAGE"
-    exit 1
+    export BA_PREFIX='noba'
 fi
 echo "Bundle Adjust Prefix: $BA_PREFIX"
-
-# get the optional semi-unique job NAME if it's not set
-if [[ -z "$JOB_NAME_POSTFIX" ]]; then
-    # get a job name postfix from the city names file
-    export JOB_NAME_POSTFIX=`shuf ~/cities.csv | head -n 1`
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
 fi
-echo "JOB_NAME_POSTFIX will be $JOB_NAME_POSTFIX"
+echo "Workdir: $WORKDIR"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -67,7 +65,8 @@ if [[ -n $SUBMIT ]]; then
         sleep 15
     fi
     # submit to qsub
-    exec qsub -N "pbs_run_mapproj_${JOB_NAME_POSTFIX}" -o "pbs_run_mapproj_${JOB_NAME_POSTFIX}.log" -V "$0"
+    submit_name="pbs_run_mapproj_${BA_PREFIX%/*}"
+    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -83,22 +82,32 @@ if [[ -n $PBS_O_WORKDIR ]]; then
     echo "If DEBUG was not unset it should now be not set: $DEBUG"
 fi
 # Change to the working directory
-echo Working directory is $PBS_O_WORKDIR
-cd $PBS_O_WORKDIR
+echo Working directory is "$PBS_O_WORKDIR"
+if [[ -n $PBS_O_WORKDIR ]]; then
+    cd "$PBS_O_WORKDIR" || exit
+fi
 echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
 ##############################################
-# source asap environment
+# source asp environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 # save the path to mapproject
-MAPPROJ=`which mapproject`
+MAPPROJ=$(which mapproject)
 ##############################################
-out_dir="$HOME/logs/mapproj/"
+# create output folders as needed
+LOGS_FOLDER="$WORKDIR/logs"
+JOBS_FOLDER="$WORKDIR/jobs"
+mkdir -p "$LOGS_FOLDER"
+mkdir -p "$JOBS_FOLDER"
+# set log file
+BASE=$(basename "$IMG")
+LOG_FILE="$LOGS_FOLDER/pbs_mapproj_${BASE%%.cub}.map.${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+# first set the map projection args
 args_mapproj=(
             "$MAPPROJ" 
             "$DEM" 
@@ -109,6 +118,7 @@ args_mapproj=(
             --threads 4 
             --tr 1
         )
+# next set the footprint computation args
 args_foot=(
             "&&" 
             /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
@@ -118,20 +128,15 @@ args_foot=(
             "${IMG%%.cub}.map.${BA_PREFIX%/*}.tif" 
             "${IMG%%.cub}.map.${BA_PREFIX%/*}.geojson"
         )     
-
-# get the log path
-OUTPUT_LOG="$HOME/log/mapproj/log_mapproj_${IMG%%.cub}.map.${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-# first write out the parallel mapproj command but first make the output dir so I can capture the logs per job
-PROCESS="${args_mapproj[@]} ${args_foot[@]}&> $OUTPUT_LOG"
+# Combine both into one string
+PROCESS="${args_mapproj[@]} ${args_foot[@]}"
+# prepare to run the command or print the debug
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    # Run GNU Parallel with the temp file if not in debug mode
-    # as we will run each mapproj pair one at a time, we will only use parallel here
-    # to spawn one job at a time. Later it could make sense to qsub these and have sub jobs instead
-    echo "Starting Job for $IMG at $(date)" &> "$OUTPUT_LOG"
+    echo "Starting Job for $IMG at $(date)" &> "$LOG_FILE"
     # first run mapproj
-    eval $PROCESS &> "$OUTPUT_LOG"
+    eval "$PROCESS" &> "$LOG_FILE"
     # The jobs have actually completed 
-    echo "Finished Job for $IMG at $(date)" &> "$OUTPUT_LOG"
+    echo "Finished Job for $IMG at $(date)" &> "$LOG_FILE"
 else
     # we are in debug mode so just log out the commands that would run
     echo "$PROCESS"

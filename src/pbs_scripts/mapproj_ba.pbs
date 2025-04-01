@@ -25,16 +25,13 @@ if [ -z "$DEM" ]; then
     exit 1
 fi
 echo "DEM file: $DEM"
-
 # Ensure bundle adjust prefix was provided
 if [ -z "$BA_PREFIX" ]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
     exit 1
 fi
 echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX%/*}.tif"
-
 # If CAMERA_LIST and IMAGE_LIST provided, use them instead of INPUT_DIR and passing in a BA prefix
-
 if [[ -n "$CAMERA_LIST"  &&  -n "$IMAGE_LIST"  ]]; then
     # ensure list files exist
     if [[ ! -f $IMAGE_LIST ]]; then
@@ -61,7 +58,12 @@ else
     #
     echo "Path to CUBs: $INPUT_DIR"
 fi
-
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -76,7 +78,8 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -N "pbs_mapproj_${BA_PREFIX%/*}" -o "pbs_mapproj_${BA_PREFIX%/*}.log" -V "$0"
+    submit_name="pbs_mapproj_${BA_PREFIX%/*}"
+    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log"  -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -95,7 +98,7 @@ fi
 # TODO set the work dir to be the parent to the IMAGES directory
 echo Working directory is $PBS_O_WORKDIR
 if [[ -n $PBS_O_WORKDIR ]]; then
-    cd $PBS_O_WORKDIR
+    cd "$PBS_O_WORKDIR" || exit
 fi
 echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
@@ -109,20 +112,20 @@ fi
 echo "running on $NUM_NODES nodes"
 echo
 ##############################################
-# source asap environment
+# source asp environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 # save the path to mapproject
-MAPPROJ=`which mapproject`
+MAPPROJ=$(which mapproject)
 ################################################
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp $HOME/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX)
+TMPFILE=$(mktemp "$WORKDIR/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX")
 # Ensure cleanup on exit or error
 #trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
@@ -133,7 +136,7 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX)
     cameras=()
     if [[ -n "$USE_LISTS" ]]; then
         # parse each list file and append to the array
-        while read IMG CAM; do
+        while read -r IMG CAM; do
             if [[ ! -f $IMG ]]; then
                 echo "IMAGE not found!: $IMG"
                 continue
@@ -142,10 +145,10 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX)
                 continue
             else
                 # TODO test to ensure the camera and image correspond!
-                images+=($IMG)
-                cameras+=($CAM)
+                images+=("$IMG")
+                cameras+=("$CAM")
             fi
-        done < <(paste $IMAGE_LIST $CAMERA_LIST)
+        done < <(paste "$IMAGE_LIST" "$CAMERA_LIST")
     else
         # grab the cubs from the input dir
         for file in "$INPUT_DIR"*.ech.cub; do
@@ -187,7 +190,7 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX)
             "${IMG%%.cub}.map.${BA_PREFIX%/*}.tif" 
             "${IMG%%.cub}.map.${BA_PREFIX%/*}.geojson"
         )      
-        echo "${args_mapproj[@]} ${args_foot[@]}" >> "$TMPFILE";
+        echo "${args_mapproj[@]}" "${args_foot[@]}" >> "$TMPFILE";
     done
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -197,21 +200,26 @@ TMPFILE=$(mktemp $HOME/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX)
 # log we are about to start (TODO move below to new script)
 echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    # get output name
-    export OUTPUT_LOG="$HOME/pbs_mapproj_ba_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    # create output folders as needed
+    LOGS_FOLDER="$WORKDIR/logs"
+    JOBS_FOLDER="$WORKDIR/jobs"
+    mkdir -p "$LOGS_FOLDER"
+    mkdir -p "$JOBS_FOLDER"
+    # set log file names
+    LOG_FILE="$LOGS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    JOB_FILE="$JOBS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}_job.log"
     # Run GNU Parallel with the temp file if not in debug mode   
     if [[ $NUM_NODES -gt 1 ]]; then
-        # run 1 job at a time
         # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes!
-        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --joblog ~/pbs_mapproj_ba_${BA_PREFIX%/*}_job.log < "$TMPFILE" &> "$OUTPUT_LOG"
+        ~/sw/tools/asp/bin/parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
     else
-        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_mapproj_ba_${BA_PREFIX%/*}_job.log  < "$TMPFILE" &> "$OUTPUT_LOG"
+        ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
     # TODO need to set the output log name as a variable to make this work
-    mv "$OUTPUT_LOG" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_${BA_PREFIX%/*}_job.log"
+    mv "$OUTPUT_LOG" "$JOBS_FOLDER/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_mapproj_ba_${BA_PREFIX%/*}_job.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

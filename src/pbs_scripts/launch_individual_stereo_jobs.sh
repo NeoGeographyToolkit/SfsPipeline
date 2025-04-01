@@ -29,23 +29,29 @@ if [[ -z "$BA_PREFIX" ]]; then
     exit 1
 fi
 echo "Bundle Adjust Prefix: $BA_PREFIX"
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
 ##############################################
 # source asap environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 ##############################################
 # Create a temp file
-TMPFILE=$(mktemp /home7/aannex/launch_stereo_cmds.XXXXXX)
+TMPFILE=$(mktemp $WORKDIR/launch_stereo_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG
-    while read LIMG RIMG LCAM RCAM; do
+    while read -r LIMG RIMG LCAM RCAM; do
         if [[ ! -f $LIMG ]]; then
             echo "LEFT image not found!: $LIMG"
             continue
@@ -59,23 +65,23 @@ trap 'rm -f "$TMPFILE"' EXIT
             echo "RIGHT camera not found!: $RCAM"
             continue
         else
-            l_img_id=`echo "${LIMG##*/}" | cut -d. -f1`
-            r_img_id=`echo "${RIMG##*/}" | cut -d. -f1`
-            l_cam_id=`echo "${LCAM##*/}" | cut -c 5- | cut -d. -f1`
-            r_cam_id=`echo "${RCAM##*/}" | cut -c 5- | cut -d. -f1`
-            if [[ $l_img_id != $l_cam_id ]]; then
+            l_img_id=$(echo "${LIMG##*/}" | cut -d. -f1)
+            r_img_id=$(echo "${RIMG##*/}" | cut -d. -f1)
+            l_cam_id=$(echo "${LCAM##*/}" | cut -c 5- | cut -d. -f1)
+            r_cam_id=$(echo "${RCAM##*/}" | cut -c 5- | cut -d. -f1)
+            if [[ "$l_img_id" != "$l_cam_id" ]]; then
                 echo "LEFT IMG and CAM don't match!"
-                echo $l_img_id $l_cam_id
-            elif [[ $r_img_id != $r_cam_id ]]; then
+                echo "$l_img_id" "$l_cam_id"
+            elif [[ "$r_img_id" != "$r_cam_id" ]]; then
                 echo "RIGHT IMG and CAM don't match!"
-                echo $r_img_id $r_cam_id
+                echo "$r_img_id" "$r_cam_id"
             else 
                 # should only get here if all files exist and match correctly
-                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; run_individual_stereo.pbs" >> "$TMPFILE";
+                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; export WORKDIR=$WORKDIR; run_individual_stereo.pbs" >> "$TMPFILE";
             fi
         fi
         # okay 
-    done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
+    done < <(paste "$IMAGE_PAIR_LIST" "$CAMERA_PAIR_LIST")
     #
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -83,7 +89,7 @@ trap 'rm -f "$TMPFILE"' EXIT
 }
 # log we are about to start 
 echo "launching jobs"
-if [[ -z "$DEBUG" && -n $SUBMIT ]]; then 
+if [[ -z "$DEBUG" && -n "$SUBMIT" ]]; then 
     # Launch each job with Qsub
     while IFS= read -r line; do
         eval "$line"

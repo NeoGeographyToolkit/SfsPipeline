@@ -43,9 +43,16 @@ echo "Camera Pair list file: $CAMERA_PAIR_LIST"
 # get the optional semi-unique job NAME if it's not set
 if [ -z "$JOB_NAME_POSTFIX" ]; then
     # get a job name postfix from the city names file
-    export JOB_NAME_POSTFIX=`shuf ~/cities.csv | head -n 1`
+    JOB_NAME_POSTFIX=$(shuf ~/cities.csv | head -n 1)
+    export JOB_NAME_POSTFIX
 fi
 echo "JOB_NAME_POSTFIX will be $JOB_NAME_POSTFIX"
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -60,7 +67,8 @@ if [[ -n $SUBMIT ]]; then
     # actually sleep
     sleep 15
     # submit to qsub
-    exec qsub -N "pbs_launch_stereo_${JOB_NAME_POSTFIX}" -o "pbs_launch_stereo_${JOB_NAME_POSTFIX}.log" -V "$0"
+    submit_name="pbs_launch_stereo_${JOB_NAME_POSTFIX}"
+    exec qsub -N "$submit_name" -o "$submit_name.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -76,8 +84,10 @@ if [[ -n $PBS_O_WORKDIR ]]; then
     echo "If DEBUG was not unset it should now be not set: $DEBUG"
 fi
 # Change to the working directory
-echo Working directory is $PBS_O_WORKDIR
-cd $PBS_O_WORKDIR
+echo Working directory is "$PBS_O_WORKDIR"
+if [[ -n $PBS_O_WORKDIR ]]; then
+    cd "$PBS_O_WORKDIR" || exit
+fi
 echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
 # get the number of unique nodes 
@@ -93,22 +103,33 @@ echo
 # source asap environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 ##############################################
+# create output folders as needed
+LOGS_FOLDER="$WORKDIR/logs"
+JOBS_FOLDER="$WORKDIR/jobs"
+mkdir -p "$LOGS_FOLDER"
+mkdir -p "$JOBS_FOLDER"
+# set log file names
+LOG_FILE="$LOGS_FOLDER/pbs_stereo_$(date +"%Y-%m-%d_%H-%M-%S")_log_$JOB_NAME_POSTFIX.txt"
+JOB_FILE="$JOBS_FOLDER/pbs_stereo_job_$JOB_NAME_POSTFIX.log"
 # Create a temp file
-TMPFILE=$(mktemp /home7/aannex/launch_stereo_cmds.XXXXXX)
+TMPFILE=$(mktemp "$WORKDIR/launch_stereo_cmds.XXXXXX")
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG
-    while read LIMG RIMG LCAM RCAM; do
+    while read -r LIMG RIMG LCAM RCAM; do
         LBASE=$(basename "$LIMG")
         RBASE=$(basename "$RIMG")
         out_dir="run_stereo/${LBASE%%.*}__${RBASE%%.*}"
+        out_job_log="$out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_job.log"
+        out_log_stereo="$out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt"
+        out_log_p2d="$out_dir/pbs_point2dem_${LBASE%%.*}_${RBASE%%.*}_log.txt"
         # re-use match files from bundle adjust https://stereopipeline.readthedocs.io/en/latest/tools/bundle_adjust.html#match-files
         # stereo.default docs claim the normal match-files-prefix works only with non-mapprojected images.
         args=(
@@ -125,13 +146,13 @@ trap 'rm -f "$TMPFILE"' EXIT
             "$out_dir/run" "$DEM"
         )
         # for annoying reasons I can't seem to pass this in the array
-        parallel_opts="\"--joblog $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_job.log\""
+        parallel_opts="\"--joblog $out_job_log\""
         # first write out the parallel stereo command but first make the output dir so I can capture the logs per job
-        echo "mkdir -p $out_dir && parallel_stereo ${args[@]}" --parallel-options "${parallel_opts} &> $out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
+        echo "mkdir -p $out_dir && parallel_stereo" "${args[@]}" "--parallel-options ${parallel_opts} &> $out_log_stereo" >> "$TMPFILE";
         # I could have seperate queues and run point2dem all at the end over the nodes in order to have less dead air time
-        echo "point2dem --threads 8 --errorimage --tr 1 $out_dir/run-PC.tif &> $out_dir/pbs_point2dem_${LBASE%%.*}_${RBASE%%.*}_log.txt" >> "$TMPFILE";
+        echo "point2dem --threads 8 --errorimage --tr 1 $out_dir/run-PC.tif &> $out_log_p2d" >> "$TMPFILE";
         # okay 
-    done < <(paste $IMAGE_PAIR_LIST $CAMERA_PAIR_LIST)
+    done < <(paste "$IMAGE_PAIR_LIST" "$CAMERA_PAIR_LIST")
     #
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -144,11 +165,11 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     # Run GNU Parallel with the temp file if not in debug mode
     # as we will run each stereo pair one at a time, we will only use parallel here
     # to spawn one job at a time. Later it could make sense to qsub these and have sub jobs instead
-    ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog ~/pbs_stereo_job_$JOB_NAME_POSTFIX.log  < "$TMPFILE" &> "$HOME/pbs_stereo_$(date +"%Y-%m-%d_%H-%M-%S")_log_$JOB_NAME_POSTFIX.txt"
+    ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_stereo_job_$JOB_NAME_POSTFIX.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_stereo_job_$JOB_NAME_POSTFIX.log"
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_stereo_job_$JOB_NAME_POSTFIX.log"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

@@ -40,7 +40,7 @@ is_file_or_symlink() {
 IMAGES_LIST="$(pwd)/IMAGES.txt"
 CAMERAS_LIST="$(pwd)/CAMERAS.txt"
 MAPPROJ_LIST="$(pwd)/MAPPROJ_DATA.txt"
-echo $IMAGES_LIST $CAMERAS_LIST $MAPPROJ_LIST
+echo "$IMAGES_LIST" "$CAMERAS_LIST" "$MAPPROJ_LIST"
 
 # Clear (or create) the output files
 echo -n "" > "$IMAGES_LIST"
