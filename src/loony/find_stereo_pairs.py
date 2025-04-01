@@ -297,7 +297,7 @@ def arg_parser():
     )
     parser.add_argument(
         "-d", "--db_path",
-        help="Path to a geoparquet database file containing the database"
+        help="Path to a geopandas file created by sfs-cover (don't use the geoparquet files!)"
     )
     parser.add_argument(
         "-p", "--polygon",
