@@ -66,7 +66,7 @@ def run(db_path, wkt_roi, az_step_size: float = 10.0):
     df_query = gp.GeoDataFrame(crs=df.crs, geometry=[polygon])
     # --- 2. Prepare the patches and store each polygon's angle ---
     patches = np.array(list(to_polygon(df['geometry'])))   
-    angles = df['SUB_SOLAR_GROUND_AZIMUTH']
+    angles = df['ROI_SUB_SOLAR_GROUND_AZIMUTH']
     # --- 3. Set up the figure, axis, and collection ---
     fig, ax = plt.subplots(figsize=(8, 6))
     # Create a PatchCollection. You can adjust the color and edge color.

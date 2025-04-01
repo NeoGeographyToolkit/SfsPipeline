@@ -208,13 +208,17 @@ def read_file(path, header=None)-> pd.DataFrame:
         return pd.read_csv(path, skiprows=3, header=None, sep=' ')
     elif 'residuals_stats' in path:
         return pd.read_csv(path, skiprows=2, header=None, sep=' ')
+    elif 'mapproj_match_offset_stats' in path:
+        return pd.read_csv(path, skiprows=2, header=None, sep=' ')
+    elif 'triangulation_offsets' in path:
+        return pd.read_csv(path, skiprows=2, header=None, sep=' ')
     else:
         return pd.read_csv(path, header=header)
 
 
 
 # main body
-def run_expression(expr: str, bypid: bool = False, verbose: bool = False, *files: str):
+def run_expression(expr: str, *files: str, bypid: bool = False, verbose: bool = False):
     """
     Set Operations with ASP list files and normal text files for LROC
 
@@ -228,7 +232,12 @@ def run_expression(expr: str, bypid: bool = False, verbose: bool = False, *files
     if verbose:
         print(f"Expression: {expr}\nAST: {ast}\n")
     # read in the files
-    files_data = {f'f{i}': file for i, file in enumerate(files,start=1)}
+    if verbose:
+        print(f"Provided {files}")
+    files_data = {f'f{i}': read_file(file) for i, file in enumerate(files,start=1)}
+    if verbose:
+        print(f"Loaded {len(files_data)}: {list(files_data.keys())}")
+        print(files_data)
     # evaluate the expression  
     result = evaluate(ast, files_data, bypid=bypid)
     # if we have a set, print it, else return True/False

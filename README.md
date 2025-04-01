@@ -186,7 +186,7 @@ You can pass those to xargs and wget them in parallel, an example that downloade
 
 This will just output two columns with no header due to the sed call
 ```bash
-ogr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional ORDER BY SUB_SOLAR_GROUND_AZIMUTH ASC' | sed '1d'
+ogr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, ROI_SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional ORDER BY ROI_SUB_SOLAR_GROUND_AZIMUTH ASC' | sed '1d'
 ```
 
 
@@ -361,7 +361,7 @@ CREATE TEMP TABLE
             L.PHASE_ANGLE     as L_PHASE_ANGLE,
             L.EMISSION_ANGLE  as L_EMISSION_ANGLE,
             L.INCIDENCE_ANGLE as L_INCIDENCE_ANGLE,
-            L.SUB_SOLAR_GROUND_AZIMUTH as L_SUB_SOLAR_GROUND_AZIMUTH,
+            L.ROI_SUB_SOLAR_GROUND_AZIMUTH as L_ROI_SUB_SOLAR_GROUND_AZIMUTH,
             L.SUB_SPACECRAFT_GROUND_AZIMUTH as L_SUB_SPACECRAFT_GROUND_AZIMUTH,
             L.RESOLUTION      as L_RESOLUTION,
             ST_AREA(L.geom)   as L_area,
@@ -371,7 +371,7 @@ CREATE TEMP TABLE
             R.PHASE_ANGLE     as R_PHASE_ANGLE,
             R.EMISSION_ANGLE  as R_EMISSION_ANGLE,
             R.INCIDENCE_ANGLE as R_INCIDENCE_ANGLE,
-            R.SUB_SOLAR_GROUND_AZIMUTH as R_SUB_SOLAR_GROUND_AZIMUTH,
+            R.ROI_SUB_SOLAR_GROUND_AZIMUTH as R_ROI_SUB_SOLAR_GROUND_AZIMUTH,
             R.SUB_SPACECRAFT_GROUND_AZIMUTH as R_SUB_SPACECRAFT_GROUND_AZIMUTH,
             R.RESOLUTION      as R_RESOLUTION,
             ST_AREA(R.geom)   as R_area,

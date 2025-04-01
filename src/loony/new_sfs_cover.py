@@ -31,6 +31,7 @@ import matplotlib
 from pyproj.crs import ProjectedCRS
 from pyproj.crs.coordinate_operation import StereographicConversion
 
+from .ground_azimuth import ground_azimuth_scalar as ground_azimuth
 from .utils import get_embedded_provenance
 
 # setup pyproj CRSs and transforms
@@ -38,58 +39,25 @@ moon_crs_ge = pyproj.CRS.from_user_input('IAU_2015:30100')
 moon_crs_np = pyproj.CRS.from_user_input('IAU_2015:30130')
 moon_crs_sp = pyproj.CRS.from_user_input('IAU_2015:30135')
 
-
 def make_stereographic_moon_projection(lon, lat):
     conversion = StereographicConversion(lat, lon)
     proj_crs = ProjectedCRS(conversion, geodetic_crs=moon_crs_ge)
     return proj_crs
 
-def calculate_initial_compass_bearing(deg_lon_A:float, deg_lat_A:float, deg_lon_B:float, deg_lat_B:float)-> float:
-    """
-    Calculates the bearing between two points.
-
-    The formulae used is the following:
-        θ = atan2(sin(Δlong).cos(lat2),
-                  cos(lat1).sin(lat2) − sin(lat1).cos(lat2).cos(Δlong))
-
-    :Parameters:
-
-    :Returns:
-      The bearing in degrees from 0-360, zero is north, 90 is East, etc.
-
-    :Returns Type:
-      float
-
-    """
-    # This function is in the public domain, and available at
-    # https://gist.github.com/jeromer/2005586
-    # modified to work with numpy arrays by A Annex
-    lat1 = np.radians(deg_lat_A)
-    lat2 = np.radians(deg_lat_B)
-    diffLong = np.radians(deg_lon_B - deg_lon_A)
-    x = np.sin(diffLong) * np.cos(lat2)
-    y = np.cos(lat1) * np.sin(lat2) - (np.sin(lat1) * np.cos(lat2) * np.cos(diffLong))
-    initial_bearing = np.atan2(x, y)
-    # Now we have the initial bearing but math.atan2 return values
-    # from -180° to + 180° which is not what we want for a compass bearing
-    # The solution is to normalize the initial bearing as shown below
-    initial_bearing = np.degrees(initial_bearing)
-    compass_bearing = (initial_bearing + 360) % 360
-    return compass_bearing
-
-def _perform_geo_selection_sql(con, wkt_geometry: str):
+def _perform_geo_selection_sql(con, wkt_geometry: str, centroid_longitude: float, centroid_latitude: float):
     # Step 1: Create a temp table with the query geometry.
     con.execute(f"""
     CREATE TEMPORARY TABLE temp_query_geom AS
     SELECT ST_GeomFromText('{wkt_geometry}') AS geom;
     """)
     # Step 2: Create a temp table with rows that intersect the query geometry
-    # SUB_SOLAR_GROUND_AZIMUTH is precomputed solar_bearing
-    con.execute("""
+    # SUB_SOLAR_GROUND_AZIMUTH is precomputed solar_bearing but not as precise as ROI_SSGA
+    con.execute(f"""
     CREATE TEMPORARY TABLE temp_intersection AS
     SELECT 
         a.*,
         ST_Area(ST_Intersection(a.geometry, q.geom)) / ST_Area(q.geom) AS fraction_area,
+        ground_azimuth({centroid_latitude}, {centroid_longitude}, a.SUB_SOLAR_LATITUDE, a.SUB_SOLAR_LONGITUDE) AS ROI_SUB_SOLAR_GROUND_AZIMUTH
     FROM 
         df_src AS a
     CROSS JOIN 
@@ -97,14 +65,14 @@ def _perform_geo_selection_sql(con, wkt_geometry: str):
     WHERE 
         ST_Intersects(a.geometry, q.geom) AND a.INCIDENCE_ANGLE < 95 AND RESOLUTION::float <= 5.0 AND EMISSION_ANGLE::float <= 20.0;
     """)
-    # Final step: Query the final results sorted by SUB_SOLAR_GROUND_AZIMUTH, ST_Hilbert(geometry), INCIDENCE_ANGLE and fraction_area.
+    # Final step: Query the final results sorted by ROI_SUB_SOLAR_GROUND_AZIMUTH, ST_Hilbert(geometry), INCIDENCE_ANGLE and fraction_area.
     # TODO this doesn't go quite as far as I'd want to order the results such that more likely than not nearby rows overlap
     # but it seems to do enough such 
     con.execute("""
     CREATE TEMPORARY TABLE numbered_ordered AS 
     SELECT
         *,
-        ROW_NUMBER() OVER (ORDER BY SUB_SOLAR_GROUND_AZIMUTH,INCIDENCE_ANGLE,ST_Hilbert(ST_Centroid(geometry)),fraction_area) AS orderid,
+        ROW_NUMBER() OVER (ORDER BY ROI_SUB_SOLAR_GROUND_AZIMUTH,INCIDENCE_ANGLE,ST_Hilbert(ST_Centroid(geometry)),fraction_area) AS orderid,
     FROM temp_intersection;
     CREATE TEMPORARY TABLE temp_final AS 
     SELECT 
@@ -124,7 +92,9 @@ def _perform_geo_selection_sql(con, wkt_geometry: str):
     pass
 
 
-def perform_geo_selection_duckdb(df_src_path: str, wkt_geometry: str)-> gp.GeoDataFrame:
+def perform_geo_selection_duckdb(df_src_path: str, wkt_geometry: str, df_query: gp.GeoDataFrame)-> gp.GeoDataFrame:
+    # get the wkt geometry centroid
+    centroid = df_query.centroid.to_crs(moon_crs_ge).iloc[0]
     # Connect to DuckDB
     with duckdb.connect(config = {'threads': 4}) as con:
         con.sql('SET enable_progress_bar = true;')
@@ -132,7 +102,7 @@ def perform_geo_selection_duckdb(df_src_path: str, wkt_geometry: str)-> gp.GeoDa
         con.install_extension("spatial")
         con.load_extension("spatial")
         # register functions
-        con.create_function('calculate_initial_compass_bearing', calculate_initial_compass_bearing)
+        con.create_function('ground_azimuth', ground_azimuth)
         # load the database into duckdb
         con.sql(f"CREATE TEMP TABLE df_src AS (SELECT * FROM '{df_src_path}');")
         print(f'Loaded DB: {df_src_path}')
@@ -140,7 +110,7 @@ def perform_geo_selection_duckdb(df_src_path: str, wkt_geometry: str)-> gp.GeoDa
         con.sql("CREATE INDEX my_idx ON df_src USING RTREE (geometry)")
         print('Created Spatial Index')
         # perform the actual work
-        _perform_geo_selection_sql(con, wkt_geometry)
+        _perform_geo_selection_sql(con, wkt_geometry, centroid.x, centroid.y)
         # convert back to geodataframe
         result_df = con.execute("SELECT * from temp_final").df()
         # print summary of overlaps
@@ -217,7 +187,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         data_indices = bin_indices == i
         # now plot
         stem = ax.stem(
-            np.radians(df_results['SUB_SOLAR_GROUND_AZIMUTH'].iloc[data_indices]), 
+            np.radians(df_results['ROI_SUB_SOLAR_GROUND_AZIMUTH'].iloc[data_indices]), 
             df_results['fraction_area'].iloc[data_indices],
             markerfmt=" ",
             basefmt=" ",
@@ -361,7 +331,7 @@ def main():
         embedded_provenance = get_embedded_provenance(args.db_path)
         # perform query for downselection and prepare output geodataframe
         # TODO refactor below to avoid use of pandas at all, see find_stereo_pairs.py
-        df_results = perform_geo_selection_duckdb(args.db_path, wkt_polygon)
+        df_results = perform_geo_selection_duckdb(args.db_path, wkt_polygon, df_query)
         # convert back to geodataframe
         df_results['geometry'] = gp.GeoSeries.from_wkt(df_results['geometry'])
         df_results = gp.GeoDataFrame(df_results, crs=df.crs)
@@ -373,7 +343,7 @@ def main():
             args.output,
             index=False,
             columns=(
-                "PRODUCT_ID", "INCIDENCE_ANGLE", "fraction_area", "SUB_SOLAR_GROUND_AZIMUTH",
+                "PRODUCT_ID", "INCIDENCE_ANGLE", "fraction_area", "ROI_SUB_SOLAR_GROUND_AZIMUTH",
                 "RESOLUTION"
             )
         )

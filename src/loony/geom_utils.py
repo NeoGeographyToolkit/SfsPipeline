@@ -358,7 +358,7 @@ def intersect_group(geoms: np.ndarray) -> np.ndarray:
     intersections = intersections | intersections.T
     return intersections
 
-def pairwise_diff_column(df: gp.GeoDataFrame, column='SUB_SOLAR_GROUND_AZIMUTH'):
+def pairwise_diff_column(df: gp.GeoDataFrame, column='ROI_SUB_SOLAR_GROUND_AZIMUTH'):
     """
     _summary_
 
@@ -403,7 +403,7 @@ def reorder_gdf_by_SSGA_INT(in_gdf: gp.GeoDataFrame, quantile_cut: int = 90)-> g
     # get the crs
     crs = gdf.crs
     # compute the quantile bins
-    gdf['SSGA_BIN']=gp.pd.qcut(gdf['SUB_SOLAR_GROUND_AZIMUTH'], quantile_cut)
+    gdf['SSGA_BIN']=gp.pd.qcut(gdf['ROI_SUB_SOLAR_GROUND_AZIMUTH'], quantile_cut)
     bins = gdf['SSGA_BIN'].dtype.categories
     results = []
     for bin in bins:
@@ -412,7 +412,7 @@ def reorder_gdf_by_SSGA_INT(in_gdf: gp.GeoDataFrame, quantile_cut: int = 90)-> g
         # get adjacency
         adjacency = intersect_group(dfg.geometry)
         # get SSGA
-        ssga = dfg['SUB_SOLAR_GROUND_AZIMUTH']
+        ssga = dfg['ROI_SUB_SOLAR_GROUND_AZIMUTH']
         # get the new weighted order
         new_order = get_graph_order_weighted(adjacency, ssga)
         # reset the index of the reordered sub group

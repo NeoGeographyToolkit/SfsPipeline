@@ -380,7 +380,7 @@ def main():
             L.PHASE_ANGLE     as L_PHASE_ANGLE,
             L.EMISSION_ANGLE  as L_EMISSION_ANGLE,
             L.INCIDENCE_ANGLE as L_INCIDENCE_ANGLE,
-            L.SUB_SOLAR_GROUND_AZIMUTH as L_SUB_SOLAR_GROUND_AZIMUTH,
+            L.ROI_SUB_SOLAR_GROUND_AZIMUTH as L_ROI_SUB_SOLAR_GROUND_AZIMUTH,
             L.SUB_SPACECRAFT_GROUND_AZIMUTH as L_SUB_SPACECRAFT_GROUND_AZIMUTH,
             L.RESOLUTION      as L_RESOLUTION,
             ST_AREA(L.geom)   as L_area,
@@ -390,7 +390,7 @@ def main():
             R.PHASE_ANGLE     as R_PHASE_ANGLE,
             R.EMISSION_ANGLE  as R_EMISSION_ANGLE,
             R.INCIDENCE_ANGLE as R_INCIDENCE_ANGLE,
-            R.SUB_SOLAR_GROUND_AZIMUTH as R_SUB_SOLAR_GROUND_AZIMUTH,
+            R.ROI_SUB_SOLAR_GROUND_AZIMUTH as R_ROI_SUB_SOLAR_GROUND_AZIMUTH,
             R.SUB_SPACECRAFT_GROUND_AZIMUTH as R_SUB_SPACECRAFT_GROUND_AZIMUTH,
             R.RESOLUTION      as R_RESOLUTION,
             ST_AREA(R.geom)   as R_area,
@@ -427,13 +427,13 @@ def main():
         CONCAT('https://wms.lroc.asu.edu/lroc/view_lroc/LRO-L-LROC-2-EDR-V1.0/',p.L_PRODUCT_ID) as L_VIEW,
         CONCAT('https://wms.lroc.asu.edu/lroc/view_lroc/LRO-L-LROC-2-EDR-V1.0/',p.R_PRODUCT_ID) as R_VIEW,
         ST_INTERSECTION(p.geom, roi.geom) as roi_overlap_geom,
-        ABS(p.L_SUB_SOLAR_GROUND_AZIMUTH - p.R_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_DIFF,
-        angular_separation_acos(p.L_SUB_SOLAR_GROUND_AZIMUTH, p.R_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_ACOS_DIFF,
+        ABS(p.L_ROI_SUB_SOLAR_GROUND_AZIMUTH - p.R_ROI_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_DIFF,
+        angular_separation_acos(p.L_ROI_SUB_SOLAR_GROUND_AZIMUTH, p.R_ROI_SUB_SOLAR_GROUND_AZIMUTH) as SOLAR_AZ_ACOS_DIFF,
         (ST_AREA(p.geom) / p.L_AREA) * 100 AS OVERLAP_PERCENTAGE,
         (ST_AREA(ST_INTERSECTION(p.geom, roi.geom)) / ST_AREA(roi.geom)) * 100 AS ROI_OVERLAP_PERCENTAGE,
         parallax(radians(p.L_EMISSION_ANGLE), radians(p.L_SUB_SPACECRAFT_GROUND_AZIMUTH), radians(p.R_EMISSION_ANGLE), radians(p.R_SUB_SPACECRAFT_GROUND_AZIMUTH)) as PARALLAX_ANGLE,
         parallax_height_ratio(radians(p.L_EMISSION_ANGLE), radians(p.L_SUB_SPACECRAFT_GROUND_AZIMUTH), radians(p.R_EMISSION_ANGLE), radians(p.R_SUB_SPACECRAFT_GROUND_AZIMUTH)) as PARALLAX_HEIGHT_RATIO,
-        shadow_tip_distance(radians(p.L_INCIDENCE_ANGLE), radians(p.L_SUB_SOLAR_GROUND_AZIMUTH), radians(p.R_INCIDENCE_ANGLE), radians(p.R_SUB_SOLAR_GROUND_AZIMUTH)) as SHADOW_TIP_DISTANCE,
+        shadow_tip_distance(radians(p.L_INCIDENCE_ANGLE), radians(p.L_ROI_SUB_SOLAR_GROUND_AZIMUTH), radians(p.R_INCIDENCE_ANGLE), radians(p.R_ROI_SUB_SOLAR_GROUND_AZIMUTH)) as SHADOW_TIP_DISTANCE,
         gsd_ratio(p.L_RESOLUTION::DOUBLE, p.R_RESOLUTION::DOUBLE) as GSD_RATIO,
         -- other pair dependent quality metrics here
         incidence_quality(p.L_INCIDENCE_ANGLE::FLOAT) as L_INCIDENCE_QUALITY,
@@ -443,7 +443,7 @@ def main():
         emission_quality(p.L_EMISSION_ANGLE::FLOAT) as L_EMISSION_QUALITY,
         emission_quality(p.R_EMISSION_ANGLE::FLOAT) as R_EMISSION_QUALITY,                      
         gsd_quality(p.L_RESOLUTION::FLOAT, p.R_RESOLUTION::FLOAT) as GSD_QUALITY,
-        delta_solar_az_quality(p.L_SUB_SOLAR_GROUND_AZIMUTH::FLOAT, p.R_SUB_SOLAR_GROUND_AZIMUTH::FLOAT) as DELTA_SOLAR_AZ_QUALITY,
+        delta_solar_az_quality(p.L_ROI_SUB_SOLAR_GROUND_AZIMUTH::FLOAT, p.R_ROI_SUB_SOLAR_GROUND_AZIMUTH::FLOAT) as DELTA_SOLAR_AZ_QUALITY,
     FROM 
         pairs_raw as p
     JOIN

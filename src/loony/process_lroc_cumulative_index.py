@@ -83,6 +83,7 @@ def run(lbl_path: str = '~/CUMINDEX.LBL'):
 
     ### compute SubSpacecraft Ground Azimuth and SupSolar Ground Azimuth
     # Grab the columns we need from the current database
+    # Note this is not the SUB_SOLAR_GROUND_AZIMUHTH to use really, we compute a ROI_SSGA later
     # TODO I don't like this SELECT here, but this is much less lines of code than making intermediate tables and inserting new columns and such
     df = con.execute("""SELECT * FROM cleaned""").pl()
     df_cleaned_with_ground_azimuths = df.with_columns(

@@ -90,10 +90,10 @@ def main():
                     pairs_raw
             AS SELECT
                     L.PRODUCT_ID      as L_PRODUCT_ID,
-                    L.SUB_SOLAR_GROUND_AZIMUTH as L_SUB_SOLAR_GROUND_AZIMUTH,
+                    L.ROI_SUB_SOLAR_GROUND_AZIMUTH as L_ROI_SUB_SOLAR_GROUND_AZIMUTH,
                     R.PRODUCT_ID      as R_PRODUCT_ID,
-                    R.SUB_SOLAR_GROUND_AZIMUTH as R_SUB_SOLAR_GROUND_AZIMUTH,
-                    angular_separation_acos(L.SUB_SOLAR_GROUND_AZIMUTH::FLOAT, R.SUB_SOLAR_GROUND_AZIMUTH::FLOAT) as SOLAR_AZ_ACOS_DIFF,
+                    R.ROI_SUB_SOLAR_GROUND_AZIMUTH as R_ROI_SUB_SOLAR_GROUND_AZIMUTH,
+                    angular_separation_acos(L.ROI_SUB_SOLAR_GROUND_AZIMUTH::FLOAT, R.ROI_SUB_SOLAR_GROUND_AZIMUTH::FLOAT) as SOLAR_AZ_ACOS_DIFF,
             FROM 
                 df L
             JOIN 
@@ -107,7 +107,7 @@ def main():
             AND
                 LEFT(L_PRODUCT_ID, LENGTH(L_PRODUCT_ID) - 2) != LEFT(R_PRODUCT_ID, LENGTH(R_PRODUCT_ID) - 2) -- Ensure left and right images for an observation aren't matched to themselves as the overlap is too small for ASP
             ORDER BY
-                L_SUB_SOLAR_GROUND_AZIMUTH ASC,
+                L_ROI_SUB_SOLAR_GROUND_AZIMUTH ASC,
                 SOLAR_AZ_ACOS_DIFF ASC;
         """)
         # get left ids
