@@ -27,6 +27,12 @@ if [ -z "$INPUT_DIR" ]; then
     exit 1
 fi
 echo "Path to CUBs: $INPUT_DIR"
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -57,12 +63,12 @@ if [[ -n $PBS_O_WORKDIR ]]; then
     echo "If DEBUG was not unset it should now be not set: $DEBUG"
 fi
 # Change to the working directory
-echo Working directory is $PBS_O_WORKDIR
+echo Working directory is "$PBS_O_WORKDIR"
 if [[ -n $PBS_O_WORKDIR ]]; then
-    cd $PBS_O_WORKDIR
+    cd "$PBS_O_WORKDIR" || exit
 fi
-echo machine is $(uname -a)
-echo machine file is $PBS_NODEFILE
+echo "machine is $(uname -a)"
+echo "machine file is $PBS_NODEFILE"
 # get the number of unique nodes 
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
     NUM_NODES=1
@@ -75,12 +81,18 @@ echo
 # make sure the CWD is the INPUT_DIR
 # source asap environment
 source init_sfstools.sh
-cd $INPUT_DIR
-echo 'CWD is: '
-pwd
+cd "$INPUT_DIR" || exit
+# create output folders as needed
+LOGS_FOLDER="$WORKDIR/logs"
+JOBS_FOLDER="$WORKDIR/jobs"
+mkdir -p "$LOGS_FOLDER"
+mkdir -p "$JOBS_FOLDER"
+# set log file names
+JOB_FILE="$JOBS_FOLDER/pbs_shadow_mask_job.log"
+LOG_FILE="$LOGS_FOLDER/pbs_shadow_mask_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 # find the IMG files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp $HOME/shadow_mask_cmds.XXXXXX)
+TMPFILE=$(mktemp "$WORKDIR/shadow_mask_cmds.XXXXXX")
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
@@ -92,14 +104,14 @@ if [[ -z "$DEBUG" ]]; then
     # Run GNU Parallel with the temp file if not in debug mode 
     if [[ $NUM_NODES -gt 1 ]]; then
         # DON'T USE ASP's parallel call it modified the python path!!! make sure you update PYTHONHOME WITHIN 
-        ~/sw/tools/asp/bin/parallel --env CONDA_PREFIX --resume-failed --joblog $HOME/pbs_shadow_mask_job.log -u --sshdelay 0.5 --memfree 10G --sshloginfile $PBS_NODEFILE  < "$TMPFILE" &> "$HOME/pbs_shadow_mask_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        parallel --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -u --sshdelay 0.5 --memfree 10G --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
     else
-        ~/sw/tools/asp/bin/parallel --env CONDA_PREFIX --resume-failed --joblog $HOME/pbs_shadow_mask_job.log -j 20 -u --memfree 10G  < "$TMPFILE" &> "$HOME/pbs_shadow_mask_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        parallel --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -j 20 -u --memfree 10G  < "$TMPFILE" &> "$LOG_FILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$HOME/pbs_shadow_mask_job.log" "$HOME/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_shadow_mask_job.log"
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

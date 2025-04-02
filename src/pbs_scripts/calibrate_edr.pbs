@@ -74,6 +74,14 @@ fi
 echo "running on $NUM_NODES nodes"
 echo
 ##############################################
+# source asp environment
+source init_asp.sh
+# echo out ISISDATA and ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
+# echo out PATH
+echo PATH is "$PATH"
+################################################
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"
 JOBS_FOLDER="$WORKDIR/jobs"
@@ -95,14 +103,14 @@ echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel -u --resume-failed --sshdelay 0.5 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
+        parallel -u --resume-failed --sshdelay 0.5 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
     else
-        ~/sw/tools/asp/bin/parallel -u --resume-failed --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
+        parallel -u --resume-failed --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$JOB_FILE" "$JOBS_FOLDER/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_calibrate_edr_job.log"
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

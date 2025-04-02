@@ -36,6 +36,7 @@ export PATH="$PATH:/path/to/sfstools/base_scripts/:/path/to/sfstools/src/pbs_scr
 export ISISDATA=/path/to/your/ISISDATA/
 export ISISROOT=/path/to/your/conda/envs/isis
 export ASPROOT=/path/to/your/extracted/ASP/ 
+export NAME_SOURCE=/path/to/cities.csv or some other text file with random names you like, but this is optional
 ```
 
 7. To run the commands below simply activate the `sfstools` conda environment. The bash and PBS scripts however shouldn't need this and they should be available in your PATH regardless of the conda environment. 

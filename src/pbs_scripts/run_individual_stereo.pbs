@@ -58,8 +58,11 @@ fi
 echo "Bundle Adjust Prefix: $BA_PREFIX"
 # get the optional semi-unique job NAME if it's not set
 if [[ -z "$JOB_NAME_POSTFIX" ]]; then
-    # get a job name postfix from the city names file
-    JOB_NAME_POSTFIX=$(shuf ~/cities.csv | head -n 1)
+    # get a job name postfix from the names file
+    if [[ -z "$NAME_SOURCE" ]]; then
+        NAME_SOURCE=/usr/share/dict/words
+    fi
+    JOB_NAME_POSTFIX=$(shuf "$NAME_SOURCE" | head -n 1 | awk '{print tolower($0)}')
     export JOB_NAME_POSTFIX
 fi
 echo "JOB_NAME_POSTFIX will be $JOB_NAME_POSTFIX"

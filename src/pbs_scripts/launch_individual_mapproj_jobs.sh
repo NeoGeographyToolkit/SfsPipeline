@@ -35,7 +35,7 @@ if [[ -z "$WORKDIR" ]]; then
 fi
 echo "Workdir: $WORKDIR"
 ##############################################
-# source asap environment
+# source asp environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
 echo ISIS data is "$ISISDATA" 

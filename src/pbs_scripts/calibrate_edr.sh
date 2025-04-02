@@ -4,7 +4,7 @@ if [ -n "$PBS_NODEFILE" ]; then
     echo "Running on PBS node: $(uname -a)"
 fi
 ##############################################
-# source asap environment
+# source asp environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
 echo ISIS data is $ISISDATA 
@@ -18,8 +18,7 @@ if [ "$#" -ne 1 ]; then
     exit 1
 fi
 in_img=$1
-echo IN IMG is $in_img
-# use asap to calibrate EDR
+echo IN IMG is "$in_img"
 # convert the IMG to a cUB
 lronac2isis from="${in_img}" to="${in_img%.IMG}.raw.cub"
 # run spiceinit with smithed kernels, fallback to recon otherwise
@@ -35,6 +34,6 @@ rm "${in_img%.IMG}.cal.cub"
 # get the final cub name
 ech_cub="${in_img%.IMG}.ech.cub"
 # use isd_generate to generate CSM camera model using only spiceinit info from ISIS
-isd_generate -i $ech_cub
+isd_generate -i "$ech_cub"
 # done!
 

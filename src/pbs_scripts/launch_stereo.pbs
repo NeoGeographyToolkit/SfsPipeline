@@ -41,9 +41,12 @@ if [ -z "$CAMERA_PAIR_LIST" ]; then
 fi
 echo "Camera Pair list file: $CAMERA_PAIR_LIST"
 # get the optional semi-unique job NAME if it's not set
-if [ -z "$JOB_NAME_POSTFIX" ]; then
-    # get a job name postfix from the city names file
-    JOB_NAME_POSTFIX=$(shuf ~/cities.csv | head -n 1)
+if [[ -z "$JOB_NAME_POSTFIX" ]]; then
+    # get a job name postfix from the names file
+    if [[ -z "$NAME_SOURCE" ]]; then
+        NAME_SOURCE=/usr/share/dict/words
+    fi
+    JOB_NAME_POSTFIX=$(shuf "$NAME_SOURCE" | head -n 1 | awk '{print tolower($0)}')
     export JOB_NAME_POSTFIX
 fi
 echo "JOB_NAME_POSTFIX will be $JOB_NAME_POSTFIX"
@@ -100,7 +103,7 @@ fi
 echo "running on $NUM_NODES nodes"
 echo
 ##############################################
-# source asap environment
+# source asp environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
 echo ISIS data is "$ISISDATA" 
@@ -158,18 +161,17 @@ trap 'rm -f "$TMPFILE"' EXIT
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
 }
-
 # log we are about to start (TODO move below to new script)
 echo "launching jobs"
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     # as we will run each stereo pair one at a time, we will only use parallel here
     # to spawn one job at a time. Later it could make sense to qsub these and have sub jobs instead
-    ~/sw/tools/asp/bin/parallel --resume-failed -u -j 1 --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
+    parallel --resume-failed -u -j 1 --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$JOB_FILE" "$JOBS_FOLDER/completed_$(date +"%Y-%m-%d_%H-%M-%S")_pbs_stereo_job_$JOB_NAME_POSTFIX.log"
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel

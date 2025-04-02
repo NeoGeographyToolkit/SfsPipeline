@@ -234,7 +234,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$JOB_FILE" "$JOBS_FOLDER/completed_$(date +"%Y-%m-%d_%H-%M-%S")_${JOB_FILE##*/}"
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
 else
     # I am debugging of a pfe or something
     echo "would have run: "

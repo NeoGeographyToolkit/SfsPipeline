@@ -32,7 +32,9 @@ if [[ -z "$IMG" ]]; then
     exit 1
 fi
 echo "Image file: $IMG"
-# Right Camera
+# precompute the base filename for the image
+BASE=$(basename "$IMG")
+# Camera
 if [[ -z "$CAM" ]]; then
     echo "Error: CAM is not set. Use $USAGE"
     exit 1
@@ -40,7 +42,8 @@ fi
 echo "Camera file: $CAM"
 # Bundle Adjust prefix
 if [[ -z "$BA_PREFIX" ]]; then
-    export BA_PREFIX='noba'
+    BA_PREFIX='noba'
+    export BA_PREFIX
 fi
 echo "Bundle Adjust Prefix: $BA_PREFIX"
 # Ensure the work dir is set to something
@@ -65,7 +68,7 @@ if [[ -n $SUBMIT ]]; then
         sleep 15
     fi
     # submit to qsub
-    submit_name="pbs_run_mapproj_${BA_PREFIX%/*}"
+    submit_name="pbs_run_mapproj_${BA_PREFIX%/*}_${BASE%%.cub}"
     exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
@@ -105,7 +108,6 @@ JOBS_FOLDER="$WORKDIR/jobs"
 mkdir -p "$LOGS_FOLDER"
 mkdir -p "$JOBS_FOLDER"
 # set log file
-BASE=$(basename "$IMG")
 LOG_FILE="$LOGS_FOLDER/pbs_mapproj_${BASE%%.cub}.map.${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 # first set the map projection args
 args_mapproj=(
@@ -118,9 +120,8 @@ args_mapproj=(
             --threads 4 
             --tr 1
         )
-# next set the footprint computation args
+# next set the footprint computation args 
 args_foot=(
-            "&&" 
             /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
             -q 
             -write_absolute_path 
@@ -129,7 +130,7 @@ args_foot=(
             "${IMG%%.cub}.map.${BA_PREFIX%/*}.geojson"
         )     
 # Combine both into one string
-PROCESS="${args_mapproj[@]} ${args_foot[@]}"
+PROCESS="${args_mapproj[@]} && ${args_foot[@]}"
 # prepare to run the command or print the debug
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Starting Job for $IMG at $(date)" &> "$LOG_FILE"
