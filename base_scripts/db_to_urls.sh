@@ -26,4 +26,4 @@ else
     sqlcmd="SELECT replace(FILE_SPECIFICATION_NAME, 'LRO-L-LROC-2-EDR-V1.0', \"$pds_url\") FROM $layer_name"
 fi
 
-ogr2ogr -sql "$sqlcmd" -f CSV /vsistdout/ "$db_file"
+ogr2ogr -sql "$sqlcmd" -f CSV /vsistdout/ "$db_file" | tail -n+2 | sort

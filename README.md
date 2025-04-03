@@ -31,7 +31,7 @@ Note sfstools contains both utilities intended to be run on your local machine (
 6. (☁️) Add `base_scripts` and `src/pbs_scripts` to your PATH environment by editing your .bashrc/.zshrc file and set ASP_ROOT, ISIS_ROOT, and ISIS_DATA variables to paths you created in steps 1 and 3.
 
 ```bash
-# within your .bashrc/.zshrc file add:
+# within your .bashrc/.zshrc file add (TODO Replace with with sym links in ~/.local/bin)
 export PATH="$PATH:/path/to/sfstools/base_scripts/:/path/to/sfstools/src/pbs_scripts/"
 export ISISDATA=/path/to/your/ISISDATA/
 export ISISROOT=/path/to/your/conda/envs/isis
@@ -57,7 +57,7 @@ Symbols:
 2. sfs-cover (💻)
   - Local script for using geoparquet index to get images relevant to ROI 
 3. find-stereo-pairs (💻)
-  - Optional script to investigate "good stereo" availability prior to BA (you can skip entirely)
+  - Optional script to investigate "good stereo" availability prior to BA (you can skip entirely, this is just to get a sense of what could be usable)
 4. db_to_urls.sh (💻/☁️)
   - Given sfs-cover output get S3 urls to images/labels for downloading via wget
 5. calibrate_edr.pbs (☁️)

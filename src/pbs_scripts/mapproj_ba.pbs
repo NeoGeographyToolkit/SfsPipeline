@@ -5,7 +5,6 @@
 #PBS -l select=3:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
-#PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_mapproj_ba.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
@@ -211,9 +210,9 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     # Run GNU Parallel with the temp file if not in debug mode   
     if [[ $NUM_NODES -gt 1 ]]; then
         # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes!
-        parallel --resume-failed --controlmaster -u -j 4 --sshdelay 0.5 --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
+        parallel --resume-failed --controlmaster --sshloginfile "$PBS_NODEFILE" -u -j 4 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     else
-        parallel --resume-failed -u -j 1 --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
+        parallel --resume-failed -u -j 1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"

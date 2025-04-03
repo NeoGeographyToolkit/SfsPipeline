@@ -19,10 +19,10 @@ if [ "$#" -ne 1 ]; then
 fi
 in_img=$1
 echo IN IMG is "$in_img"
-# convert the IMG to a cUB
+# convert the IMG to a CUB
 lronac2isis from="${in_img}" to="${in_img%.IMG}.raw.cub"
 # run spiceinit with smithed kernels, fallback to recon otherwise
-spiceinit from="${in_img%.IMG}.raw.cub" spksmithed=true spkrecon=true web=true
+spiceinit from="${in_img%.IMG}.raw.cub" spksmithed=true spkrecon=true web=false
 # run lro nac calibration
 lronaccal from="${in_img%.IMG}.raw.cub" to="${in_img%.IMG}.cal.cub"
 # cleanup raw cub
