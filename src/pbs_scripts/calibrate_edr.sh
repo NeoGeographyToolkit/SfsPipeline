@@ -7,10 +7,10 @@ fi
 # source asp environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 ################################################
 # Must have 1 arguments. Print usage on failure.
 if [ "$#" -ne 1 ]; then

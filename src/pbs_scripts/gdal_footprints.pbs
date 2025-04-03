@@ -25,6 +25,12 @@ if [ -z "$INPUT_DIR" ]; then
     exit 1
 fi
 echo "Path to TIFs: $INPUT_DIR"
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -71,20 +77,20 @@ fi
 echo "running on $NUM_NODES nodes"
 echo
 ##############################################
-# source asap environment
+# source asp environment
 source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 # save the path to gdal_footprint
-GDAL_FOOTPRINT='/vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint'
+GDAL_FOOTPRINT=$(which gdal_footprint)
 ################################################
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp ~/gdal_footprints_cmds.XXXXXX)
+TMPFILE=$(mktemp $WORKDIR/gdal_footprints_cmds.XXXXXX)
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
@@ -104,9 +110,9 @@ echo "launching jobs at $(date)"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        ~/sw/tools/asp/bin/parallel --memfree 20G --resume-failed --controlmaster -u --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_gdal_footprints_job.log  < "$TMPFILE" &> "$HOME/pbs_gdal_footprints_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        $ASPROOT/bin/parallel --memfree 20G --resume-failed --controlmaster -u --sshdelay 0.5 --sshloginfile $PBS_NODEFILE --joblog ~/pbs_gdal_footprints_job.log  < "$TMPFILE" &> "$HOME/pbs_gdal_footprints_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     else
-        ~/sw/tools/asp/bin/parallel -j 20 --memfree 20G --resume-failed -u --joblog ~/pbs_gdal_footprints_job.log  < "$TMPFILE" &> "$HOME/pbs_gdal_footprints_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+        $ASPROOT/bin/parallel -j 20 --memfree 20G --resume-failed -u --joblog ~/pbs_gdal_footprints_job.log  < "$TMPFILE" &> "$HOME/pbs_gdal_footprints_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"

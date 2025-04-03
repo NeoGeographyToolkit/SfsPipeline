@@ -155,10 +155,10 @@ if [[ -z "$DEBUG" ]]; then
     JOB_FILE="$JOBS_FOLDER/pbs_mapproj_noba_job.log"
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes!
-        parallel -u --resume-failed --jobs 16 --controlmaster --sshloginfile "$PBS_NODEFILE" --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
+        # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes! It does look to be per node not over all but oddly not failing with 16 per
+        $ASPROOT/bin/parallel -u --resume-failed --jobs 4 --memfree 10G --controlmaster --sshloginfile "$PBS_NODEFILE" --sshdelay 0.1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     else
-        parallel -u --resume-failed --jobs 1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
+        $ASPROOT/bin/parallel -u --resume-failed --jobs 1 --memfree 10G --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
