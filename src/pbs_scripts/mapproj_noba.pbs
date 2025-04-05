@@ -2,14 +2,18 @@
 #PBS -N pbs_mapproj_noba
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=16:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=16:ncpus=20:model=ivy,walltime=04:00:00        
 #PBS -q normal             
 #PBS -m abe                     
 #PBS -o pbs_mapproj_noba.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
-#PBS -W group_list=e2305        
+#PBS -W group_list=e2305
+# group list for job
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours        
 
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
@@ -129,6 +133,7 @@ trap 'rm -f "$TMPFILE"' EXIT
             "&&" 
             /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
             -q 
+            -overwrite
             -write_absolute_path 
             -of GeoJSON 
             "${file%%.cub}.map.noba.tif" 
@@ -136,6 +141,8 @@ trap 'rm -f "$TMPFILE"' EXIT
         )      
         echo "${args_mapproj[@]}" "${args_foot[@]}" >> "$TMPFILE";
     done;
+    # sort the TMPFILE to ensure repeatability
+    sort -o "$TMPFILE"{,}
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
@@ -156,7 +163,7 @@ if [[ -z "$DEBUG" ]]; then
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
         # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes! It does look to be per node not over all but oddly not failing with 16 per
-        $ASPROOT/bin/parallel -u --resume-failed --jobs 4 --memfree 10G --controlmaster --sshloginfile "$PBS_NODEFILE" --sshdelay 0.1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
+        $ASPROOT/bin/parallel -u --resume-failed --jobs 8 --memfree 10G --controlmaster --sshloginfile "$PBS_NODEFILE" --sshdelay 0.1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     else
         $ASPROOT/bin/parallel -u --resume-failed --jobs 1 --memfree 10G --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     fi

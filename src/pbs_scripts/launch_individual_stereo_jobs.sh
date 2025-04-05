@@ -82,6 +82,8 @@ trap 'rm -f "$TMPFILE"' EXIT
         fi
         # okay 
     done < <(paste "$IMAGE_PAIR_LIST" "$CAMERA_PAIR_LIST")
+    # sort the TMPFILE to ensure repeatability
+    sort -o "$TMPFILE"{,}
     #
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG

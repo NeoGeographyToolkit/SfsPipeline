@@ -97,6 +97,8 @@ TMPFILE=$(mktemp "$WORKDIR/calibrate_edr_cmds.XXXXXX")
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
 find "$INPUT_DIR" -type f -name '*.IMG' -exec echo "calibrate_edr.sh {}" \; >> "$TMPFILE"
+# sort the TMPFILE to ensure repeatability
+sort -o "$TMPFILE"{,}
 # log we are about to start 
 # https://www.gnu.org/software/parallel/parallel.html#options
 echo "launching jobs"

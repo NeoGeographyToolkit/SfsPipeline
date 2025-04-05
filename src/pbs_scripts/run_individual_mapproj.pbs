@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=8:model=ivy,walltime=00:10:00        
+#PBS -l select=1:ncpus=8:model=ivy,walltime=01:00:00        
 #PBS -q low
 #PBS -o pbs_mapproj.log
 #PBS -r y                       

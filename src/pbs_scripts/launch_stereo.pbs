@@ -156,6 +156,8 @@ trap 'rm -f "$TMPFILE"' EXIT
         echo "point2dem --threads 8 --errorimage --tr 1 $out_dir/run-PC.tif &> $out_log_p2d" >> "$TMPFILE";
         # okay 
     done < <(paste "$IMAGE_PAIR_LIST" "$CAMERA_PAIR_LIST")
+    # sort the TMPFILE to ensure repeatability
+    sort -o "$TMPFILE"{,}
     #
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG

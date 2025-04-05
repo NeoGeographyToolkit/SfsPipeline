@@ -25,8 +25,6 @@ gdalinfo $tmp_mask -hist -json | jq --arg IMG ${in_img##*/}  -c '{'img': $IMG, '
 # recompute the mask 
 gdal_calc --quiet -A $in_img --calc="A>0.003" --outfile $tmp_mask --NoData=0 --type Byte --overwrite --co=COMPRESS=LZW --co=NBITS=1
 # now only the good illuminated pixels are not nodata, can't get stats per say but can get geometry
-gdal_footprint -q -write_absolute_path -max_points 1000 -simplify 50 $tmp_mask -of GeoJSON $out_mask_geojson
-# now remove the mask file as we don't need it anymore. 
-rm $tmp_mask
+gdal_footprint -q -overwrite -write_absolute_path -max_points 1000 -simplify 50 $tmp_mask -of GeoJSON $out_mask_geojson
 # now we are done 
 echo "Finished $in_img"

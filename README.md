@@ -58,25 +58,29 @@ Symbols:
   - Local script for using geoparquet index to get images relevant to ROI 
 3. find-stereo-pairs (💻)
   - Optional script to investigate "good stereo" availability prior to BA (you can skip entirely, this is just to get a sense of what could be usable)
-4. db_to_urls.sh (💻/☁️)
+4. solar_az_animate.py (💻)
+  - Optional script to view footprint coverage given solar ground azimuth bins via animation in matplotlib (you can skip entirely, this is just to get a sense of what could be usable)
+5. db_to_urls.sh (💻/☁️)
   - Given sfs-cover output get S3 urls to images/labels for downloading via wget
-5. calibrate_edr.pbs (☁️)
+6. calibrate_edr.pbs (☁️)
   - PBS batch job for calibrating/spiceinit'ing images, making CSM models, etc, run on PFE to submit job.
-6. mapproj_noba.pbs (☁️)
-  - PBS batch job for map projecting CUB files given CSM models
-7. prepare_ba0_lists.sh (💻)
+7. mapproj_noba.pbs (☁️)
+  - PBS batch job for map projecting CUB files given CSM models to the DEM prior to bundle adjust (first bundle adjust ba0 will use map projected images to start)
+8. DEPRECATED FOR NOW prepare_ba0_lists.sh (💻)
   - Given folder of cubs and csm cameras generate most of the list text files bundle adjust needs (may be deprecated)
-8. find_overlaps_for_bundle_adjust.py (💻)
+  - easier to just run find/sort/uniq/sed in command line, will update to make a simpler script
+9. find_overlaps_for_bundle_adjust.py (💻)
   - Given sfs cover output determine likely matching images by overlap and lighting geometry to feed pairs list to bundle adjust
-9. solar_az_animate.py (💻)
-  - Optional script to view footprint coverage given solar ground azimuth bins via animation in matplotlib
 10. bundle_adjust_pt1.pbs (☁️)
-  - PBS batch job First pass bundle adjust that just computes statistics and matches for bundle adjust
+  - PBS batch job First pass bundle adjust that just computes statistics and matches for bundle adjust using many nodes
 11. bundle_adjust_pt2.pbs (☁️)
   - PBS batch job that only runs 1 node to perform bundle adjust optimization
-12. mapproj_ba.pbs (☁️)
-13. verify_bundle_adjust.py (💻)
-14. get_stereo_pairs_from_bundle_adjust.py (💻)
+12. verify_bundle_adjust.py (💻/☁️)
+  - Used to investigate the graph from the bundle adjust and determine the largest connected group of cameras/plot footprints and illumination coverage 
+13. get_stereo_pairs_from_bundle_adjust.py (💻)
+  - Script to determine what stereo pairs are available to run given the largest connected group of cameras
+14. mapproj_ba.pbs (☁️)
+  - PBS batch job for map projecting CUB files given CSM models to the DEM using the adjusted state cameras, used at multiple points when new cameras are needed to remapproject the data 
 15. launch_individual_stereo_jobs.sh (☁️)
   - Script that launches individual stereo jobs each as PBS jobs that use 1 node each 
 16. triangulation_plot.py (💻)

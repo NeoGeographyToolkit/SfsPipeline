@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=3:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=16:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -o pbs_mapproj_ba.log   
@@ -11,6 +11,9 @@
 #PBS -V                         
 #PBS -W group_list=e2305        
 # group list for job
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours
 
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
@@ -184,6 +187,7 @@ TMPFILE=$(mktemp "$WORKDIR/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX")
             "&&" 
             /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
             -q 
+            -overwrite
             -write_absolute_path 
             -of GeoJSON 
             "${IMG%%.cub}.map.${BA_PREFIX%/*}.tif" 
@@ -191,6 +195,8 @@ TMPFILE=$(mktemp "$WORKDIR/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX")
         )      
         echo "${args_mapproj[@]}" "${args_foot[@]}" >> "$TMPFILE";
     done
+    # sort the TMPFILE to ensure repeatability
+    sort -o "$TMPFILE"{,}
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi

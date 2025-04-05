@@ -57,6 +57,7 @@ while IFS= read -r base || [[ -n "$base" ]]; do
   f_img="$(pwd)/${base}.ech.cub" 
   f_camera="$(pwd)/${base}.ech.json"
   f_mapproj="$(pwd)/${base}.ech.map.noba.tif"
+  echo "$f_img"
 
   echo "$counter $good image $(is_file_or_symlink "$f_img") camera $(is_file_or_symlink "$f_camera") map $(is_file_or_symlink "$f_mapproj")"
 
@@ -72,9 +73,13 @@ while IFS= read -r base || [[ -n "$base" ]]; do
 done
 
 # 
-echo "lengths of logs:"
+echo "lengths of lists:"
 echo "IMAGES $(cat $IMAGES_LIST | wc -l)"
 echo "CAMERAS $(cat $CAMERAS_LIST | wc -l)"
 echo "MAPPROJ $(cat $MAPPROJ_LIST | wc -l)"
-
-
+# append the dem
+if [[ -n $append_dem ]]; then
+    echo "$append_dem" >> "$MAPPROJ_LIST"
+fi
+echo "updated length of MAPPROJ:"
+echo "MAPPROJ $(cat $MAPPROJ_LIST | wc -l)"

@@ -97,6 +97,9 @@ TMPFILE=$(mktemp "$WORKDIR/shadow_mask_cmds.XXXXXX")
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
 find "$INPUT_DIR" -type f -name "*.$TIF_POSTFIX" -exec echo 'shadow_mask.sh {}' \; >> "$TMPFILE"
+# sort the TMPFILE to ensure repeatability
+sort -o "$TMPFILE"{,}
+#
 # log we are about to start 
 # https://www.gnu.org/software/parallel/parallel.html#options
 echo "launching jobs"
@@ -104,7 +107,7 @@ if [[ -z "$DEBUG" ]]; then
     # Run GNU Parallel with the temp file if not in debug mode 
     if [[ $NUM_NODES -gt 1 ]]; then
         # DON'T USE ASP's parallel call it modified the python path!!! make sure you update PYTHONHOME WITHIN 
-        parallel --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -u --sshdelay 0.5 --memfree 10G --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
+        parallel --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -u --sshdelay 0.1 --memfree 10G --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
     else
         parallel --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -j 20 -u --memfree 10G  < "$TMPFILE" &> "$LOG_FILE"
     fi
