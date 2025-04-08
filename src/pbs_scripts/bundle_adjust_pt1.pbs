@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=24:ncpus=20:model=ivy,walltime=08:00:00        
-#PBS -q normal                
+#PBS -l select=72:ncpus=20:model=ivy,walltime=24:00:00        
+#PBS -q long                
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1.log   
@@ -12,6 +12,9 @@
 #PBS -V                         
 #PBS -W group_list=e2305     
 # twelve nodes for 286 images and 1600 pairs took about 45 minutes wall time
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
@@ -147,8 +150,8 @@ args=(
       --mapproj-dem "$DEM"      
       --mapprojected-data-list "$MAPPROJ_DATA" 
       --overlap-list "$OVERLAP_LIST"
-      --processes 3            
-      --threads 5               
+      --processes 10            
+      --threads 3               
       --nodata-value 0.001      
       --ip-detect-method 1      
       --ip-per-tile  400        
@@ -175,7 +178,7 @@ mkdir -p "$JOBS_FOLDER"
 LOG_FILE="$LOGS_FOLDER/pbs_ba_pt1_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 JOB_FILE="$JOBS_FOLDER/pbs_ba_pt1_${BA_PREFIX%/*}_job.log"
 # for annoying reasons I can't seem to pass this in the array
-parallel_opts="--resume-failed --sshdelay 0.75 --memfree 22G --joblog $JOB_FILE"
+parallel_opts="--resume-failed --sshdelay 0.05 --memfree 22G --joblog $JOB_FILE"
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Environment Variables: "

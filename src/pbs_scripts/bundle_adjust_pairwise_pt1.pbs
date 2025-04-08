@@ -1,0 +1,215 @@
+#!/bin/bash
+#PBS -N pbs_ba_pt1_pairwise
+#PBS -j oe                      
+#PBS -k oe                      
+#PBS -l select=10:ncpus=20:model=ivy,walltime=00:30:00        
+#PBS -q normal                
+#PBS -m abe                     
+#PBS -M andrew.m.annex@nasa.gov 
+#PBS -o pbs_ba_pt1_pairwise.log   
+#PBS -r y                       
+#PBS -S /bin/bash               
+#PBS -V                         
+#PBS -W group_list=e2305     
+# twelve nodes for 286 images and 1600 pairs took about 45 minutes wall time
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours
+# Enable stepwise debugging if DEBUG is set to "true"
+if [[ "$DEBUG" == "true" ]]; then
+    trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
+fi
+
+# define usage once
+USAGE="qsub -v DEM=/path/to/dem.tif,OVERLAP_LIST=/path/to/overlap_list.txt,BA_PREFIX=ba0/run $0"
+# Ensure a DEM was provided
+if [ -z "$DEM" ]; then
+    echo "Error: DEM is not set. Use $USAGE"
+    exit 1
+fi
+echo "DEM file: $DEM"
+# get overlap list file
+if [[ -z "$OVERLAP_LIST" ]]; then
+    echo "Error: OVERLAP_LIST is not set. Use $USAGE"
+    exit 1
+fi
+echo "Path to overlap list: $OVERLAP_LIST"
+# Ensure a output prefix is provided
+if [[ -z "$BA_PREFIX" ]]; then
+    echo "Error: BA_PREFIX is not set. Use $USAGE"
+    exit 1
+fi
+echo "Output Prefix: $BA_PREFIX"
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
+##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # actually sleep
+    sleep 15
+    # submit to qsub
+    submit_name="pbs_ba_pt1_pairwise_${BA_PREFIX%/*}"
+    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_JOBID ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
+# Change to the working directory
+echo Working directory is "$PBS_O_WORKDIR"
+if [[ -n $PBS_O_WORKDIR ]]; then
+    cd "$PBS_O_WORKDIR" || exit
+fi
+echo "machine is $(uname -a)"
+echo "machine file is $PBS_NODEFILE"
+# get the number of unique nodes 
+if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
+    NUM_NODES=1
+else
+    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
+    NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+fi
+echo "running on $NUM_NODES nodes"
+echo
+##############################################
+# source asp environment
+source init_asp.sh
+# echo out ISISDATA and ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
+# echo out PATH
+echo PATH is "$PATH"
+# save the path to mapproject
+BUNDLE_ADJUST=$(which bundle_adjust)
+##############################################
+# create output folders as needed TODO: guard with check on debug?
+LOGS_FOLDER="$WORKDIR/logs"
+JOBS_FOLDER="$WORKDIR/jobs"
+mkdir -p "$LOGS_FOLDER"
+mkdir -p "$JOBS_FOLDER"
+# set log file names
+LOG_FILE="$LOGS_FOLDER/pbs_ba_pt1_pairwise_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$JOBS_FOLDER/pbs_ba_pt1_pairwise_${BA_PREFIX%/*}_job.log"
+# Create a temp file
+TMPFILE=$(mktemp "$WORKDIR/launch_bundle_adjust_cmds.XXXXXX")
+# Ensure cleanup on exit or error
+trap 'rm -f "$TMPFILE"' EXIT
+# Generate commands dynamically and store in temp file
+{
+    trap '' DEBUG
+    while read -r LIMG RIMG; do
+        # compute the parent folder once 
+        if [[ -z "$parent_dir" ]]; then
+            parent_dir=$(dirname "$LIMG")
+        fi
+        LBASE=$(basename "$LIMG")
+        RBASE=$(basename "$RIMG")
+        LCAM="${parent_dir}/${LBASE%.cub}.json"
+        RCAM="${parent_dir}/${RBASE%.cub}.json"
+        LMAP="${parent_dir}/${LBASE%.cub}.map.noba.tif"
+        RMAP="${parent_dir}/${RBASE%.cub}.map.noba.tif"
+        MAPPROJ_DATA_STR="'${LMAP} ${RMAP} ${DEM}'"
+        if [[ ! -f $LIMG ]]; then
+            echo "LEFT image not found!: $LIMG"
+            continue
+        elif [[ ! -f $RIMG ]]; then
+            echo "RIGHT image not found!: $RIMG"
+            continue
+        elif [[ ! -f $LCAM ]]; then
+            echo "LEFT camera not found!: $LCAM"
+            continue
+        elif [[ ! -f $RCAM ]]; then
+            echo "RIGHT camera not found!: $RCAM"
+            continue
+        elif [[ ! -f $LMAP ]]; then
+            echo "LEFT mapprojected image not found!: $LMAP"
+            continue
+        elif [[ ! -f $RMAP ]]; then
+            echo "RIGHT mapprojected image not found!: $RMAP"
+            continue
+        else
+            args=(
+                "$BUNDLE_ADJUST"
+                "$LIMG" 
+                "$RIMG" 
+                "$LCAM" 
+                "$RCAM"
+                --mapproj-dem "$DEM"      
+                --mapprojected-data "$MAPPROJ_DATA_STR"  
+                --stop-after-matching      
+                --threads 4               
+                --nodata-value 0.001      
+                --ip-detect-method 1      
+                --ip-per-tile  400        
+                --ip-per-image 20000      
+                --num-iterations 500      
+                --num-passes 2            
+                --min-matches 10          
+                --max-pairwise-matches 2000 
+                --camera-weight 0           
+                --save-intermediate-cameras 
+                --robust-threshold 2.0      
+                --tri-weight 0.1            
+                --tri-robust-threshold 0.25 
+                --min-triangulation-angle 0.1 
+                --remove-outliers-params "'75.0 3.0 100 100'"
+                -o "$BA_PREFIX"
+            )
+        fi
+        # first write out the parallel stereo command but first make the output dir so I can capture the logs per job
+        echo "${args[@]}"  >> "$TMPFILE";
+        # okay 
+    done < <(paste "$OVERLAP_LIST")
+    # sort the TMPFILE to ensure repeatability
+    sort -o "$TMPFILE"{,}
+    #
+    if [[ "$DEBUG" == "true" ]]; then
+        trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
+    fi
+}
+
+# start call
+if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
+    echo "Log File: "
+    echo "$LOG_FILE"
+    echo "Job File: "
+    echo "$JOB_FILE"
+    echo "Parallel has started at $(date)"
+    # Run GNU Parallel with the temp file if not in debug mode
+    if [[ $NUM_NODES -gt 1 ]]; then
+        $ASPROOT/bin/parallel -u -j 10 --memfree 10G --resume-failed --sshdelay 0.1 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
+    else
+        $ASPROOT/bin/parallel -u -j 10 --memfree 10G --resume-failed --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
+    fi
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
+else
+    # I am debugging of a pfe or something
+    echo "would have run: "
+    cat "$TMPFILE"
+fi
+# we are now done!
+echo "Job finished at $(date)"

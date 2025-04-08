@@ -218,7 +218,7 @@ mkdir -p "$JOBS_FOLDER"
 LOG_FILE="$LOGS_FOLDER/pbs_ba_${KIND}_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 JOB_FILE="$JOBS_FOLDER/pbs_ba_${KIND}_${BA_PREFIX%/*}_job.log"
 # for annoying reasons I can't seem to pass this in the array
-parallel_opts="--resume-failed --sshdelay 0.75 --memfree 30G --joblog $JOB_FILE"
+parallel_opts="--resume-failed --sshdelay 0.1 --memfree 30G --joblog $JOB_FILE"
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Args: "
