@@ -1,8 +1,6 @@
+import json 
 import fire
 import geopandas as gp
-
-
-
 
 
 def set_coverage(df, threshold: float = 100.0, verbose: bool = False):
@@ -42,7 +40,6 @@ def set_coverage(df, threshold: float = 100.0, verbose: bool = False):
     return df.iloc[selected_indices].reset_index(drop=True)
 
 
-
 def run(
         gdb_path,
         column: str = "ROI_SUB_SOLAR_GROUND_AZIMUTH", 
@@ -50,10 +47,17 @@ def run(
         max_v: float = 361.0, 
         ret_column: str = "PRODUCT_ID",
         threshold: float = 100.0, 
+        verify_out_json: str = None,
+        component_index: int = 0,
         verbose: bool = False
     ):
     """
-    
+    Perform a vector based implementation of image_subset
+    using the shadow masks and optionally filtered by
+    SSGA and bundle adjust verification components
+
+    returns a list of product_ids that can be used
+    to build other lists outside of this script
     """
     # load the geodatabase file with geopandas
     df: gp.GeoDataFrame = gp.read_file(gdb_path)
@@ -65,10 +69,20 @@ def run(
         df = df[selection]
     else:
         raise RuntimeError(f'Column {column} not in possible columns: {df.columns} for file {gdb_path}')
+    # if the connected components are provided, ensure the selections are compatible with it
+    if verify_out_json:
+        # load the components
+        with open(verify_out_json) as src:
+            components = json.load(verify_out_json)
+        # now make a table with the IDs in the largest component
+        component_pids = components['components'][component_index].apply(lambda x: x.replace('.ech.cub', ''))
+        # now update the df to only include those 
+        df = df[df['PRODUCT_ID'].isin(component_pids)]
     # now perform the down select
     ds_df = set_coverage(df, threshold=threshold, verbose=verbose)
-    # now represent the content to the user probably best done via csv
-    
+    # now represent the content to the user probably best done via csv, using the ret_column
+    for out in ds_df[ret_column].tolist():
+        print(out, flush=True)
 
 # main
 def main():

@@ -107,9 +107,9 @@ if [[ -z "$DEBUG" ]]; then
     # Run GNU Parallel with the temp file if not in debug mode 
     if [[ $NUM_NODES -gt 1 ]]; then
         # DON'T USE ASP's parallel call it modified the python path!!! make sure you update PYTHONHOME WITHIN 
-        parallel --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -u --sshdelay 0.1 --memfree 10G --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
+        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -u --sshdelay 0.1 --memfree 10G --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
     else
-        parallel --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -j 20 -u --memfree 10G  < "$TMPFILE" &> "$LOG_FILE"
+        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -j 20 -u --memfree 10G  < "$TMPFILE" &> "$LOG_FILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"

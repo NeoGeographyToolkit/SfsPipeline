@@ -20,3 +20,8 @@ function check_files() {
     echo "yes"
     return 0
 }
+
+function collect_geojson() {
+  jq '{"type": "FeatureCollection", "features": [.[] | .features[]]}' --slurp "$1"/*.geojson
+}
+

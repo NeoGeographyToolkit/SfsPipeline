@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1_pairwise
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=10:ncpus=20:model=ivy,walltime=00:30:00        
-#PBS -q normal                
+#PBS -l select=78:ncpus=20:model=ivy,walltime=24:00:00        
+#PBS -q long                
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1_pairwise.log   
@@ -149,6 +149,9 @@ trap 'rm -f "$TMPFILE"' EXIT
             echo "RIGHT mapprojected image not found!: $RMAP"
             continue
         else
+            # 3 threads are used as memory usage seems proportional to thread count
+            # 4 was a bit too much causing as much as 11% ram use vs 7-8% for 3 threads
+            # 2 threads used up to 6% or so but I think it's crashed before even then and 10 workers
             args=(
                 "$BUNDLE_ADJUST"
                 "$LIMG" 
@@ -158,7 +161,7 @@ trap 'rm -f "$TMPFILE"' EXIT
                 --mapproj-dem "$DEM"      
                 --mapprojected-data "$MAPPROJ_DATA_STR"  
                 --stop-after-matching      
-                --threads 4               
+                --threads 3              
                 --nodata-value 0.001      
                 --ip-detect-method 1      
                 --ip-per-tile  400        
@@ -198,9 +201,9 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     echo "Parallel has started at $(date)"
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        $ASPROOT/bin/parallel -u -j 10 --memfree 10G --resume-failed --sshdelay 0.1 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
+        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --sshdelay 0.1 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
     else
-        $ASPROOT/bin/parallel -u -j 10 --memfree 10G --resume-failed --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
+        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
