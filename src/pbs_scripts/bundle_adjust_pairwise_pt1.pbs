@@ -2,7 +2,7 @@
 #PBS -N pbs_ba_pt1_pairwise
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=78:ncpus=20:model=ivy,walltime=24:00:00        
+#PBS -l select=158:ncpus=20:model=ivy,walltime=60:00:00        
 #PBS -q long                
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -10,7 +10,9 @@
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
-#PBS -W group_list=e2305     
+#PBS -W group_list=e2305    
+# to complete this, run 156 nodes for 60 hours on long queue
+# 78 nodes ran at roughly 5k pairs per hour (although this was highly variable, up to 80 per minute) 
 # twelve nodes for 286 images and 1600 pairs took about 45 minutes wall time
 # Use queue "long" for jobs up to 120 hours
 # Use queue "normal" for jobs up to 8 hours
@@ -46,6 +48,22 @@ if [[ -z "$WORKDIR" ]]; then
     export WORKDIR="$PWD"
 fi
 echo "Workdir: $WORKDIR"
+# instead of the below, why not just make the commands file and don't delete it
+# then submit after the file is made passing it as a variable to qsub for the 
+# script to use
+if [[ -z "$PARALLEL_JOBS_LIST_FILE" ]]; then
+    echo "WARNING"
+    echo "PARALLEL_JOBS_LIST_FILE is not specified. This isn't fatal,"
+    echo "   as this script will generate this file for you. However,"
+    echo "   for large bundle adjusts (>50k pairs) this is inadvisable"
+    echo ""
+    echo "To make the log file, on a PFE re-run this script with"
+    echo "    DEBUG=true"
+    echo "  And rename the $WORKDIR/launch_bundle_adjust_cmds.XXXXXX"
+    echo "  temporary file before the script ends (you step through)"
+    echo "  to ensure the file doesn't get deleted"
+    echo ""
+fi
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -57,6 +75,8 @@ if [[ -n $SUBMIT ]]; then
     unset DEBUG
     # echo SUBMIT and DEBUG as sanity check
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # echo "$PARALLEL_JOBS_LIST_FILE"
+    echo "JOB list was provided! Good on you!: $PARALLEL_JOBS_LIST_FILE"
     # actually sleep
     sleep 15
     # submit to qsub
@@ -102,7 +122,7 @@ echo ISIS root is "$ISISROOT"
 echo PATH is "$PATH"
 # save the path to mapproject
 BUNDLE_ADJUST=$(which bundle_adjust)
-##############################################
+###################################################
 # create output folders as needed TODO: guard with check on debug?
 LOGS_FOLDER="$WORKDIR/logs"
 JOBS_FOLDER="$WORKDIR/jobs"
@@ -111,41 +131,93 @@ mkdir -p "$JOBS_FOLDER"
 # set log file names
 LOG_FILE="$LOGS_FOLDER/pbs_ba_pt1_pairwise_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 JOB_FILE="$JOBS_FOLDER/pbs_ba_pt1_pairwise_${BA_PREFIX%/*}_job.log"
-# Create a temp file
-TMPFILE=$(mktemp "$WORKDIR/launch_bundle_adjust_cmds.XXXXXX")
-# Ensure cleanup on exit or error
-trap 'rm -f "$TMPFILE"' EXIT
-# Generate commands dynamically and store in temp file
-{
+###################################################
+# creating the parallel job list file
+# if not present, create a tmpfile with it
+# else proceed assuming its good to go 
+if [[ -z "$PARALLEL_JOBS_LIST_FILE" ]]; then
+    # perform all file existence checks once to avoid duplicative work
+    declare -A file_ok
+    # Extract unique images from both left and right columns
+    # This produces the union of all image file paths.
+    unique_images=$(awk '{print $1; print $2}' "$OVERLAP_LIST" | sort -u)
+    echo "Performing pre-check on unique cameras, images, and map projected image files. Start $(date)"
+    {
+        trap '' DEBUG
+        for img in $unique_images; do
+            # Use parameter expansion to get parent dir and base name:
+            parent="${img%/*}"
+            base="${img##*/}"
+            base_no_ext="${base%.cub}"
+            # Construct paths for the auxiliary files:
+            cam="${parent}/${base_no_ext}.json"
+            map="${parent}/${base_no_ext}.map.noba.tif"
+            # Check the image file
+            if [[ -f "$img" ]]; then
+                file_ok["$img"]=1
+            else
+                file_ok["$img"]=0
+                echo "Image not found: $img"
+            fi
+            # Check the camera JSON file
+            if [[ -f "$cam" ]]; then
+                file_ok["$cam"]=1
+            else
+                file_ok["$cam"]=0
+                echo "Camera file not found: $cam"
+            fi
+            # Check the map projected file
+            if [[ -f "$map" ]]; then
+                file_ok["$map"]=1
+            else
+                file_ok["$map"]=0
+                echo "Map projected image not found: $map"
+            fi
+        done
+        #
+        if [[ "$DEBUG" == "true" ]]; then
+            trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
+        fi
+    }
+    echo "file_ok has ${#file_ok[@]} keys, finished checks at $(date)"
+    # Create a temp file
+    TMPFILE=$(mktemp "$WORKDIR/launch_bundle_adjust_cmds.XXXXXX")
+    # Ensure cleanup on exit or error
+    trap 'rm -f "$TMPFILE"' EXIT
+    echo "Start building jobs list: $(date)"
+    # Generate commands dynamically and store in temp file
+    {
     trap '' DEBUG
     while read -r LIMG RIMG; do
-        # compute the parent folder once 
-        if [[ -z "$parent_dir" ]]; then
-            parent_dir=$(dirname "$LIMG")
-        fi
-        LBASE=$(basename "$LIMG")
-        RBASE=$(basename "$RIMG")
-        LCAM="${parent_dir}/${LBASE%.cub}.json"
-        RCAM="${parent_dir}/${RBASE%.cub}.json"
-        LMAP="${parent_dir}/${LBASE%.cub}.map.noba.tif"
-        RMAP="${parent_dir}/${RBASE%.cub}.map.noba.tif"
+        # Get the base names without external commands
+        parent_dir="${LIMG%/*}"
+        LBASE="${LIMG##*/}"
+        RBASE="${RIMG##*/}"
+        LBASE_NO_EXT="${LBASE%.cub}"
+        RBASE_NO_EXT="${RBASE%.cub}"
+        # Construct the auxiliary file names
+        LCAM="${parent_dir}/${LBASE_NO_EXT}.json"
+        RCAM="${parent_dir}/${RBASE_NO_EXT}.json"
+        LMAP="${parent_dir}/${LBASE_NO_EXT}.map.noba.tif"
+        RMAP="${parent_dir}/${RBASE_NO_EXT}.map.noba.tif"
         MAPPROJ_DATA_STR="'${LMAP} ${RMAP} ${DEM}'"
-        if [[ ! -f $LIMG ]]; then
+        # Instead of repeated file tests, we now look up results from file_ok.
+        if [[ ${file_ok["$LIMG"]} -ne 1 ]]; then
             echo "LEFT image not found!: $LIMG"
             continue
-        elif [[ ! -f $RIMG ]]; then
+        elif [[ ${file_ok["$RIMG"]} -ne 1 ]]; then
             echo "RIGHT image not found!: $RIMG"
             continue
-        elif [[ ! -f $LCAM ]]; then
+        elif [[ ${file_ok["$LCAM"]} -ne 1 ]]; then
             echo "LEFT camera not found!: $LCAM"
             continue
-        elif [[ ! -f $RCAM ]]; then
+        elif [[ ${file_ok["$RCAM"]} -ne 1 ]]; then
             echo "RIGHT camera not found!: $RCAM"
             continue
-        elif [[ ! -f $LMAP ]]; then
+        elif [[ ${file_ok["$LMAP"]} -ne 1 ]]; then
             echo "LEFT mapprojected image not found!: $LMAP"
             continue
-        elif [[ ! -f $RMAP ]]; then
+        elif [[ ${file_ok["$RMAP"]} -ne 1 ]]; then
             echo "RIGHT mapprojected image not found!: $RMAP"
             continue
         else
@@ -190,7 +262,11 @@ trap 'rm -f "$TMPFILE"' EXIT
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
-}
+    }
+    echo "Finished building jobs list: $(date)"
+    # set the PARALLEL_JOBS_LIST_FILE
+    PARALLEL_JOBS_LIST_FILE="$TMPFILE"
+fi
 
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
@@ -201,18 +277,18 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     echo "Parallel has started at $(date)"
     # Run GNU Parallel with the temp file if not in debug mode
     if [[ $NUM_NODES -gt 1 ]]; then
-        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --sshdelay 0.1 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
+        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --controlmaster --sshdelay 0.01 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$PARALLEL_JOBS_LIST_FILE" &> "$LOG_FILE"
     else
-        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --joblog "$JOB_FILE" < "$TMPFILE" &> "$LOG_FILE"
+        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --joblog "$JOB_FILE" < "$PARALLEL_JOBS_LIST_FILE" &> "$LOG_FILE"
     fi
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
-    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_$(date +"%Y-%m-%d_%H-%M-%S")_${JOB_FILE##*/}"
 else
     # I am debugging of a pfe or something
     echo "would have run: "
-    cat "$TMPFILE"
+    cat "$PARALLEL_JOBS_LIST_FILE"
 fi
 # we are now done!
 echo "Job finished at $(date)"

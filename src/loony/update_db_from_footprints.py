@@ -18,48 +18,47 @@ def run(
     
     write the updated geodatabase to a new file
     """
-    with duckdb.connect(config = {'threads': 4}) as con:
-        con.sql('SET enable_progress_bar = true;')
-        con.sql('SET memory_limit = "4GB";')
-        con.install_extension("spatial")
-        con.load_extension("spatial")
-        # load the geojson
-        con.sql(
-        f"""
-        CREATE TEMP TABLE 
+    con = duckdb.connect(config = {'threads': 4})
+    con.sql('SET enable_progress_bar = true;')
+    con.sql('SET memory_limit = "4GB";')
+    con.install_extension("spatial")
+    con.load_extension("spatial")
+    # load the geojson
+    con.sql(f"""
+    CREATE TEMP TABLE 
             ov 
-        AS SELECT 
+    AS SELECT 
             split_part(parse_filename(O.location, true),'.',1) as PRODUCT_ID, 
-            ST_ConvexHull(geom) as geom 
-        FROM ST_READ({footprint_geojson_collection}) O; 
-        """
-        )
-        # perform the join
-        con.sql(
-        f"""
-        CREATE TEMP TABLE 
-            df 
-        AS SELECT 
-            * 
-        FROM 
-            ST_READ({db_path}); 
-        CREATE TEMP TABLE 
-            merged 
-        AS SELECT 
-            * EXCLUDE (geom), 
-            ov.geom 
-        FROM 
-            df 
-        JOIN 
-            ov 
-        ON df.PRODUCT_ID == ov.PRODUCT_ID; 
-        COPY 
-            merged 
-        TO 
-            {db_out_path} 
-        WITH (FORMAT GDAL, DRIVER 'GPKG', SRS 'IAU:30135');
-        """
-        )
+            geom 
+    FROM 
+            ST_READ("{footprint_geojson_collection}") O; 
+    """)
+    # perform the join
+    con.sql(
+    f"""
+    CREATE TEMP TABLE 
+        df 
+    AS SELECT 
+        * 
+    FROM 
+        ST_READ("{db_path}"); 
+    CREATE TEMP TABLE 
+        merged 
+    AS SELECT 
+        * EXCLUDE (geom), 
+        ov.geom 
+    FROM 
+        df 
+    JOIN 
+        ov 
+    ON df.PRODUCT_ID == ov.PRODUCT_ID; 
+    COPY 
+        merged 
+    TO 
+        "{db_out_path}" 
+    WITH (FORMAT GDAL, DRIVER 'GPKG', SRS 'IAU:30135');
+    """
+    )
 
 
 # main

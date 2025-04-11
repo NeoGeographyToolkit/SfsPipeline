@@ -44,6 +44,60 @@ export NAME_SOURCE=/path/to/cities.csv or some other text file with random names
 8. To run ISIS or ASP commands invoke `source init_asp.sh`, to run sfstool tools and GDAL use `source init_sfstools.sh`.
 
 
+# Overview of scripts
+
+This project contains a number of types of scripts that broadly are:
+
+1) Python scripts 
+    * generally for pre-processing operations and analysis. Typically run on your local system or on the PFE node.
+2) PBS scripts
+    * these end with `.pbs` extension and are intended to be run only on HPC with PBS job management system.
+3) Bash scripts
+    * located in base_scripts and pbs_scripts that are either simple utilities or help run or are used by other `.pbs` script files
+
+
+The Python scripts are (unless I forgot to update the pyproject.toml) installed as entry points to your python environment and are available on your PATH.
+
+
+## PBS Scripts detail
+
+The PBS scripts are a bit special and some explaination is needed for their use. 
+They are mostly configured via environment variables that must be set for them to, although
+a few things like the PBS queue and node allocations are currently hard set at the top of the file and must be 
+adjusted manually. This may change soon hopefully so that they can also be configured but are also set to sensible defaults.
+
+By default the scripts will not run any real commands (mapproject, bundle adjust, stereo, etc) UNLESS 
+you set the environment variable `SUBMIT=true`. By default running the scripts will just execute the workings of the script 
+that find files, prepare output folders, etc but no actual work will occur. This is intentional for debugging purposes and to 
+avoid accidentally attempting to run work on the PFE nodes.
+
+Each PBS (and a few of the .sh scripts) look for a debug flag set via the environment variable `DEBUG=true`
+This will run the script line-by-line, where the user will see the command that will be executed printed
+to the terminal, and the user will need to press enter to progress. This is helpful for understanding the scripts,
+debugging issues, and for inspecting the temporary job list files that get created for certain commands that use gnu parallel.
+
+The intended workflow is for users to set the environment variables they need for a particular job then:
+
+1) unset SUBMIT
+2) export DEBUG=true
+3) run the script to ensure everything looks correct
+4) unset DEBUG
+5) export SUBMIT=true
+6) run the script again to submit to PBS
+
+Each script when submitted to PBS has a 15 second pause where the user can cancel the script (using keyboard shortcut)
+before the job is actually submitted. As jobs typically don't run immedietly the user can also use `qdel` to cancel jobs after the submission occurs.
+
+
+
+## Recommendation for workflow
+
+It is recommended that users create a sub folder for each area they are producing SFS terrain for that will be the work directory.
+
+The user should create a log file of some kind (like a markdown file) where they can document their steps and prototype bash commands
+before running them in the terminal.
+
+
 # Workflow for scripts
 
 Here is the high level ordering of the commands used end-to-end 
@@ -71,7 +125,7 @@ Symbols:
   - easier to just run find/sort/uniq/sed in command line, will update to make a simpler script
 9. find_overlaps_for_bundle_adjust.py (💻)
   - Given sfs cover output determine likely matching images by overlap and lighting geometry to feed pairs list to bundle adjust
-10. bundle_adjust_pt1.pbs (☁️)
+10. bundle_adjust_pairwise_pt1.pbs (☁️)
   - PBS batch job First pass bundle adjust that just computes statistics and matches for bundle adjust using many nodes
 11. bundle_adjust_pt2.pbs (☁️)
   - PBS batch job that only runs 1 node to perform bundle adjust optimization
@@ -85,7 +139,9 @@ Symbols:
   - Script that launches individual stereo jobs each as PBS jobs that use 1 node each 
 16. triangulation_plot.py (💻)
   - utility plot tool to plot triangulation error images in python without stereo-gui
-
+17. downselect_stereo_for_pc_align.py (💻)
+18. 
+19. lit_select.py (💻)
 
 
 ## Command Line Tools
@@ -513,3 +569,34 @@ duckdb -csv -c "WITH tbl AS (SELECT * FROM read_csv('../baD_align_ref/baD-mappro
 ```
 
 from testing, raising the max 85% error value (column5) past 1 meter didn't add as many images as changing the tolerance on the number of matches (column7). For that, a value of 100 was found to be too permissive. 500 was found to be just on the edge (maybe a bad image or two is included), while 1000 seemed perfect, although some illumination diversity was lost.
+
+
+
+
+## Collect map projected footprints into a update geodatabase (GPKG) file using new scripts (deprecating lots of steps above)
+
+
+```bash
+# need to make this part easier
+source ~/projects/sfstools/base_scripts/sfs_utilities.sh
+
+collect_geojson ./IMAGES 'map.baD_align_ref.geojson' > all_map_baD_align_ref_footprints.geojson
+
+collect_geojson ./IMAGES 'map.noba.mask.geojson' > all_map_noba_mask_footprints.geojson
+
+collect_geojson ./IMAGES 'map.baD_align_ref.mask.geojson' > all_map_baD_align_ref_mask_footprints.geojson
+
+
+update_db_from_footprints.py ./mons_mouton_10k_5m.gpkg ./shadow_mask_mons_mouton_10k_5m.gpkg ./all_map_baD_align_ref_mask_footprints.geojson
+
+```
+
+## Update DB to only include images that are contained in the verify bundle adjust largest connected component
+
+
+```bash
+
+
+
+
+```
