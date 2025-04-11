@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# source bashrc
+[ -f ~/.bashrc ] && source ~/.bashrc
 # Log the PBS_NODEFILE if available
 if [ -n "$PBS_NODEFILE" ]; then
     echo "Running on PBS node: $(uname -a)"

@@ -2,19 +2,14 @@
 
 
 # https://duckdb.org/docs/api/python/function
-import abc
+import json
 import os
 import argparse
 import numpy as np
-import numpy.core.multiarray
 import duckdb
-from duckdb.typing import DOUBLE
-import math
-from shapely import wkt
-from shapely import Polygon
-import geopandas as gpd
 
 from loony.utils import get_embedded_provenance
+from loony.graph_utils import check_connectivity
 
 def angular_separation_acos(deg1: float, deg2: float)-> float:
     # Convert degrees to radians
@@ -28,7 +23,7 @@ def angular_separation_acos(deg1: float, deg2: float)-> float:
 def arg_parser():
     parser = argparse.ArgumentParser(
         description=__doc__,
-        epilog="In general, you either need to specify --title & --polygon."
+        epilog=""
     )
     parser.add_argument(
         "-d", "--db_path",
@@ -38,6 +33,11 @@ def arg_parser():
         '-v', '--verbose',
         type=bool, default=False,
         help='set to enable print statements',
+    )
+    parser.add_argument(
+        '--check_connectivity',
+        action='store_true',
+        help='If true use networkx to determine the graph connectivity of the results assume all pairs successfully produce matches (a high assumption)'
     )
     parser.add_argument(
         "--max_diff_slrgaz",
@@ -111,11 +111,11 @@ def main():
                 SOLAR_AZ_ACOS_DIFF ASC;
         """)
         # get left ids
-        left_ids = set(_[0] for _ in con.sql('SELECT DISTINCT L_PRODUCT_ID from pairs_raw').fetchall())
+        u_left_ids = set(_[0] for _ in con.sql('SELECT DISTINCT L_PRODUCT_ID from pairs_raw').fetchall())
         # get right ids
-        right_ids = set(_[0] for _ in con.sql('SELECT DISTINCT R_PRODUCT_ID from pairs_raw').fetchall())
+        u_right_ids = set(_[0] for _ in con.sql('SELECT DISTINCT R_PRODUCT_ID from pairs_raw').fetchall())
         # get union
-        ids_used = left_ids.union(right_ids)
+        ids_used = u_left_ids.union(u_right_ids)
         # test if any original ids are missing
         missed_ids = original_ids - ids_used
         if len(missed_ids) > 0:
@@ -128,10 +128,19 @@ def main():
         if path_prefix == 'CWD':
             path_prefix = os.getcwd()+'/'
         
-        # get the final output for stdout
-        pair_output = con.sql(f"SELECT CONCAT('{path_prefix}', L_PRODUCT_ID, '{args.image_filename_postfix} ', '{path_prefix}', R_PRODUCT_ID, '{args.image_filename_postfix}') as lines FROM pairs_raw;").fetchnumpy()
-        for row in pair_output['lines']:
-            print(row, flush=True)
+        # if we check the connectivity we just want it's output not the actual list of pairs
+        if args.check_connectivity:
+            # grab the full list of product ids
+            pairs = con.sql('SELECT L_PRODUCT_ID, R_PRODUCT_ID FROM pairs_raw').fetchnumpy()
+            # compute the graph and determine the checks
+            res = check_connectivity(np.vstack(( pairs['L_PRODUCT_ID'], pairs['R_PRODUCT_ID'] )).T)
+            # todo add plotting from verify bundle adjust
+            return json.dumps(res)
+        else:
+            # get the final output for stdout
+            pair_output = con.sql(f"SELECT CONCAT('{path_prefix}', L_PRODUCT_ID, '{args.image_filename_postfix} ', '{path_prefix}', R_PRODUCT_ID, '{args.image_filename_postfix}') as lines FROM pairs_raw;").fetchnumpy()
+            for row in pair_output['lines']:
+                print(row, flush=True)
 
 
     # close the

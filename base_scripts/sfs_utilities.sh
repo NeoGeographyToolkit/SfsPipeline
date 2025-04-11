@@ -9,6 +9,10 @@ function jim {
   gdalinfo $1 -stats -json | jq -c ".bands[0].metadata | .[""] + {file: \"$1\"}"
 }
 
+function unique_from_pairs() {
+    awk '{print $1; print $2}' "$1" | sort -u
+}
+
 function check_files() {
     local list_file="$1"
     while IFS= read -r file; do

@@ -13,37 +13,7 @@ import fire
 import networkx as nx
 import numpy as np
 
-
-def check_connectivity(pairs):
-    """
-    construct the newtorkx graph and determine if there is connectivity or not
-    """
-    # make the graph
-    G = nx.Graph()
-    # add the edges
-    G.add_edges_from(pairs)
-    ## perform checks
-    # get the weakly connected components
-    components = list(nx.connected_components(G))
-    components = sorted(components, key=len, reverse=True)
-    # get the size of each
-    components_sizes = list(map(len, components))
-    # if you have more than one component, the bundle adjustment network
-    # is incomplete (islands of data)
-    # This is probably a bad thing, but it doesn't mean that within each 
-    # island (component), the data isn't good, it just means that there is no
-    # guarentee it is co-aligned to the other components
-    # likely the best path forward is to take the largest of these and use that only
-    # or to treat each connected component as a isolated part and independently do stereo
-    # and pc_align for each
-    #
-    return {
-        'is_connected': nx.is_connected(G),
-        'num_components': len(components_sizes),
-        'component_sizes': components_sizes,
-        'components': [list(_) for _ in components]
-    }
-
+from loony.graph_utils import check_connectivity
 
 
 def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, plot: bool = False, db: str | None = None):

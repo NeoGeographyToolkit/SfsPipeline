@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1_pairwise
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=158:ncpus=20:model=ivy,walltime=60:00:00        
-#PBS -q long                
+#PBS -l select=2:ncpus=20:model=ivy,walltime=1:00:00        
+#PBS -q normal              
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1_pairwise.log   
@@ -109,6 +109,22 @@ if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
 else
     echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+    # create a new nodefile for gnu parallel
+    # Create a temp file
+    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_ba_pt1_nodes.XXXXXX")
+    # Ensure cleanup on exit or error
+    trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
+    # write out the number of jobs per node 
+    DEFAULT_JOBS=9
+    LOCAL_JOBS=6
+    LOCAL_HOST=$(hostname -s)
+    # start the output file 
+    # Append the local node with LOCAL_JOBS
+    echo "${LOCAL_JOBS}/${LOCAL_HOST}" > "$GNU_PARALLEL_NODEFILE"
+    # Write all other nodes with DEFAULT_JOBS
+    sort -u "$PBS_NODEFILE" | grep -v "^$LOCAL_HOST\$" | while read NODE; do
+        echo "${DEFAULT_JOBS}/${NODE}" >> "$GNU_PARALLEL_NODEFILE"
+    done
 fi
 echo "running on $NUM_NODES nodes"
 echo
@@ -276,11 +292,33 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     echo "$JOB_FILE"
     echo "Parallel has started at $(date)"
     # Run GNU Parallel with the temp file if not in debug mode
+    #  --jobs "$MAX_CON_JOBS"
+    parallel_opts=(
+        -u 
+        -a "$PARALLEL_JOBS_LIST_FILE"
+        --workdir "$WORKDIR"
+        --memfree 10G
+        --retries 10
+        --resume-failed 
+        --keep-order
+        --joblog "$JOB_FILE"
+    )
     if [[ $NUM_NODES -gt 1 ]]; then
-        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --controlmaster --sshdelay 0.01 --joblog "$JOB_FILE" --sshloginfile "$PBS_NODEFILE" < "$PARALLEL_JOBS_LIST_FILE" &> "$LOG_FILE"
+        parallel_opts+=(
+            --controlmaster 
+            --sshdelay 0.1 
+            --sshloginfile "$GNU_PARALLEL_NODEFILE"
+        )
     else
-        $ASPROOT/bin/parallel --workdir "$WORKDIR" -u -j 9 --memfree 22G --resume-failed --joblog "$JOB_FILE" < "$PARALLEL_JOBS_LIST_FILE" &> "$LOG_FILE"
+        parallel_opts+=(
+            --jobs "$DEFAULT_JOBS"
+        )
     fi
+    # echo out parallel opts
+    echo "Using these opts for parallel: "
+    echo "${parallel_opts[@]}"
+    # start gnu parallel
+    $ASPROOT/bin/parallel "${parallel_opts[@]}" &> "$LOG_FILE"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it

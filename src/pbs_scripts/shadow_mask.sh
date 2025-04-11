@@ -1,5 +1,7 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 ##############################################
+# source bashrc
+[ -f ~/.bashrc ] && source ~/.bashrc
 # source asap environment
 source init_sfstools.sh
 micromamba activate sfstools
@@ -10,6 +12,25 @@ if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <i>"
     exit 1
 fi
+# must have gdal_calc/etc in path
+if ! command -v gdal_calc 2>&1 >/dev/null
+then
+    echo "gdal_calc could not be found"
+    exit 1
+fi
+# must have gdalinfo in path
+if ! command -v gdalinfo 2>&1 >/dev/null
+then
+    echo "gdalinfo could not be found"
+    exit 1
+fi
+# must have gdal_footprint in path
+if ! command -v gdal_footprint 2>&1 >/dev/null
+then
+    echo "gdal_footprint could not be found"
+    exit 1
+fi
+
 in_img=$1
 tmp_mask=${in_img%.tif}.mask.tif
 out_mask_geojson=${in_img%.tif}.mask.geojson

@@ -2,7 +2,7 @@
 #PBS -N pbs_shadow_mask       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=00:45:00        
+#PBS -l select=4:ncpus=20:model=ivy,walltime=02:00:00        
 #PBS -q normal                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -73,7 +73,24 @@ echo "machine file is $PBS_NODEFILE"
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
     NUM_NODES=1
 else
+    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+    # create a new nodefile for gnu parallel
+    # Create a temp file
+    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_shadow_mask_nodes.XXXXXX")
+    # Ensure cleanup on exit or error
+    trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
+    # write out the number of jobs per node 
+    DEFAULT_JOBS=20
+    LOCAL_JOBS=20
+    LOCAL_HOST=$(hostname -s)
+    # start the output file 
+    # Append the local node with LOCAL_JOBS
+    echo "${LOCAL_JOBS}/${LOCAL_HOST}" > "$GNU_PARALLEL_NODEFILE"
+    # Write all other nodes with DEFAULT_JOBS
+    sort -u "$PBS_NODEFILE" | grep -v "^$LOCAL_HOST\$" | while read NODE; do
+        echo "${DEFAULT_JOBS}/${NODE}" >> "$GNU_PARALLEL_NODEFILE"
+    done
 fi
 echo "running on $NUM_NODES nodes"
 echo
@@ -81,7 +98,13 @@ echo
 # make sure the CWD is the INPUT_DIR
 # source asap environment
 source init_sfstools.sh
+# echo out PATH
+echo PATH is "$PATH"
 cd "$INPUT_DIR" || exit
+# save the path to mapproject
+SHADOW_MASK=$(which shadow_mask.sh)
+echo "Path to shadow_mask.sh: $SHADOW_MASK"
+##############################################
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"
 JOBS_FOLDER="$WORKDIR/jobs"
@@ -96,7 +119,7 @@ TMPFILE=$(mktemp "$WORKDIR/shadow_mask_cmds.XXXXXX")
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
-find "$INPUT_DIR" -type f -name "*.$TIF_POSTFIX" -exec echo 'shadow_mask.sh {}' \; >> "$TMPFILE"
+find "$INPUT_DIR" -type f -name "*.$TIF_POSTFIX" -exec echo "$SHADOW_MASK" '{}' \; >> "$TMPFILE"
 # sort the TMPFILE to ensure repeatability
 sort -o "$TMPFILE"{,}
 #
@@ -105,12 +128,34 @@ sort -o "$TMPFILE"{,}
 echo "launching jobs"
 if [[ -z "$DEBUG" ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode 
+    parallel_opts=(
+        -u 
+        -a "$TMPFILE"
+        --workdir "$WORKDIR"
+        --env CONDA_PREFIX
+        --memfree 10G
+        --retries 10
+        --resume-failed 
+        --keep-order
+        --joblog "$JOB_FILE"
+    )
     if [[ $NUM_NODES -gt 1 ]]; then
-        # DON'T USE ASP's parallel call it modified the python path!!! make sure you update PYTHONHOME WITHIN 
-        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -u -j 20 --memfree 10G --sshdelay 0.01 --controlmaster --sshloginfile "$PBS_NODEFILE" < "$TMPFILE" &> "$LOG_FILE"
+        parallel_opts+=(
+            --controlmaster 
+            --sshdelay 0.1 
+            --sshloginfile "$GNU_PARALLEL_NODEFILE"
+        )
     else
-        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" --env CONDA_PREFIX --resume-failed --joblog "$JOB_FILE" -u -j 20 --memfree 10G  < "$TMPFILE" &> "$LOG_FILE"
+        parallel_opts+=(
+            --jobs "$DEFAULT_JOBS"
+        )
     fi
+    # echo out parallel opts
+    echo "Using these opts for parallel: "
+    echo "${parallel_opts[@]}"
+    # DON'T USE ASP's parallel call it modified the python path!!! make sure you update PYTHONHOME WITHIN 
+    # start gnu parallel
+    $ASPROOT/bin/parallel "${parallel_opts[@]}" &> "$LOG_FILE"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
