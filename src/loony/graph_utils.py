@@ -1,3 +1,4 @@
+import numpy as np
 import networkx as nx
 from collections import Counter
 
@@ -11,6 +12,25 @@ def degree_histogram(G):
     # make the dict. Ensure keys are strings for json
     degree_histogram = {str(k): c[k] for k in keys}
     return degree_histogram
+
+def prune_to_mst(pairs, match_counts):
+    """
+    return the maximum spanning tree for the graph, using weights that are the 
+    match counts from match counts
+    I'll need to look into how to get the counts for matches prior to actually running optimization...
+    """
+    # make the graph
+    G = nx.Graph()
+    # add the edges with weights TODO make counts unique integers to use Boruvka algo
+    G.add_edges_from(np.hstack((pairs, match_counts)))
+    # Compute the maximum spanning tree (MST)
+    mst = nx.maximum_spanning_tree(G, weight='weight')
+    # determine if it's connected
+    connected = nx.is_connected(mst)
+    # get the weakly connected components
+    components = list(nx.connected_components(mst))
+    components_graphs = [mst.subgraph(c).copy() for c in components]
+    return connected, components, components_graphs
 
 
 def check_connectivity(pairs):

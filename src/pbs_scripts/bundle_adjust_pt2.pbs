@@ -2,7 +2,7 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=24:00:00        
+#PBS -l select=1:ncpus=40:model=sky_ele,walltime=48:00:00      
 #PBS -q long
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -53,8 +53,8 @@ if [[ -z $USE_DEM_HEIGHTS ]]; then
         echo "Error: OVERLAP_LIST is not set. Use $USAGE"
         exit 1
     fi
+    echo "Path to overlap list: $OVERLAP_LIST"
 fi
-echo "Path to overlap list: $OVERLAP_LIST"
 # Ensure a output prefix is provided
 if [[ -z "$BA_PREFIX" ]]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
@@ -154,7 +154,7 @@ args=(
       --image-list "$IMAGES"    
       --camera-list "$CAMERAS"  
       --mapproj-dem "$DEM"     
-      --processes 4            
+      --processes 1            
       --threads 36              
       --nodata-value 0.001      
       --ip-detect-method 1      
@@ -163,7 +163,7 @@ args=(
       --num-iterations 500      
       --num-passes 2            
       --min-matches 10          
-      --max-pairwise-matches 750 
+      --max-pairwise-matches 400 
       --camera-weight 0           
       --save-intermediate-cameras 
       --robust-threshold "$ROBUST_THRESHOLD"     
@@ -217,8 +217,6 @@ mkdir -p "$JOBS_FOLDER"
 # set log file names
 LOG_FILE="$LOGS_FOLDER/pbs_ba_${KIND}_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 JOB_FILE="$JOBS_FOLDER/pbs_ba_${KIND}_${BA_PREFIX%/*}_job.log"
-# for annoying reasons I can't seem to pass this in the array
-parallel_opts="--resume-failed --sshdelay 0.1 --memfree 30G --joblog $JOB_FILE"
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Args: "
@@ -230,7 +228,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     echo "Job File: "
     echo "$JOB_FILE"
     echo "Parallel has started at $(date)"
-    parallel_bundle_adjust "${args[@]}" --parallel-options "$parallel_opts" | grep -E -v "Writing|Saving" &> "$LOG_FILE"
+    parallel_bundle_adjust "${args[@]}" | grep -E -v ".ech.adjust|.match" &>> "$LOG_FILE"
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it

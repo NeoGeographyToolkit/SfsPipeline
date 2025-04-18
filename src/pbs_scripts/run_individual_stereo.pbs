@@ -150,6 +150,7 @@ args=(
     "$LCAM" 
     "$RCAM"
     --stereo-algorithm asp_mgm
+    --nodata-value 0.003 
     --ip-detect-method 1      
     --ip-per-tile  400        
     --ip-per-image 20000 

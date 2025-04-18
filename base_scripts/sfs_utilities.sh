@@ -6,14 +6,17 @@ function gim {
 }
 
 function jim {
-  gdalinfo $1 -stats -json | jq -c ".bands[0].metadata | .[""] + {file: \"$1\"}"
+    # use gdal info to get the statistics for a raster in a json object including the filename in the json 
+    gdalinfo $1 -stats -json | jq -c ".bands[0].metadata | .[""] + {file: \"$1\"}"
 }
 
 function unique_from_pairs() {
+    # given a list of pairs separated by space, get the unique values from the unpaired list 
     awk '{print $1; print $2}' "$1" | sort -u
 }
 
 function check_files() {
+    # for each file in a list file check if it exists, return false at the first missed file
     local list_file="$1"
     while IFS= read -r file; do
         if [ ! -r "$file" ]; then
@@ -26,6 +29,7 @@ function check_files() {
 }
 
 function collect_geojson() {
+    # given a folder with geojson files into 
     if [[ -z "$2" ]]; then
         POSTFIX='.geojson'
     else

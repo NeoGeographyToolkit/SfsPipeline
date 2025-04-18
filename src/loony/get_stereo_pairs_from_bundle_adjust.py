@@ -29,11 +29,11 @@ import duckdb
 import fire
 import pandas as pd
 
-def main(
+def run(
         ba_prefix, 
         verify_out_json: str, 
         component_index: int = 0, 
-        min_match_count = 1000, 
+        min_match_count = 100, 
         max_residual_error: float = 1.25, 
         max_mapproj_error: float = 2.5,
         min_convergence_angle: float = 10.0,
@@ -50,7 +50,7 @@ def main(
     component_images = components['components'][component_index] # todo replace .ech.cub?
     connected_images_df = pd.DataFrame({'image': component_images})
     # load the adjusted camera models (replacing the adjusted_state.json with .cub)
-    adjusted=list(Path('./baD/baD-').parent.glob('*adjusted_state.json'))
+    adjusted=list(Path(f'./{ba_prefix}-').parent.glob('*adjusted_state.json'))
     adjusted_df = pd.DataFrame({'image': [str(_).replace(ba_prefix+'-', '').split('.')[0] for _ in adjusted]})
     # filter the connected_images_df for those with adjusted cameras (should be all)
     good_cam_images_df = duckdb.sql('SELECT t1.image FROM connected_images_df t1 JOIN adjusted_df t2 ON strpos(t1.image, t2.image) > 0;').fetchdf()
@@ -67,7 +67,8 @@ def main(
         );"""
     )
     # get just the pairs with p25 above 0 for the moment 
-    vm = matches.filter('p25 > 0').filter(f'p25 <= {max_mapproj_error}').set_alias('vm')
+    # .filter(f'p25 <= {max_mapproj_error}') avoid using the mapproj error at all for now, just so long as it's not 0
+    vm = matches.filter('p25 > 0').set_alias('vm')
     # load in the residuals 
     residuals = duckdb.sql(f"""
         SELECT 
@@ -95,6 +96,7 @@ def main(
             ) 
     """)
     # get just the valid stereo pairs
+    # TODO log here and elsewhere the counts before and after filtering to make it clear when things are being filtered out
     vs = convergences.filter(f'num_matches > {min_match_count}').filter(f'p25 > {min_convergence_angle}').filter(f'p25 < {max_convergence_angle}').set_alias('vs')
     # get the matches from `vs` where:
     # 1) both left and right are in `good_cam_images_df`
@@ -104,6 +106,8 @@ def main(
         SELECT DISTINCT
             LEAST(pt.left, pt.right) AS left,
             GREATEST(pt.left, pt.right) AS right,
+            split_part(parse_filename(pt.left, true),'.',1) as LPID,
+            split_part(parse_filename(pt.right, true),'.',1) as RPID,
             vr1.median as l_median,
             vr2.median as r_median,
             vm.p25 as match_p25,
@@ -128,14 +132,42 @@ def main(
     """).set_alias('val_pairs')
     if just_info:
         print(val_pairs)
-        if plot and db:
+        if plot and db is not None:
+            from pyproj import CRS
             import matplotlib.pyplot as plt
             from loony.new_sfs_cover import plot_footprints, plot_illumination_coverage
             import geopandas as gp
-            gdf = gp.read_file(db)
+            duckdb.sql('LOAD SPATIAL;')
+            crs_info = duckdb.sql(f"SELECT layers[1].geometry_fields[1].crs.auth_name as name, layers[1].geometry_fields[1].crs.auth_code as code FROM st_read_meta('{db}');").df().iloc[0].to_dict()
+            if crs_info['name'] == 'IAU':
+                crs_info['name'] = 'IAU_2015'
+            crs = CRS.from_user_input(f'{crs_info["name"]}:{crs_info["code"]}')
+            gdf = duckdb.sql(f'SELECT * FROM "{db}"')
             # todo plot the anticipate stereo coverage by intersecting the footprints of the pairs and 
-
-        return 0
+            # now join
+            stereo_gdf = duckdb.sql("""
+                SELECT
+                    LEAST(sp.LPID, sp.RPID) as LEFT_PID,
+                    GREATEST(sp.LPID, sp.RPID) as RIGHT_PID,
+                    ST_AsText(ST_Intersection(ci1.geom, ci2.geom)) as geometry_wkt,
+                    ST_AREA(ST_Intersection(ci1.geom, ci2.geom)) as area
+                FROM 
+                    val_pairs as sp
+                JOIN
+                    gdf as ci1 on sp.LPID = ci1.PRODUCT_ID
+                JOIN
+                    gdf as ci2 on sp.RPID = ci2.PRODUCT_ID
+                ORDER BY
+                    area;
+            """).to_df()
+            # now plot..
+            stereo_gdf['geometry'] = gp.GeoSeries.from_wkt(stereo_gdf['geometry_wkt'], crs=crs)
+            stereo_gdf = gp.GeoDataFrame(stereo_gdf)
+            plot_footprints(stereo_gdf, None, title=f'Stereo Fooprints #{len(stereo_gdf)}', to_crs=crs)
+            plt.tight_layout()
+            plt.savefig(f'stereo_pair_map.png', dpi=600)
+            plt.close('all')
+            return 
     # determine if to use map proj tifs that were bundle adjusted or not
     if use_ba_mapproj_tifs:
         map_ba_suffix = ba_prefix.split('/')[0]
@@ -150,5 +182,8 @@ def main(
     df.to_csv(sys.stdout, index=False, header=False, sep=' ')  
 
 
-if __name__ == "__main__":
-    fire.Fire(main)
+def main():
+    fire.Fire(run)
+
+if __name__ == '__main__':
+    main()

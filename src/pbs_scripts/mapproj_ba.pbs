@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=16:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=4:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -o pbs_mapproj_ba.log   
@@ -169,18 +169,13 @@ TMPFILE=$(mktemp "$WORKDIR/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX")
             "$IMG" 
             "$CAM"
             "${IMG%%.cub}.map.${BA_PREFIX%/*}.tif"
-            --processes 8 
+            --processes 5 
             --threads 4 
             --tr 1
         )
         # use BA prefix if using input_dir
         if [[ -n "$INPUT_DIR" ]]; then
             args_mapproj+=(--bundle-adjust-prefix "$BA_PREFIX") 
-        fi
-        # add the node file if we are running on PBS
-        if [[ -n "$PBS_NODEFILE" ]]; then
-            # TODO do I really want this?
-            args_mapproj+=(--nodes-list "$PBS_NODEFILE")
         fi
         # make the footprint arguments
         args_foot=(
@@ -216,7 +211,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     # Run GNU Parallel with the temp file if not in debug mode   
     if [[ $NUM_NODES -gt 1 ]]; then
         # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes!
-        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" -u --resume-failed --jobs 4 --memfree 10G --controlmaster --sshloginfile "$PBS_NODEFILE" --sshdelay 0.1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
+        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" -u --resume-failed --jobs 8 --memfree 10G --controlmaster --sshloginfile "$PBS_NODEFILE" --sshdelay 0.1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     else
         $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" -u --resume-failed --jobs 1 --memfree 10G  --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
     fi

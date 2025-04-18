@@ -120,13 +120,6 @@ trap 'rm -f "$TMPFILE"' EXIT
             --processes 5
             --threads 4 
             --tr 1
-            "&&" 
-            /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
-            -q 
-            -write_absolute_path 
-            -of GeoJSON 
-            "${file%%.cub}.map.noba.tif" 
-            "${file%%.cub}.map.noba.geojson"
         )      
         # make the footprint arguments
         args_foot=(

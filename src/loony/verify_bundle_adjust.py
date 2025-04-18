@@ -16,7 +16,7 @@ import numpy as np
 from loony.graph_utils import check_connectivity
 
 
-def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, plot: bool = False, db: str | None = None):
+def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, plot: bool = False, db: str | None = None):
     # parse in the match pairs file #TODO use https://duckdb.org/docs/stable/sql/query_syntax/prepared_statements.html
     matches = duckdb.sql(f"""
         SELECT 
@@ -75,7 +75,8 @@ def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, 
             indexes = [_ in product_ids for _ in gdf['PRODUCT_ID']]
             # plot the footprints
             plot_footprints(gdf.iloc[indexes], None, title=f'Component {i}', to_crs=gdf.crs)
-            plt.savefig(f'map_{i}.png', dpi=150)
+            plt.tight_layout()
+            plt.savefig(f'map_{i}.png', dpi=600)
             #plt.show()
             # plot the illumination
             plot_illumination_coverage(gdf.iloc[indexes], None, title=f'Component {i}')
@@ -87,5 +88,8 @@ def main(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, 
     return json.dumps(res)
 
 
-if __name__ == "__main__":
-    fire.Fire(main)
+def main():
+    fire.Fire(run)
+
+if __name__ == '__main__':
+    main()

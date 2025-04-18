@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1_pairwise
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=2:ncpus=20:model=ivy,walltime=1:00:00        
-#PBS -q normal              
+#PBS -l select=26:ncpus=20:model=ivy,walltime=24:00:00        
+#PBS -q long              
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1_pairwise.log   
@@ -292,7 +292,6 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     echo "$JOB_FILE"
     echo "Parallel has started at $(date)"
     # Run GNU Parallel with the temp file if not in debug mode
-    #  --jobs "$MAX_CON_JOBS"
     parallel_opts=(
         -u 
         -a "$PARALLEL_JOBS_LIST_FILE"
