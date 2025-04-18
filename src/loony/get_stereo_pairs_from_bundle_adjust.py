@@ -52,6 +52,8 @@ def run(
     # load the adjusted camera models (replacing the adjusted_state.json with .cub)
     adjusted=list(Path(f'./{ba_prefix}-').parent.glob('*adjusted_state.json'))
     adjusted_df = pd.DataFrame({'image': [str(_).replace(ba_prefix+'-', '').split('.')[0] for _ in adjusted]})
+    # load the spatial library just in case
+    duckdb.sql('LOAD SPATIAL;')
     # filter the connected_images_df for those with adjusted cameras (should be all)
     good_cam_images_df = duckdb.sql('SELECT t1.image FROM connected_images_df t1 JOIN adjusted_df t2 ON strpos(t1.image, t2.image) > 0;').fetchdf()
     # parse in the match pairs file #TODO use https://duckdb.org/docs/stable/sql/query_syntax/prepared_statements.html
@@ -130,33 +132,103 @@ def run(
             l_median ASC                
         ;
     """).set_alias('val_pairs')
+    # TODO Implement the same de-densification algorithm from lit_select, or something similar, to pick 
+    # the minimum set of stereo products that cover the most spatial area based on their intersected geometry and 
+    # have higher convergence angles over lower ones to remove lots of redundant/worse stereo products
+    if db:
+        from pyproj import CRS
+        # load the database for geometry data
+        crs_info = duckdb.sql(f"SELECT layers[1].geometry_fields[1].crs.auth_name as name, layers[1].geometry_fields[1].crs.auth_code as code FROM st_read_meta('{db}');").df().iloc[0].to_dict()
+        if crs_info['name'] == 'IAU':
+            crs_info['name'] = 'IAU_2015'
+        crs = CRS.from_user_input(f'{crs_info["name"]}:{crs_info["code"]}')
+        gdf = duckdb.sql(f'SELECT * FROM "{db}"')
+        # first compute the geometries into a new table
+        val_pairs_geom = duckdb.sql("""
+            SELECT 
+                * EXCLUDE (geom),
+                ST_MakeValid(
+                    ST_CollectionExtract(
+                        ST_Intersection(ci1.geom, ci2.geom),
+                        3
+                    )               
+                ) as geometry
+            FROM
+                val_pairs as vp
+            JOIN
+                gdf as ci1 on vp.LPID = ci1.PRODUCT_ID
+            JOIN
+                gdf as ci2 on vp.RPID = ci2.PRODUCT_ID;
+        """)
+        # # For each row, collect the union of all geometries with a strictly higher convergence angle
+        # higher_union = duckdb.sql("""
+        #     SELECT
+        #         t.*,
+        #         COALESCE(
+        #           (
+        #             SELECT 
+        #                 ST_Union_Agg(h.geometry)
+        #             FROM 
+        #                 val_pairs_geom AS h
+        #             WHERE 
+        #                 h.angle_25 > t.angle_25
+        #           ),
+        #           -- If no higher‑value rows exist, use an empty geometry so ST_Difference yields the full geom
+        #           ST_GeomFromText('POLYGON EMPTY')
+        #         ) AS union_geom
+        #     FROM 
+        #         val_pairs_geom AS t;
+        # """)
+        # # Compute “unique” area of each row by subtracting overlaps
+        # coverage = duckdb.sql("""
+        #     SELECT
+        #         hu.*,
+        #         ST_Area(
+        #           ST_Difference(
+        #             hu.geometry,
+        #             hu.union_geom
+        #           )
+        #         ) AS unique_area
+        #     FROM 
+        #         higher_union AS hu;
+        # """)
+        # # Final selection
+        # final_coverage = duckdb.sql("""
+        #     SELECT
+        #         c.*
+        #     FROM 
+        #         coverage AS c
+        #     WHERE
+        #         -- must meet your minimum unique‐area threshold
+        #         c.unique_area >= 100
+        #         -- and its convergence angle must be the highest among those that meet the threshold
+        #         AND c.angle_25 = (
+        #             SELECT 
+        #                 MAX(c2.angle_25)
+        #             FROM 
+        #                 coverage AS c2
+        #             WHERE 
+        #                 c2.unique_area >= p.min_unique_area
+        #         )
+        #     ORDER BY 
+        #         angle_25 DESC;
+        # """)
+
     if just_info:
         print(val_pairs)
         if plot and db is not None:
-            from pyproj import CRS
             import matplotlib.pyplot as plt
             from loony.new_sfs_cover import plot_footprints, plot_illumination_coverage
             import geopandas as gp
-            duckdb.sql('LOAD SPATIAL;')
-            crs_info = duckdb.sql(f"SELECT layers[1].geometry_fields[1].crs.auth_name as name, layers[1].geometry_fields[1].crs.auth_code as code FROM st_read_meta('{db}');").df().iloc[0].to_dict()
-            if crs_info['name'] == 'IAU':
-                crs_info['name'] = 'IAU_2015'
-            crs = CRS.from_user_input(f'{crs_info["name"]}:{crs_info["code"]}')
-            gdf = duckdb.sql(f'SELECT * FROM "{db}"')
             # todo plot the anticipate stereo coverage by intersecting the footprints of the pairs and 
             # now join
             stereo_gdf = duckdb.sql("""
-                SELECT
-                    LEAST(sp.LPID, sp.RPID) as LEFT_PID,
-                    GREATEST(sp.LPID, sp.RPID) as RIGHT_PID,
-                    ST_AsText(ST_Intersection(ci1.geom, ci2.geom)) as geometry_wkt,
-                    ST_AREA(ST_Intersection(ci1.geom, ci2.geom)) as area
+                SELECT 
+                    sp.* EXCLUDE(geometry),
+                    ST_AsText(sp.geometry) as geometry_wkt,
+                    ST_AREA(sp.geometry) as area
                 FROM 
-                    val_pairs as sp
-                JOIN
-                    gdf as ci1 on sp.LPID = ci1.PRODUCT_ID
-                JOIN
-                    gdf as ci2 on sp.RPID = ci2.PRODUCT_ID
+                    val_pairs_geom as sp
                 ORDER BY
                     area;
             """).to_df()
@@ -176,10 +248,11 @@ def run(
             return 1
     else:
         map_ba_suffix = 'noba'
-    # get the data into pandas
-    df = duckdb.sql(f"SELECT replace(val_pairs.left, '.cub', '.map.{map_ba_suffix}.tif') as left, replace(val_pairs.right, '.cub', '.map.{map_ba_suffix}.tif') as right FROM val_pairs;").fetchdf()
-    # Print DataFrame to CSV to stdout
-    df.to_csv(sys.stdout, index=False, header=False, sep=' ')  
+    if not just_info:
+        # get the data into pandas
+        df = duckdb.sql(f"SELECT replace(val_pairs.left, '.cub', '.map.{map_ba_suffix}.tif') as left, replace(val_pairs.right, '.cub', '.map.{map_ba_suffix}.tif') as right FROM val_pairs;").fetchdf()
+        # Print DataFrame to CSV to stdout
+        df.to_csv(sys.stdout, index=False, header=False, sep=' ')  
 
 
 def main():

@@ -2,7 +2,7 @@
 #PBS -N pbs_launch_stereo
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
+#PBS -l select=1:ncpus=20:model=ivy,walltime=01:10:00        
 #PBS -q low
 #PBS -o pbs_launch_stereo.log   
 #PBS -r y                       
@@ -137,10 +137,11 @@ mkdir -p "$JOBS_FOLDER"
 # Process parameters
 LBASE=$(basename "$LIMG")
 RBASE=$(basename "$RIMG")
-out_dir="run_stereo_${BA_PREFIX%/*}/${JOB_NAME_POSTFIX}_${LBASE%%.*}__${RBASE%%.*}"
+out_dir="run_stereo_${BA_PREFIX%/*}/${LBASE%%.*}__${RBASE%%.*}__${JOB_NAME_POSTFIX}"
 # set log file names
 STEREO_LOG_FILE="$out_dir/pbs_stereo_${LBASE%%.*}_${RBASE%%.*}_log.txt"
 DEM_LOG_FILE="$out_dir/pbs_point2dem_${LBASE%%.*}_${RBASE%%.*}_log.txt"
+GDAL_LOG_FILE="$out_dir/pbs_gdal_translate_${LBASE%%.*}_${RBASE%%.*}_log.txt"
 OUTPUT_LOG="$LOGS_FOLDER/pbs_stereo_$(date +"%Y-%m-%d_%H-%M-%S")_log_$JOB_NAME_POSTFIX.txt"
 # re-use match files from bundle adjust https://stereopipeline.readthedocs.io/en/latest/tools/bundle_adjust.html#match-files
 # stereo.default docs claim the normal match-files-prefix works only with non-mapprojected images.
@@ -164,17 +165,21 @@ args=(
 # first write out the parallel stereo command but first make the output dir so I can capture the logs per job
 STEREO_RUN="mkdir -p $out_dir && parallel_stereo ${args[@]} &> $STEREO_LOG_FILE"
 # next run Point2dem
-POST_PROCESS="point2dem --threads 8 --errorimage --tr 1 $out_dir/run-PC.tif &> $DEM_LOG_FILE"
+POST_PROCESS_POINTDEM="point2dem --threads 8 --errorimage --tr 1 $out_dir/run-PC.tif &> $DEM_LOG_FILE"
+# next run gdal_translate
+POST_PROCESS_GDAL="gdal_translate -r average -outsize 50% 50% $out_dir/run-DEM.tif $out_dir/run-DEM.half.tif &> $GDAL_LOG_FILE"
 # prepare to run jobs
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     # Run GNU Parallel with the temp file if not in debug mode
     # as we will run each stereo pair one at a time, we will only use parallel here
     # to spawn one job at a time. Later it could make sense to qsub these and have sub jobs instead
-    echo "Parallel starting Job at $(date)"  >> "$OUTPUT_LOG" 2>&1
+    echo "Parallel starting Job at $(date)" >> "$OUTPUT_LOG" 2>&1
     # first run stereo
     eval "$STEREO_RUN" >> "$OUTPUT_LOG" 2>&1
-    # next post process
-    eval "$POST_PROCESS" >> "$OUTPUT_LOG" 2>&1
+    # next post process point2dem
+    eval "$POST_PROCESS_POINTDEM" >> "$OUTPUT_LOG" 2>&1
+    # next post process gdal_translate
+    eval "$POST_PROCESS_GDAL" >> "$OUTPUT_LOG" 2>&1
     # The jobs have actually completed 
     echo "Parallel has finished Job at $(date)"  >> "$OUTPUT_LOG" 2>&1
 else

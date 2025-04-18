@@ -29,7 +29,7 @@ def run(
             ov 
     AS SELECT 
             split_part(parse_filename(O.location, true),'.',1) as PRODUCT_ID, 
-            geom 
+            ST_MakeValid(geom) as geom 
     FROM 
             ST_READ("{footprint_geojson_collection}") O; 
     """)
