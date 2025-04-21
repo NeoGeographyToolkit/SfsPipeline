@@ -28,21 +28,12 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 import matplotlib
-from pyproj.crs import ProjectedCRS
-from pyproj.crs.coordinate_operation import StereographicConversion
 
+from .proj_utils import make_stereographic_moon_projection, moon_crs_ge, moon_crs_np, moon_crs_sp
 from .ground_azimuth import ground_azimuth_scalar as ground_azimuth
 from .utils import get_embedded_provenance
 
-# setup pyproj CRSs and transforms
-moon_crs_ge = pyproj.CRS.from_user_input('IAU_2015:30100')
-moon_crs_np = pyproj.CRS.from_user_input('IAU_2015:30130')
-moon_crs_sp = pyproj.CRS.from_user_input('IAU_2015:30135')
 
-def make_stereographic_moon_projection(lon, lat):
-    conversion = StereographicConversion(lat, lon)
-    proj_crs = ProjectedCRS(conversion, geodetic_crs=moon_crs_ge)
-    return proj_crs
 
 def _perform_geo_selection_sql(con, wkt_geometry: str, centroid_longitude: float, centroid_latitude: float):
     # Step 1: Create a temp table with the query geometry.

@@ -163,7 +163,7 @@ args=(
       --num-iterations 500      
       --num-passes 2            
       --min-matches 10          
-      --max-pairwise-matches 400 
+      --max-pairwise-matches 500 
       --camera-weight 0           
       --save-intermediate-cameras 
       --robust-threshold "$ROBUST_THRESHOLD"     
