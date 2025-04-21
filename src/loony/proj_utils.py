@@ -1,4 +1,3 @@
-from loony.new_sfs_cover import moon_crs_ge
 from pyproj import CRS, Transformer
 from pyproj.crs import ProjectedCRS
 from pyproj.crs.coordinate_operation import StereographicConversion

@@ -29,7 +29,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib
 
-from .proj_utils import make_stereographic_moon_projection, moon_crs_ge, moon_crs_np, moon_crs_sp
+from .proj_utils import make_stereographic_moon_projection, moon_crs_ge
 from .ground_azimuth import ground_azimuth_scalar as ground_azimuth
 from .utils import get_embedded_provenance
 
@@ -231,6 +231,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         ),
         width=25
     ))
+    return ax
 
 def arg_parser():
     parser = argparse.ArgumentParser(
