@@ -250,6 +250,109 @@ python loony/update_db_from_footprints.py SOURCE.gpkg TARGET_mask_noba_footprint
 
 These steps can be repeated at later stages of processing by updating the particular parameters as needed
 
+## Determining pairs for Bundle Adjust (investigate the graph)
+
+An improved process for bundle adjust is to use the image footprints and metadata, both from the sfs-cover geodatabase file (optionally updated to use map projected or shadow mask footprints described above), to determine which images both overlap spatially and are likely to match well based on the illumination geometry and possibly which areas of the images are actually illuminated when using the shadowmask files. 
+
+From these spatial relationships, we can investigate apriori how inter-connected the cameras can or will be given different tolerances after bundle adjustment is completed using a Graph data structure. We can also use this graph to directly generate the `overlap-list` file parameter for bundle adjust which can help perform the only matches necessary to complete a good bundle adjustment and avoid attempting to match images which don't overlap spatially or aren't fully illuminated in the same areas. As study area sizes grow and the number of images used grows, this becomes increasingly cirtical to keep the computational costs to reasonable limits.
+
+Prior to bundle adjustment, it is highly suggested to have completed both the first pass, non bundle adjusted map projection of the images (using mapproj_noba.pbs) AND the shadow masks for these noba tifs (using shadow_mask.pbs) to generate the updated footprint GPKG file (using the steps above). 
+
+While it is possible to use the sfs-cover gpkg file directly, the shadow masks in particular helpful as it eliminates impossible matches, where image footprints overlap in areas that are not illuminated.
+
+Using this geodatabase/gpkg file, the python program `find-overlaps-for-bundle-adjust` is used with the option `--check_connectivity` first to compute the connectivity of the images given a maximum difference in sub-solar ground azimuth defined by the `--max_diff_slrgaz` parameter. 
+
+For example 
+```bash
+# this script is somewhat resource intensive, so ideally run on a debug or devel PBS node with 4-8 cores. Should only 2 minutes or so.
+find-overlaps-for-bundle-adjust --check_connectivity  -d ./mask_noba_footprints.gpkg --max_diff_slrgaz=12
+```
+will generate something like the following json who's fields I will explain below
+
+```json
+{
+  "components": [... omitted for brevity ..]
+  "is_connected": true, 
+  "num_pairs": 36574, 
+  "num_components": 1, 
+  "component_sizes": [1514], 
+  "num_pairs_per_component": [36574], 
+  "degree_hist_per_component": [... omitted for brevity ..]
+}
+```
+
+The 0th field is the `components` which has all the product ids for each sub graph but I don't discuss it here as it isn't useful to this topic presently. 
+
+The 1st field `is_connected` tells you if the graph used every available image, and is rarely true. 
+
+The 2nd field `num_pairs` are the number of image pairs from the largest full connected sub graph that would be created in the overlap list file for bundle adjust, and is the first value from the field `num_pairs_per_component` 
+
+The 3rd field `num_components` tells you the number of sub graphs that are fully connected. In this case it is `1` because only one fully connected component was found.
+
+The 4th field `component_sizes` tells you for each sub graph how many images are contained. The 1st (or 0th) component is always the largest as I sort them. 
+
+the 5th field `num_pairs_per_component` tells you the number of image pairs in each sub graph that could be bundle adjusted together.
+
+The last field is a histogram of the graph degree for each sub-graph, which is to say the histogram of the connectiveness of all the images, which to say ask "for each image, how many images is it directly connected to, and plot this histogram of this". This lets you see how deeply interconnected the graph is, and in general more values at higher bins is a good thing, as you want to keep the number of images that are only connected to 1 other image to a low value.
+
+With all of the above explained we can now describe the actual workflow, which is to re-run the command above with higher or lower `--max_diff_slrgaz` values such that you keep the number of subgraphs ideally to 1 (so there is a single fully connected graph) while not suggesting too many pairs. 100k pairs would be considered a heck of a lot but do-able with available resources. A good comparison would be to take the number of images you have and multiply it by a reasonable "window" size you would otherwise use for bundle adjust, say 25 or 50, and if you are able to compute a fully connected graph with fewer pairs than this number, that you were successful. 
+
+In testing a `--max_diff_slrgaz` greater than 10 degrees created un-neccessarily large number of pairs, while values around 6 or 8 degrees created large but managable sized lists.
+
+Rerunning with `--max_diff_slrgaz=6` could tell you 
+
+```json
+...
+"is_connected": false,
+"num_pairs": 17507, 
+"num_components": 4, 
+"component_sizes": [1493, 8, 3, 3], 
+"num_pairs_per_component": [17488, 13, 3, 3],
+...
+```
+
+
+Which says that you have 4 sub graphs, the largest of which uses 1493 images and only has 17488 match pairs. You can see from the next few components that you lost a few images some of which are connected enough to be worth including.
+
+
+Running it again after increasing the max diff value to 8 degrees results in 
+
+```json
+...
+"is_connected": true, 
+"num_pairs": 23580, 
+"num_components": 1, 
+"component_sizes": [1511], 
+"num_pairs_per_component": [23580], 
+```
+
+Which uses nealy all the images we got from a max diff of 12 degrees, but only uses 23k pairs (approximately 2/3rds the value from 12 degrees). 
+
+When happy with the parameters, re-run the script without the `--check_connectivity` parameter to create the overlap list file for bundle adjust
+
+```bash
+find-overlaps-for-bundle-adjust --image_dir='IMAGES/'  -d ./mask_noba_footprints.gpkg --max_diff_slrgaz=8 > OVERLAP_LIST_SLRGAZ_8.txt
+```
+
+This list can then be used to create the IMAGES, CAMERAS, and MapProjected data list files for bundle adjust using some bash and a utility from `base_scripts/sfs_utilities.sh`
+
+```bash
+source base_scripts/sfs_utilities.sh
+
+# need to remake the image and camera list from the overlap list 
+unique_from_pairs OVERLAP_LIST_SLRGAZ_8.txt > IMAGES.txt
+cat IMAGES.txt | sed 's/.cub/.json/g' > CAMERAS.txt
+cat IMAGES.txt | sed 's/.cub/.map.noba.tif/g' > MAPPROJ_DATA.txt 
+# set the DEM path 
+export DEM='path_to_dem.tif'
+# append it to the mapproj data list
+echo "$DEM" >> MAPPROJ_DATA.txt 
+
+```
+
+You are now ready to run the pairwise bundle adjust script that will described below.
+
+
 
 ## Finding stereo pairs from SFS Cover outputs
 
