@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=24:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=24:ncpus=20:model=ivy,walltime=04:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -o pbs_mapproj_ba.log   
@@ -77,10 +77,11 @@ if [[ -n $SUBMIT ]]; then
     unset DEBUG
     # echo SUBMIT and DEBUG as sanity check
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
-    # actually sleep
-    sleep 15
     # submit to qsub
     submit_name="pbs_mapproj_${BA_PREFIX%/*}"
+    echo "submitting  $submit_name"
+    # actually sleep
+    sleep 15
     exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log"  -V "$0"
     # be sure to exit the script at this point
     exit 0
@@ -139,6 +140,7 @@ echo ISIS root is "$ISISROOT"
 echo PATH is "$PATH"
 # save the path to mapproject
 MAPPROJ=$(which mapproject)
+echo "Path to mapproject: $MAPPROJ"
 ################################################
 ##############################################
 # find the CUB files and parallel the jobs

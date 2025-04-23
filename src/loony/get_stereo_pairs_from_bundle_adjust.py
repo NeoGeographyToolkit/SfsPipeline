@@ -99,7 +99,7 @@ def run(
     """)
     # get just the valid stereo pairs
     # TODO log here and elsewhere the counts before and after filtering to make it clear when things are being filtered out
-    vs = convergences.filter(f'num_matches > {min_match_count}').filter(f'p25 > {min_convergence_angle}').filter(f'p25 < {max_convergence_angle}').set_alias('vs')
+    vs = convergences.filter(f'num_matches > {min_match_count}').filter(f'p75 >= {min_convergence_angle}').filter(f'p25 < {max_convergence_angle}').set_alias('vs')
     # get the matches from `vs` where:
     # 1) both left and right are in `good_cam_images_df`
     # 2) both left and right are in `vr`
@@ -115,6 +115,8 @@ def run(
             vm.p25 as match_p25,
             vm.p95 as match_p95,
             pt.p25 as angle_25,
+            pt.p50 as angle_50,
+            pt.p75 as angle_75,
             pt.num_matches as num_matches
         FROM 
             vs as pt

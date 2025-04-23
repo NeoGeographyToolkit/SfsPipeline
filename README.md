@@ -210,6 +210,47 @@ Extent: (-58034.599620, -25721.486558) - (216325.951463, 263254.550266)
 Layer SRS WKT:
 ```
 
+## Getting updated Footprints
+
+At several stages of the processing, users will want to updated the footprints/polygons in their GPKG/geodatabase file to reflect the actual map projected footprint with and without bundle adjusted cameras and get polygons that loosly represent illuminated vs shadowed areas using the shadow masks process. The general process is the same for these cases, although the exact commands will slightly differ but the general process is:
+
+1) Generate the updated footprint geojsons, either through mapproject or if needed the shadow_mask.pbs script
+2) Collect the geojsons desired using the `collect_geojson` utility, available from the `base_scripts/sfs_utilities.sh` file (source it to add the function to your terminal). 
+3) run `update_db_from_footprints.py` to create a new GPKG file with all the meta data from the geodatabase for their ROI and the new footprints.
+
+A more concrete/practical example for the first stage of this after map projecting the data
+
+```bash
+# source the sfs utilities so that collect_geojson is available
+source base_scripts/sfs_utilities.sh
+# collect the non-bundle adjusted footprints into a single file
+# assuming you have a folder called 'IMAGES' that has all your cub/tif files. 
+collect_geojson IMAGES 'map.noba.geojson' > noba_footprints.geojson
+# now generate the new GPKG file using this collected geojson and the original GDB
+python loony/update_db_from_footprints.py SOURCE.gpkg TARGET_noba_footprints.gpkg noba_footprints.geojson
+```
+
+If using the shadow masks is desired, which it typically is, first they must be generated 
+
+```bash
+export INPUT_DIR="IMAGES"
+export TIF_POSTFIX='map.noba.tif'
+# submit a PBS just that looks for map projected images that use the original (noba) cameras
+shadow_mask.pbs
+# wait until the PBS jobs is complete then re-run the process above with new inputs
+
+# source the sfs utilities so that collect_geojson is available
+source base_scripts/sfs_utilities.sh
+# collect the non-bundle adjusted footprints into a single file
+# assuming you have a folder called 'IMAGES' that has all your cub/tif files. 
+collect_geojson IMAGES 'map.noba.mask.geojson' > mask_noba_footprints.geojson
+# now generate the new GPKG file using this collected geojson and the original GDB
+python loony/update_db_from_footprints.py SOURCE.gpkg TARGET_mask_noba_footprints.gpkg mask_noba_footprints.geojson
+```
+
+These steps can be repeated at later stages of processing by updating the particular parameters as needed
+
+
 ## Finding stereo pairs from SFS Cover outputs
 
 ```bash

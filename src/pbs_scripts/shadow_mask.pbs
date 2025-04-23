@@ -101,7 +101,7 @@ source init_sfstools.sh
 # echo out PATH
 echo PATH is "$PATH"
 cd "$INPUT_DIR" || exit
-# save the path to mapproject
+# save the path to shadowmask
 SHADOW_MASK=$(which shadow_mask.sh)
 echo "Path to shadow_mask.sh: $SHADOW_MASK"
 ##############################################
