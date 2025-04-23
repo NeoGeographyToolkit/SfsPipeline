@@ -2,7 +2,7 @@
 #PBS -N pbs_shadow_mask       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=4:ncpus=20:model=ivy,walltime=02:00:00        
+#PBS -l select=4:ncpus=20:model=ivy,walltime=02:30:00        
 #PBS -q normal                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 

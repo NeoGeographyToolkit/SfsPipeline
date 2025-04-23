@@ -9,7 +9,9 @@ def main(
         dem_diffs_jsonld, 
         inter_error_jsonld, 
         max_mean_error: float = 1.0,
-        max_abs_dem_diff: float = 10.0
+        max_abs_dem_diff: float = 10.0,
+        diff_prefix: str = 'run-diff',
+        with_postfix: str = 'run-DEM'
         ):
     """
     Given the  geodiff-stat json files for a list of dems and stats for intersectionerror tif files
@@ -34,7 +36,7 @@ def main(
     d_df = d_df.loc[d_df['file'].isin(good_dems)]
     # now report just the file names
     for _ in d_df['file']:
-        print(_, flush=True)
+        print(_.replace(diff_prefix, with_postfix), flush=True)
 
 
 

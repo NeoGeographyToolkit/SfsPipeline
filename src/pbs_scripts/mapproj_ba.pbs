@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=4:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=24:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -o pbs_mapproj_ba.log   
@@ -108,8 +108,24 @@ echo "machine file is $PBS_NODEFILE"
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
     NUM_NODES=1
 else
-    echo "machines are: $(cat $PBS_NODEFILE)"
+    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+    # create a new nodefile for gnu parallel
+    # Create a temp file
+    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_ba_pt1_nodes.XXXXXX")
+    # Ensure cleanup on exit or error
+    trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
+    # write out the number of jobs per node 
+    DEFAULT_JOBS=2
+    LOCAL_JOBS=1
+    LOCAL_HOST=$(hostname -s)
+    # start the output file 
+    # Append the local node with LOCAL_JOBS
+    echo "${LOCAL_JOBS}/${LOCAL_HOST}" > "$GNU_PARALLEL_NODEFILE"
+    # Write all other nodes with DEFAULT_JOBS
+    sort -u "$PBS_NODEFILE" | grep -v "^$LOCAL_HOST\$" | while read NODE; do
+        echo "${DEFAULT_JOBS}/${NODE}" >> "$GNU_PARALLEL_NODEFILE"
+    done
 fi
 echo "running on $NUM_NODES nodes"
 echo
@@ -209,12 +225,37 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     LOG_FILE="$LOGS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
     JOB_FILE="$JOBS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}_job.log"
     # Run GNU Parallel with the temp file if not in debug mode   
+    echo "Log File: "
+    echo "$LOG_FILE"
+    echo "Job File: "
+    echo "$JOB_FILE"
+    echo "Parallel has started at $(date)"
+    parallel_opts=(
+        -u 
+        -a "$TMPFILE"
+        --workdir "$WORKDIR"
+        --memfree 10G
+        --retries 10
+        --resume-failed 
+        --keep-order
+        --joblog "$JOB_FILE"
+    )
     if [[ $NUM_NODES -gt 1 ]]; then
-        # TODO I keep forgetting if -j is the number of jobs on each machine or in total across all nodes!
-        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" -u --resume-failed --jobs 8 --memfree 10G --controlmaster --sshloginfile "$PBS_NODEFILE" --sshdelay 0.1 --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
+        parallel_opts+=(
+            --controlmaster 
+            --sshdelay 0.1 
+            --sshloginfile "$GNU_PARALLEL_NODEFILE"
+        )
     else
-        $ASPROOT/bin/parallel --workdir "$PBS_O_WORKDIR" -u --resume-failed --jobs 1 --memfree 10G  --joblog "$JOB_FILE" < "$TMPFILE" >> "$LOG_FILE" 2>&1
+        parallel_opts+=(
+            --jobs "$DEFAULT_JOBS"
+        )
     fi
+    # echo out parallel opts
+    echo "Using these opts for parallel: "
+    echo "${parallel_opts[@]}"
+    # start gnu parallel
+    $ASPROOT/bin/parallel "${parallel_opts[@]}"  >> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
