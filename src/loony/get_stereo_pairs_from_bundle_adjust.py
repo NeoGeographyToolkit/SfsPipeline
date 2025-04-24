@@ -38,6 +38,7 @@ def run(
         max_mapproj_error: float = 2.5,
         min_convergence_angle: float = 10.0,
         max_convergence_angle: float = 22.0,
+        max_num_stereo_pairs: int = 500,
         use_ba_mapproj_tifs: bool = False,
         just_info: bool = False,
         plot: bool = False,
@@ -99,7 +100,7 @@ def run(
     """)
     # get just the valid stereo pairs
     # TODO log here and elsewhere the counts before and after filtering to make it clear when things are being filtered out
-    vs = convergences.filter(f'num_matches > {min_match_count}').filter(f'p75 >= {min_convergence_angle}').filter(f'p25 < {max_convergence_angle}').set_alias('vs')
+    vs = convergences.filter(f'num_matches > {min_match_count}').filter(f'p75 >= {min_convergence_angle}').filter(f'p75 < {max_convergence_angle}').set_alias('vs')
     # get the matches from `vs` where:
     # 1) both left and right are in `good_cam_images_df`
     # 2) both left and right are in `vr`
@@ -134,9 +135,12 @@ def run(
             l_median ASC                
         ;
     """).set_alias('val_pairs')
-    # TODO Implement the same de-densification algorithm from lit_select, or something similar, to pick 
-    # the minimum set of stereo products that cover the most spatial area based on their intersected geometry and 
-    # have higher convergence angles over lower ones to remove lots of redundant/worse stereo products
+    if just_info:
+        print('Lengths of each table: ')
+        print('len(vm): ', len(vm))
+        print('len(vr): ', len(vr))
+        print('len(vs): ', len(vs))
+        print('len(vp): ', len(val_pairs))
     if db:
         from pyproj import CRS
         # load the database for geometry data
@@ -161,61 +165,23 @@ def run(
                 gdf as ci1 on vp.LPID = ci1.PRODUCT_ID
             JOIN
                 gdf as ci2 on vp.RPID = ci2.PRODUCT_ID;
+            WHERE
+                NOT ci1.PRODUCT_ID = ci2.PRODUCT_ID AND 
+                NOT ci1.PRODUCT_ID[0:-3] = ci2.PRODUCT_ID[0:-3];
         """)
-        # # For each row, collect the union of all geometries with a strictly higher convergence angle
-        # higher_union = duckdb.sql("""
-        #     SELECT
-        #         t.*,
-        #         COALESCE(
-        #           (
-        #             SELECT 
-        #                 ST_Union_Agg(h.geometry)
-        #             FROM 
-        #                 val_pairs_geom AS h
-        #             WHERE 
-        #                 h.angle_25 > t.angle_25
-        #           ),
-        #           -- If no higher‑value rows exist, use an empty geometry so ST_Difference yields the full geom
-        #           ST_GeomFromText('POLYGON EMPTY')
-        #         ) AS union_geom
-        #     FROM 
-        #         val_pairs_geom AS t;
-        # """)
-        # # Compute “unique” area of each row by subtracting overlaps
-        # coverage = duckdb.sql("""
-        #     SELECT
-        #         hu.*,
-        #         ST_Area(
-        #           ST_Difference(
-        #             hu.geometry,
-        #             hu.union_geom
-        #           )
-        #         ) AS unique_area
-        #     FROM 
-        #         higher_union AS hu;
-        # """)
-        # # Final selection
-        # final_coverage = duckdb.sql("""
-        #     SELECT
-        #         c.*
-        #     FROM 
-        #         coverage AS c
-        #     WHERE
-        #         -- must meet your minimum unique‐area threshold
-        #         c.unique_area >= 100
-        #         -- and its convergence angle must be the highest among those that meet the threshold
-        #         AND c.angle_25 = (
-        #             SELECT 
-        #                 MAX(c2.angle_25)
-        #             FROM 
-        #                 coverage AS c2
-        #             WHERE 
-        #                 c2.unique_area >= p.min_unique_area
-        #         )
-        #     ORDER BY 
-        #         angle_25 DESC;
-        # """)
-
+        # now compute the area as well and limit the results to the top N largest by area anticipated stereo pairs
+        val_pairs_geom_area = duckdb.sql(f"""
+            SELECT 
+                sp.*,
+                ST_AREA(sp.geometry) as area
+            FROM 
+                val_pairs_geom as sp
+            ORDER BY
+                area DESC
+            LIMIT {max_num_stereo_pairs};
+        """).set_alias('val_pairs')
+        if just_info:
+            print('len(vp) (final) : ', len(val_pairs))
     if just_info:
         print(val_pairs)
         if plot and db is not None:
@@ -228,11 +194,8 @@ def run(
                 SELECT 
                     sp.* EXCLUDE(geometry),
                     ST_AsText(sp.geometry) as geometry_wkt,
-                    ST_AREA(sp.geometry) as area
                 FROM 
-                    val_pairs_geom as sp
-                ORDER BY
-                    area;
+                    val_pairs as sp;
             """).to_df()
             # now plot..
             stereo_gdf['geometry'] = gp.GeoSeries.from_wkt(stereo_gdf['geometry_wkt'], crs=crs)
