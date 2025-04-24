@@ -9,3 +9,4 @@ __pycache__/
 *.egg-info/
 dist/
 *.ipynb
+*ba0*.txt

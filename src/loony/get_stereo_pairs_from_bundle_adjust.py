@@ -38,6 +38,7 @@ def run(
         max_mapproj_error: float = 2.5,
         min_convergence_angle: float = 10.0,
         max_convergence_angle: float = 22.0,
+        max_num_stereo_pairs: int = 500,
         use_ba_mapproj_tifs: bool = False,
         just_info: bool = False,
         plot: bool = False,
@@ -99,7 +100,7 @@ def run(
     """)
     # get just the valid stereo pairs
     # TODO log here and elsewhere the counts before and after filtering to make it clear when things are being filtered out
-    vs = convergences.filter(f'num_matches > {min_match_count}').filter(f'p75 >= {min_convergence_angle}').filter(f'p25 < {max_convergence_angle}').set_alias('vs')
+    vs = convergences.filter(f'num_matches > {min_match_count}').filter(f'p75 >= {min_convergence_angle}').filter(f'p75 < {max_convergence_angle}').set_alias('vs')
     # get the matches from `vs` where:
     # 1) both left and right are in `good_cam_images_df`
     # 2) both left and right are in `vr`
@@ -134,9 +135,12 @@ def run(
             l_median ASC                
         ;
     """).set_alias('val_pairs')
-    # TODO Implement the same de-densification algorithm from lit_select, or something similar, to pick 
-    # the minimum set of stereo products that cover the most spatial area based on their intersected geometry and 
-    # have higher convergence angles over lower ones to remove lots of redundant/worse stereo products
+    if just_info:
+        print('Lengths of each table: ')
+        print('len(vm): ', len(vm))
+        print('len(vr): ', len(vr))
+        print('len(vs): ', len(vs))
+        print('len(vp): ', len(val_pairs))
     if db:
         from pyproj import CRS
         # load the database for geometry data
@@ -161,64 +165,23 @@ def run(
                 gdf as ci1 on vp.LPID = ci1.PRODUCT_ID
             JOIN
                 gdf as ci2 on vp.RPID = ci2.PRODUCT_ID;
+            WHERE
+                NOT ci1.PRODUCT_ID = ci2.PRODUCT_ID AND 
+                NOT ci1.PRODUCT_ID[0:-3] = ci2.PRODUCT_ID[0:-3];
         """)
-    #     # 1. add a id column and compute the area column 
-    #     with_id_and_area = duckdb.sql("""
-    #         SELECT
-    #           ROW_NUMBER() OVER ()  AS id,    -- <-- new id column
-    #           *,
-    #           ST_AREA(geometry)     AS stereo_area
-    #         FROM val_pairs_geom;              -- or replace with your sub-query
-    #     """)
-    #     # 2. Find every intersecting pair (p1, p2) and compute intersection area
-    #     intersecting_stereos = duckdb.sql("""
-    #         SELECT
-    #           p1.id   AS id1,
-    #           p2.id   AS id2,
-    #           p1.angle_75 AS converg1,
-    #           p2.angle_75 AS converg2,
-    #           p1.stereo_area AS stereo_area1,
-    #           p2.stereo_area AS stereo_area2,
-    #           ST_AREA(ST_INTERSECTION(p1.geometry, p2.geometry)) AS inter_stereo_area
-    #         FROM with_id_and_area p1
-    #         JOIN with_id_and_area p2
-    #           ON ST_INTERSECTS(p1.geometry, p2.geometry)
-    #          AND p1.id <> p2.id
-    #     """)
-    #     # 3. From those pairs, keep only “competitors” that are strictly better:
-    #     #    (higher attr) OR (same attr AND larger area),
-    #     #    AND that either fully cover p1 or overlap it by more than :threshold
-    #     competitors = duckdb.sql("""
-    #         SELECT DISTINCT
-    #             id1
-    #         FROM 
-    #             intersecting_stereos
-    #         WHERE
-    #             -- strictly better: higher attr OR tie on attr but larger area
-    #             (converg2 > converg1 OR (converg2 = converg1 AND stereo_area2 > stereo_area1))
-    #         AND 
-    #             (inter_stereo_area / stereo_area1) > 100
-    #     """)
-    #    # 4. Compute each polygon’s *unique* area = area minus union of all others
-    #     unique_area = duckdb.sql("""
-    #         SELECT
-    #           p1.id,
-    #           ST_AREA(
-    #             ST_DIFFERENCE(
-    #               p1.geom,
-    #               -- union up only those that actually intersect p1
-    #               COALESCE((
-    #                 SELECT ST_UNION(p2.geom)
-    #                 FROM intersecting_stereos p2
-    #                 WHERE p2.id <> p1.id
-    #                   AND ST_INTERSECTS(p1.geom, p2.geom)
-    #               ), p1.geom)   -- if no intersects, union = p1 itself
-    #             )
-    #           ) AS uniq_area
-    #         FROM intersecting_stereos p1;
-    #     """)
-
-
+        # now compute the area as well and limit the results to the top N largest by area anticipated stereo pairs
+        val_pairs_geom_area = duckdb.sql(f"""
+            SELECT 
+                sp.*,
+                ST_AREA(sp.geometry) as area
+            FROM 
+                val_pairs_geom as sp
+            ORDER BY
+                area DESC
+            LIMIT {max_num_stereo_pairs};
+        """).set_alias('val_pairs')
+        if just_info:
+            print('len(vp) (final) : ', len(val_pairs))
     if just_info:
         print(val_pairs)
         if plot and db is not None:
@@ -231,11 +194,8 @@ def run(
                 SELECT 
                     sp.* EXCLUDE(geometry),
                     ST_AsText(sp.geometry) as geometry_wkt,
-                    ST_AREA(sp.geometry) as area
                 FROM 
-                    val_pairs_geom as sp
-                ORDER BY
-                    area;
+                    val_pairs as sp;
             """).to_df()
             # now plot..
             stereo_gdf['geometry'] = gp.GeoSeries.from_wkt(stereo_gdf['geometry_wkt'], crs=crs)
