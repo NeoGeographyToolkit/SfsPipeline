@@ -162,59 +162,62 @@ def run(
             JOIN
                 gdf as ci2 on vp.RPID = ci2.PRODUCT_ID;
         """)
-        # # For each row, collect the union of all geometries with a strictly higher convergence angle
-        # higher_union = duckdb.sql("""
-        #     SELECT
-        #         t.*,
-        #         COALESCE(
-        #           (
-        #             SELECT 
-        #                 ST_Union_Agg(h.geometry)
-        #             FROM 
-        #                 val_pairs_geom AS h
-        #             WHERE 
-        #                 h.angle_25 > t.angle_25
-        #           ),
-        #           -- If no higher‑value rows exist, use an empty geometry so ST_Difference yields the full geom
-        #           ST_GeomFromText('POLYGON EMPTY')
-        #         ) AS union_geom
-        #     FROM 
-        #         val_pairs_geom AS t;
-        # """)
-        # # Compute “unique” area of each row by subtracting overlaps
-        # coverage = duckdb.sql("""
-        #     SELECT
-        #         hu.*,
-        #         ST_Area(
-        #           ST_Difference(
-        #             hu.geometry,
-        #             hu.union_geom
-        #           )
-        #         ) AS unique_area
-        #     FROM 
-        #         higher_union AS hu;
-        # """)
-        # # Final selection
-        # final_coverage = duckdb.sql("""
-        #     SELECT
-        #         c.*
-        #     FROM 
-        #         coverage AS c
-        #     WHERE
-        #         -- must meet your minimum unique‐area threshold
-        #         c.unique_area >= 100
-        #         -- and its convergence angle must be the highest among those that meet the threshold
-        #         AND c.angle_25 = (
-        #             SELECT 
-        #                 MAX(c2.angle_25)
-        #             FROM 
-        #                 coverage AS c2
-        #             WHERE 
-        #                 c2.unique_area >= p.min_unique_area
-        #         )
-        #     ORDER BY 
-        #         angle_25 DESC;
-        # """)
+    #     # 1. add a id column and compute the area column 
+    #     with_id_and_area = duckdb.sql("""
+    #         SELECT
+    #           ROW_NUMBER() OVER ()  AS id,    -- <-- new id column
+    #           *,
+    #           ST_AREA(geometry)     AS stereo_area
+    #         FROM val_pairs_geom;              -- or replace with your sub-query
+    #     """)
+    #     # 2. Find every intersecting pair (p1, p2) and compute intersection area
+    #     intersecting_stereos = duckdb.sql("""
+    #         SELECT
+    #           p1.id   AS id1,
+    #           p2.id   AS id2,
+    #           p1.angle_75 AS converg1,
+    #           p2.angle_75 AS converg2,
+    #           p1.stereo_area AS stereo_area1,
+    #           p2.stereo_area AS stereo_area2,
+    #           ST_AREA(ST_INTERSECTION(p1.geometry, p2.geometry)) AS inter_stereo_area
+    #         FROM with_id_and_area p1
+    #         JOIN with_id_and_area p2
+    #           ON ST_INTERSECTS(p1.geometry, p2.geometry)
+    #          AND p1.id <> p2.id
+    #     """)
+    #     # 3. From those pairs, keep only “competitors” that are strictly better:
+    #     #    (higher attr) OR (same attr AND larger area),
+    #     #    AND that either fully cover p1 or overlap it by more than :threshold
+    #     competitors = duckdb.sql("""
+    #         SELECT DISTINCT
+    #             id1
+    #         FROM 
+    #             intersecting_stereos
+    #         WHERE
+    #             -- strictly better: higher attr OR tie on attr but larger area
+    #             (converg2 > converg1 OR (converg2 = converg1 AND stereo_area2 > stereo_area1))
+    #         AND 
+    #             (inter_stereo_area / stereo_area1) > 100
+    #     """)
+    #    # 4. Compute each polygon’s *unique* area = area minus union of all others
+    #     unique_area = duckdb.sql("""
+    #         SELECT
+    #           p1.id,
+    #           ST_AREA(
+    #             ST_DIFFERENCE(
+    #               p1.geom,
+    #               -- union up only those that actually intersect p1
+    #               COALESCE((
+    #                 SELECT ST_UNION(p2.geom)
+    #                 FROM intersecting_stereos p2
+    #                 WHERE p2.id <> p1.id
+    #                   AND ST_INTERSECTS(p1.geom, p2.geom)
+    #               ), p1.geom)   -- if no intersects, union = p1 itself
+    #             )
+    #           ) AS uniq_area
+    #         FROM intersecting_stereos p1;
+    #     """)
+
 
     if just_info:
         print(val_pairs)

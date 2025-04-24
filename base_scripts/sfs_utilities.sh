@@ -28,6 +28,32 @@ function check_files() {
     return 0
 }
 
+function collect_geojson_stream() {
+    local dir="$1"
+    local postfix="${2:-.geojson}"
+
+    # Print opening of the FeatureCollection
+    printf '{"type":"FeatureCollection","features":['
+
+    local first=1
+    # find + xargs -n1 ensures we feed one file at a time
+    find "$dir" -maxdepth 1 -type f -name "*$postfix" -print0 \
+      | xargs -0 -n1 jq -c '.features[]' \
+      | while IFS= read -r feat; do
+          if (( first )); then
+            printf '%s' "$feat"
+            first=0
+          else
+            printf ',%s' "$feat"
+          fi
+        done
+
+    # Print closing bracket
+    printf ']}'
+}
+
+
+
 function collect_geojson() {
     # given a folder with geojson files into 
     if [[ -z "$2" ]]; then
