@@ -42,6 +42,11 @@ if [[ -z "$BA_PREFIX" ]]; then
     exit 1
 fi
 echo "Output Prefix: $BA_PREFIX"
+# If max pairwise matches isn't set, default to 2000
+if [[ -z "$MAX_PAIRWISE_MATCHES" ]]; then
+    export MAX_PAIRWISE_MATCHES=2000
+    echo "Using MAX_PAIRWISE_MATCHES: $MAX_PAIRWISE_MATCHES"
+fi
 # Ensure the work dir is set to something
 if [[ -z "$WORKDIR" ]]; then
     # we will default to the current working directory wherever that is
@@ -257,7 +262,7 @@ if [[ -z "$PARALLEL_JOBS_LIST_FILE" ]]; then
                 --num-iterations 500      
                 --num-passes 2            
                 --min-matches 10          
-                --max-pairwise-matches 2000 
+                --max-pairwise-matches "$MAX_PAIRWISE_MATCHES"
                 --camera-weight 0           
                 --save-intermediate-cameras 
                 --robust-threshold 2.0      

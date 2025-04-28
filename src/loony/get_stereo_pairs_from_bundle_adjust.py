@@ -148,9 +148,10 @@ def run(
         if crs_info['name'] == 'IAU':
             crs_info['name'] = 'IAU_2015'
         crs = CRS.from_user_input(f'{crs_info["name"]}:{crs_info["code"]}')
+        # TODO this whole bit here is really slow, downselect image ids here to help and see if results arfe cached
         gdf = duckdb.sql(f'SELECT * FROM "{db}"')
         # first compute the geometries into a new table
-        val_pairs_geom = duckdb.sql("""
+        val_pairs = duckdb.sql("""
             SELECT 
                 * EXCLUDE (geom),
                 ST_MakeValid(
@@ -164,18 +165,18 @@ def run(
             JOIN
                 gdf as ci1 on vp.LPID = ci1.PRODUCT_ID
             JOIN
-                gdf as ci2 on vp.RPID = ci2.PRODUCT_ID;
+                gdf as ci2 on vp.RPID = ci2.PRODUCT_ID
             WHERE
                 NOT ci1.PRODUCT_ID = ci2.PRODUCT_ID AND 
                 NOT ci1.PRODUCT_ID[0:-3] = ci2.PRODUCT_ID[0:-3];
-        """)
+        """).set_alias('val_pairs')
         # now compute the area as well and limit the results to the top N largest by area anticipated stereo pairs
-        val_pairs_geom_area = duckdb.sql(f"""
+        val_pairs = duckdb.sql(f"""
             SELECT 
                 sp.*,
                 ST_AREA(sp.geometry) as area
             FROM 
-                val_pairs_geom as sp
+                val_pairs as sp
             ORDER BY
                 area DESC
             LIMIT {max_num_stereo_pairs};
@@ -184,7 +185,7 @@ def run(
             print('len(vp) (final) : ', len(val_pairs))
     if just_info:
         print(val_pairs)
-        if plot and db is not None:
+        if plot and (db is not None):
             import matplotlib.pyplot as plt
             from loony.new_sfs_cover import plot_footprints, plot_illumination_coverage
             import geopandas as gp
@@ -193,9 +194,12 @@ def run(
             stereo_gdf = duckdb.sql("""
                 SELECT 
                     sp.* EXCLUDE(geometry),
-                    ST_AsText(sp.geometry) as geometry_wkt,
+                    sp.area as area,
+                    ST_AsText(sp.geometry) as geometry_wkt
                 FROM 
-                    val_pairs as sp;
+                    val_pairs as sp
+                ORDER BY
+                    area DESC;
             """).to_df()
             # now plot..
             stereo_gdf['geometry'] = gp.GeoSeries.from_wkt(stereo_gdf['geometry_wkt'], crs=crs)
@@ -215,7 +219,15 @@ def run(
         map_ba_suffix = 'noba'
     if not just_info:
         # get the data into pandas
-        df = duckdb.sql(f"SELECT replace(val_pairs.left, '.cub', '.map.{map_ba_suffix}.tif') as left, replace(val_pairs.right, '.cub', '.map.{map_ba_suffix}.tif') as right FROM val_pairs;").fetchdf()
+        df = duckdb.sql(f"""
+            SELECT 
+                replace(val_pairs.left, '.cub', '.map.{map_ba_suffix}.tif') as left, 
+                replace(val_pairs.right, '.cub', '.map.{map_ba_suffix}.tif') as right 
+            FROM 
+                val_pairs 
+            ORDER BY
+                area DESC;
+        """).fetchdf()
         # Print DataFrame to CSV to stdout
         df.to_csv(sys.stdout, index=False, header=False, sep=' ')  
 

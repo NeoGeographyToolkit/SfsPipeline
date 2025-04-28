@@ -2,7 +2,7 @@
 #PBS -N pbs_launch_stereo
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=01:10:00        
+#PBS -l select=1:ncpus=20:model=ivy,walltime=02:00:00        
 #PBS -q low
 #PBS -o pbs_launch_stereo.log   
 #PBS -r y                       
@@ -159,7 +159,7 @@ args=(
     --subpixel-mode 9 
     --threads-singleprocess 4
     --threads-multiprocess 4
-    --processes 5
+    --processes 8
     "$out_dir/run" "$DEM"
 )
 # first write out the parallel stereo command but first make the output dir so I can capture the logs per job

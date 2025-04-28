@@ -61,11 +61,16 @@ if [[ -z "$BA_PREFIX" ]]; then
     exit 1
 fi
 echo "Output Prefix: $BA_PREFIX"
+# If max pairwise matches isn't set, default to 1000
+if [[ -z "$MAX_PAIRWISE_MATCHES" ]]; then
+    export MAX_PAIRWISE_MATCHES=1000
+fi
+echo "Using MAX_PAIRWISE_MATCHES: $MAX_PAIRWISE_MATCHES"
 # Set Robust Threshold, use "5.0" first then re-run at "2.0" with RESUME_PREFIX set to the BA prefix
 if [[ -z "$ROBUST_THRESHOLD" ]]; then
     export ROBUST_THRESHOLD=2.0
-    echo "Using ROBUST_TRESHOLD: $ROBUST_THRESHOLD"
 fi
+echo "Using ROBUST_TRESHOLD: $ROBUST_THRESHOLD"
 # determine if this is a refinement pass with DEM 
 if [[ -n $USE_DEM_HEIGHTS ]]; then
     export KIND='ref'
@@ -163,7 +168,7 @@ args=(
       --num-iterations 500      
       --num-passes 2            
       --min-matches 10          
-      --max-pairwise-matches 500 
+      --max-pairwise-matches "$MAX_PAIRWISE_MATCHES"
       --camera-weight 0           
       --save-intermediate-cameras 
       --robust-threshold "$ROBUST_THRESHOLD"     

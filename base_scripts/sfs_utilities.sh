@@ -15,6 +15,17 @@ function unique_from_pairs() {
     awk '{print $1; print $2}' "$1" | sort -u
 }
 
+function to_lerc_cog() {
+    in_name="$1"
+    out_name="$2"
+    if [[ -z "$3" ]]; then
+        PREC=0.0001
+    else
+        PREC="$3"
+    fi
+    gdal_translate --config GDAL_NUM_THREADS 4 -co NUM_THREADS=4 -co COMPRESS=LERC_DEFLATE -co MAX_Z_ERROR="$PREC" -co PREDICTOR=3 -ot Float32 -of COG "$in_name" "$out_name"
+}
+
 function check_files() {
     # for each file in a list file check if it exists, return false at the first missed file
     local list_file="$1"
