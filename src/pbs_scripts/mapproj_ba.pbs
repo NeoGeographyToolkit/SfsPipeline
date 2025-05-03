@@ -2,7 +2,7 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=24:ncpus=20:model=ivy,walltime=04:00:00        
+#PBS -l select=16:ncpus=20:model=ivy,walltime=08:00:00        
 #PBS -q normal                 
 #PBS -m abe                     
 #PBS -o pbs_mapproj_ba.log   
@@ -147,7 +147,7 @@ echo "Path to mapproject: $MAPPROJ"
 # Create a temp file
 TMPFILE=$(mktemp "$WORKDIR/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX")
 # Ensure cleanup on exit or error
-#trap 'rm -f "$TMPFILE"' EXIT
+trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG

@@ -117,7 +117,7 @@ LOG_FILE="$LOGS_FOLDER/pbs_make_lerc_cogs_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 # Create a temp file
 TMPFILE=$(mktemp "$WORKDIR/make_lerc_cogs_cmds.XXXXXX")
 # Ensure cleanup on exit or error
-trap 'rm -f "$TMPFILE"' EXIT
+#trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
 find "$INPUT_DIR" -type f -name "*.$TIF_POSTFIX" -exec echo "$make_lerc_cog" '{}' \; >> "$TMPFILE"
 # sort the TMPFILE to ensure repeatability
