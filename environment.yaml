@@ -6,6 +6,8 @@ dependencies:
   - ipython
   - ipykernel
   - duckdb
+  - duckdb-cli
+  - python-duckdb 
   - fire
   - gdal
   - geopandas
@@ -16,11 +18,14 @@ dependencies:
   - numpy
   - pvl
   - polars
+  - pystac
   - pip
   - pyarrow
   - pyproj
+  - rclone
   - rasterio
   - sh
+  - jq
   - fzf
   - shapely
   - pip:

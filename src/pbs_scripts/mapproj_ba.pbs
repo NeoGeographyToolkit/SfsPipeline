@@ -236,7 +236,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
         -u 
         -a "$TMPFILE"
         --workdir "$WORKDIR"
-        --memfree 10G
+        --memfree 14G
         --retries 10
         --resume-failed 
         --keep-order
