@@ -90,6 +90,7 @@ echo ISIS root is "$ISISROOT"
 echo PATH is "$PATH"
 # save the path to dem_mosaic
 DEM_MOSAIC=$(which dem_mosaic)
+GDAL_TRANSLATE=$(which gdal_translate)
 ##############################################
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"
@@ -102,17 +103,34 @@ LOG_FILE="$LOGS_FOLDER/pbs_max_lit_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_lo
 args_maxlit=(
             "$DEM_MOSAIC" 
             --max
-            --threads 38
+            --threads 32
             -l "$IMAGE_LIST"
             -o "$OUT_NAME"
         ) 
+# set the args for converting to lerc cog
+out_cog="${OUT_NAME%.tif}.lerc.cog.tif"
+args_cog=(
+   "$GDAL_TRANSLATE"
+   --config GDAL_NUM_THREADS 20
+   -co NUM_THREADS=20 
+   -co COMPRESS=LERC_DEFLATE 
+   -co MAX_Z_ERROR="0.00033" 
+   -co PREDICTOR=3 
+   -ot Float32 
+   -of COG 
+   "$OUT_NAME" 
+   "$out_cog" 
+)
 # Combine both into one string
-PROCESS="${args_maxlit[@]}"
+PROCESS_MOSAIC="${args_maxlit[@]}"
+PROCESS_COG="${args_cog[@]}"
 # prepare to run the command or print the debug
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Starting Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
     # run dem_mosaic
-    eval "$PROCESS" >> "$LOG_FILE" 2>&1
+    eval "$PROCESS_MOSAIC" >> "$LOG_FILE" 2>&1
+    # run gdal_translate to make a cog
+    eval "$PROCESS_COG" >> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Finished Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
 else

@@ -1,6 +1,5 @@
 # this file needs to be sourced
 
-
 function gim {                                    
   gdalinfo -stats $1 | grep -i Maximum | grep -i mean
 }
@@ -15,6 +14,26 @@ function unique_from_pairs() {
     awk '{print $1; print $2}' "$1" | sort -u
 }
 
+function get_largest_component_images() {
+    # print out the sorted largest components as a single column list
+    cat $1 | jq  -r '.["components"][0][]' | sort
+}
+
+function filter_remove_if_either_side_matches() {
+    local pairs_file="$1"
+    local elements_file="$2"
+
+    awk 'NR==FNR { seen[$1]; next } { if (!($1 in seen) && !($2 in seen)) print }' "$elements_file" "$pairs_file"
+}
+
+function filter_keep_if_both_sides_match() {
+    local pairs_file="$1"
+    local elements_file="$2"
+
+    # Turn list into a lookup table
+    awk 'NR==FNR { seen[$1]; next } { if ($1 in seen && $2 in seen) print }' "$elements_file" "$pairs_file"
+}
+
 function to_lerc_cog() {
     in_name="$1"
     out_name="$2"
@@ -23,7 +42,7 @@ function to_lerc_cog() {
     else
         PREC="$3"
     fi
-    gdal_translate --config GDAL_NUM_THREADS 4 -co NUM_THREADS=4 -co COMPRESS=LERC_DEFLATE -co MAX_Z_ERROR="$PREC" -co PREDICTOR=3 -ot Float32 -of COG "$in_name" "$out_name"
+    gdal_translate --config GDAL_NUM_THREADS 8 -co NUM_THREADS=8 -co COMPRESS=LERC_DEFLATE -co MAX_Z_ERROR="$PREC" -co PREDICTOR=3 -ot Float32 -of COG "$in_name" "$out_name"
 }
 
 function check_files() {
@@ -74,6 +93,12 @@ function collect_geojson() {
     fi
     jq '{"type": "FeatureCollection", "features": [.[] | .features[]]}' --slurp "$1/"*"$POSTFIX"
 }
+
+function geojsonld_to_geojson() {
+    # given a line delimited geojson file, conf
+    ogr2ogr -of GeoJSON $2 $1
+}
+
 
 function monitor_throughput() {
     # Check that at least two arguments are provided: filename and total expected lines.

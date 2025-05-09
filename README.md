@@ -225,7 +225,7 @@ A more concrete/practical example for the first stage of this after map projecti
 source base_scripts/sfs_utilities.sh
 # collect the non-bundle adjusted footprints into a single file
 # assuming you have a folder called 'IMAGES' that has all your cub/tif files. 
-collect_geojson IMAGES 'map.noba.geojson' > noba_footprints.geojson
+collect_geojson_stream IMAGES 'map.noba.geojson' > noba_footprints.geojson
 # now generate the new GPKG file using this collected geojson and the original GDB
 python loony/update_db_from_footprints.py SOURCE.gpkg TARGET_noba_footprints.gpkg noba_footprints.geojson
 ```
@@ -243,7 +243,7 @@ shadow_mask.pbs
 source base_scripts/sfs_utilities.sh
 # collect the non-bundle adjusted footprints into a single file
 # assuming you have a folder called 'IMAGES' that has all your cub/tif files. 
-collect_geojson IMAGES 'map.noba.mask.geojson' > mask_noba_footprints.geojson
+collect_geojson_stream IMAGES 'map.noba.mask.geojson' > mask_noba_footprints.geojson
 # now generate the new GPKG file using this collected geojson and the original GDB
 python loony/update_db_from_footprints.py SOURCE.gpkg TARGET_mask_noba_footprints.gpkg mask_noba_footprints.geojson
 ```

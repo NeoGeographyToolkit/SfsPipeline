@@ -2,7 +2,7 @@
 #PBS -N pbs_make_lerc_cogs       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=4:ncpus=20:model=ivy,walltime=02:30:00        
+#PBS -l select=8:ncpus=20:model=ivy,walltime=00:30:00        
 #PBS -q normal                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -155,7 +155,7 @@ if [[ -z "$DEBUG" ]]; then
     echo "${parallel_opts[@]}"
     # DON'T USE ASP's parallel call it modified the python path!!! make sure you update PYTHONHOME WITHIN 
     # start gnu parallel
-    $ASPROOT/bin/parallel "${parallel_opts[@]}" &> "$LOG_FILE"
+    $ASPROOT/bin/parallel "${parallel_opts[@]}" > "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it

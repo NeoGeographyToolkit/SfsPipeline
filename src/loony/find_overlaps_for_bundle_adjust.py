@@ -51,7 +51,7 @@ def arg_parser():
     )
     parser.add_argument(
         "--image_dir",
-        type=str, default='',
+        type=str, default='CWD',
         help='default file path to prepend to image ids, set to CWD to call os.cwd()'
     )
     return parser
@@ -85,6 +85,7 @@ def main():
         # compute all the pair-wise intersections for analysis
         if args.verbose:
             print("Performing spatial join (this will be slow for large source databases...)")
+        # TODO add new mode which does not limit the solar az acos diff but grabs the lowest N per image
         con.sql(f"""
             CREATE TEMP TABLE 
                     pairs_raw
@@ -101,7 +102,7 @@ def main():
             ON 
                 ST_INTERSECTS(L.geom, R.geom)
             WHERE
-                L_PRODUCT_ID < R_PRODUCT_ID  -- Ensures no duplicate pairs and excludes self-matches or repeates
+                L_PRODUCT_ID < R_PRODUCT_ID  -- Ensures no duplicate pairs and excludes self-matches or repeats
             AND
                 SOLAR_AZ_ACOS_DIFF < {args.max_diff_slrgaz}
             AND
@@ -121,21 +122,26 @@ def main():
         if len(missed_ids) > 0:
             if args.verbose:
                 print(f'missed {len(missed_ids)} images in the intersections, if a lot considering raising max_diff_slrgaz', flush=True)
-                print(missed_ids)
+                print(missed_ids, flush=True)
                 print('', flush=True)
         # get the prefix for the image id paths
         path_prefix = args.image_dir
         if path_prefix == 'CWD':
-            path_prefix = os.getcwd()+'/'
-        
+            path_prefix = os.getcwd()+'/IMAGES/'
         # if we check the connectivity we just want it's output not the actual list of pairs
         if args.check_connectivity:
             # grab the full list of product ids
-            pairs = con.sql('SELECT L_PRODUCT_ID, R_PRODUCT_ID FROM pairs_raw').fetchnumpy()
+            pairs = con.sql(f"""
+                SELECT 
+                    CONCAT('{path_prefix}', L_PRODUCT_ID, '{args.image_filename_postfix}') as L,
+                    CONCAT('{path_prefix}', R_PRODUCT_ID, '{args.image_filename_postfix}') as R
+                FROM 
+                    pairs_raw;
+            """).fetchnumpy()
             # compute the graph and determine the checks
-            res = check_connectivity(np.vstack(( pairs['L_PRODUCT_ID'], pairs['R_PRODUCT_ID'] )).T)
+            res = check_connectivity(np.vstack(( pairs['L'], pairs['R'] )).T)
             # todo add plotting from verify bundle adjust
-            return json.dumps(res)
+            print(json.dumps(res), flush=True)
         else:
             # get the final output for stdout
             pair_output = con.sql(f"SELECT CONCAT('{path_prefix}', L_PRODUCT_ID, '{args.image_filename_postfix} ', '{path_prefix}', R_PRODUCT_ID, '{args.image_filename_postfix}') as lines FROM pairs_raw;").fetchnumpy()

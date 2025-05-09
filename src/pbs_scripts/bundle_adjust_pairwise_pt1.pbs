@@ -21,7 +21,31 @@
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
-
+# get the number of nodes (will typically be high)
+if [[ -z "$NUM_NODES" ]]; then
+    export NUM_NODES=32
+fi;
+echo "Using NUM_NODES $NUM_NODES"
+# get the number of cpus per node
+if [[ -z "$NUM_CPUS" ]]; then
+    export NUM_CPUS=20
+fi;
+echo "Using NUM_CPUS $NUM_CPUS"
+# get the model (node type)
+if [[ -z "$MODEL" ]]; then
+    export MODEL='ivy'
+fi;
+echo "Using MODEL $MODEL"
+# get the walltime
+if [[ -z "$WALLTIME" ]]; then
+    export WALLTIME="24:00:00"
+fi;
+echo "Using WALLTIME $WALLTIME"
+# get the queue (low, normal, long, ldan)
+if [[ -z "$QUEUE" ]]; then
+    export QUEUE="long"
+fi;
+echo "Using QUEUE $QUEUE"
 # define usage once
 USAGE="qsub -v DEM=/path/to/dem.tif,OVERLAP_LIST=/path/to/overlap_list.txt,BA_PREFIX=ba0/run $0"
 # Ensure a DEM was provided
@@ -82,11 +106,13 @@ if [[ -n $SUBMIT ]]; then
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
     # echo "$PARALLEL_JOBS_LIST_FILE"
     echo "JOB list was provided! Good on you!: $PARALLEL_JOBS_LIST_FILE"
-    # actually sleep
-    sleep 15
     # submit to qsub
     submit_name="pbs_ba_pt1_pairwise_${BA_PREFIX%/*}"
-    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
+    # evaluate the nodes,cpus,walltime
+    node_cpu_wall="select=$NUM_NODES:ncpus=$NUM_CPUS:model=$MODEL,walltime=$WALLTIME" 
+    # actually sleep
+    sleep 15
+    exec qsub -q "$QUEUE" -l "$node_cpu_wall" -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
 fi
