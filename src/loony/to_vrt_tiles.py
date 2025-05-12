@@ -173,7 +173,7 @@ class VrtTiles(object):
 
     def dem_to_vrt_tiles_by_width(self, dem_path: str, width: int = 4_000):
         """
-        Givne a dem, convert it to tiles as vrt files in the current working directory
+        Given a dem, convert it to tiles as vrt files in the current working directory
         """
         # get the basename
         basename = Path(dem_path).name.split('.')[0]
@@ -189,7 +189,7 @@ class VrtTiles(object):
                 tile_path = f'{basename}.tile.{tile.i}.{tile.j}.vrt'
                 # set the options for the vrt
                 vrt_options = dict(
-                    crs = self.crs,
+                    crs = self._crs,
                     transform = tile.to_affine(),
                     width = tile.width(),
                     height = tile.height(),

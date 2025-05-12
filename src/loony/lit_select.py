@@ -1,6 +1,8 @@
 import json 
 import fire
 import geopandas as gp
+import rasterio as rio
+from pathlib import Path
 
 
 def set_coverage(df, threshold: float = 100.0, verbose: bool = False):
@@ -49,6 +51,8 @@ def run(
         threshold: float = 100.0, 
         verify_out_json: str = None,
         component_index: int = 0,
+        dem_path: str | None = None,
+        de_densify: bool = False,
         verbose: bool = False
     ):
     """
@@ -61,6 +65,23 @@ def run(
     """
     # load the geodatabase file with geopandas
     df: gp.GeoDataFrame = gp.read_file(gdb_path)
+    # if the dem is provided, subset the df to only include intersecting images
+    if dem_path:
+        with rio.open(dem_path, 'r') as src:
+            bounds = src.bounds
+        # use the bounds to filter the df for those that intersect
+        df = df.cx[bounds.left:bounds.right, bounds.bottom:bounds.top]
+    # if the connected components are provided, ensure the selections are compatible with it
+    if verify_out_json:
+        # load the components
+        with open(verify_out_json) as src:
+            components = json.load(src)
+        # now make a table with the IDs in the largest component
+        component_pids = components['components'][component_index]
+        # now adjust the pids
+        component_pids = [Path(_).name.replace('.ech.cub', '') for _ in component_pids]
+        # now update the df to only include those 
+        df = df[df['PRODUCT_ID'].isin(component_pids)]
     # attempt to filter the input df by that provided column and min/max value range
     if column in df.columns:
         # only do it inclusive on left side to treat max_v as < max_v
@@ -69,19 +90,11 @@ def run(
         df = df[selection]
     else:
         raise RuntimeError(f'Column {column} not in possible columns: {df.columns} for file {gdb_path}')
-    # if the connected components are provided, ensure the selections are compatible with it
-    if verify_out_json:
-        # load the components
-        with open(verify_out_json) as src:
-            components = json.load(verify_out_json)
-        # now make a table with the IDs in the largest component
-        component_pids = components['components'][component_index].apply(lambda x: x.replace('.ech.cub', ''))
-        # now update the df to only include those 
-        df = df[df['PRODUCT_ID'].isin(component_pids)]
-    # now perform the down select
-    ds_df = set_coverage(df, threshold=threshold, verbose=verbose)
+    if de_densify:
+        # now perform the down select
+        df = set_coverage(df, threshold=threshold, verbose=verbose)
     # now represent the content to the user probably best done via csv, using the ret_column
-    for out in ds_df[ret_column].tolist():
+    for out in df[ret_column].tolist():
         print(out, flush=True)
 
 # main
