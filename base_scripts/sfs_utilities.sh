@@ -36,7 +36,11 @@ function filter_keep_if_both_sides_match() {
 
 function to_lerc_cog() {
     in_name="$1"
-    out_name="$2"
+    if [[ -z "$2" ]]; then
+        out_name="${in_name%.tif}.lerc.tif"
+    else
+        out_name="$2"
+    fi
     if [[ -z "$3" ]]; then
         PREC=0.0001
     else
@@ -191,4 +195,35 @@ function monitor_throughput() {
         echo " $(printf "%3d" "$percent")% complete"
         echo "-----------------------------------------------------"
     done
+}
+
+
+function extract_disparity_bands() {
+    # pretty much just https://stereopipeline.readthedocs.io/en/latest/tools/image_calc.html#extract-disparity-bands-respecting-invalid-disparities
+    disp_file="$1"
+    if [[ -z "$2" ]]; then
+        MAX_DISP=1e+6
+    else
+        MAX_DISP=$2
+    fi
+
+    basename="${disp_file%.tif}"
+    
+    for b in 1 2 3; do
+        gdal_translate -b $b $disp_file ${basename}_b${b}.vrt
+    done
+
+    for b in 1 2; do
+      image_calc -c "(var_0 + $MAX_DISP)*var_1 - $MAX_DISP" \
+      --output-nodata-value -$MAX_DISP          \
+      ${basename}_b${b}.vrt ${basename}_b3.vrt                    \
+      -o ${basename}_b${b}_nodata.tif
+      to_lerc_cog ${basename}_b${b}_nodata.tif
+      rm ${basename}_b${b}_nodata.tif
+    done
+
+    for b in 1 2 3; do
+        rm ${basename}_b${b}.vrt
+    done
+
 }

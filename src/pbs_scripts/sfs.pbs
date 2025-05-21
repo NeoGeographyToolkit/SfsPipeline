@@ -2,10 +2,10 @@
 #PBS -N pbs_sfs
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=8:ncpus=24:model=has,walltime=02:00:00        
 #PBS -q normal
 #PBS -m abe                     
-#PBS -M andrew.m.annex@nasa.gov 
+#PBS -M annex@seti.org
 #PBS -o pbs_sfs.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
@@ -63,10 +63,11 @@ if [[ -n $SUBMIT ]]; then
     unset DEBUG
     # echo SUBMIT and DEBUG as sanity check
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # submit to qsub # Use -V to pass in all environment variables!
+    submit_name="pbs_launch_stereo_${SFS_PREFIX//\//}"
+    echo "submitting  $submit_name"
     # actually sleep
     sleep 15
-    # submit to qsub # Use -V to pass in all environment variables!
-    submit_name="pbs_sfs_${SFS_PREFIX%/*}"
     exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
     # be sure to exit the script at this point
     exit 0
@@ -95,6 +96,22 @@ if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
 else
     echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+    # create a new nodefile for gnu parallel
+    # Create a temp file
+    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_sfs_nodes.XXXXXX")
+    # Ensure cleanup on exit or error
+    #trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
+    # write out the number of jobs per node 
+    DEFAULT_JOBS=10
+    LOCAL_JOBS=5
+    LOCAL_HOST=$(hostname -s)
+    # start the output file 
+    # Append the local node with LOCAL_JOBS
+    echo "${LOCAL_JOBS}/${LOCAL_HOST}" > "$GNU_PARALLEL_NODEFILE"
+    # Write all other nodes with DEFAULT_JOBS
+    sort -u "$PBS_NODEFILE" | grep -v "^$LOCAL_HOST\$" | while read NODE; do
+        echo "${DEFAULT_JOBS}/${NODE}" >> "$GNU_PARALLEL_NODEFILE"
+    done
 fi
 echo "running on $NUM_NODES nodes"
 echo
@@ -113,21 +130,23 @@ echo PATH is "$PATH"
 # todo enable a --compute-exposures-only run and re-use with --image-exposures-prefix (not compatible with --resume option)
 # todo add crater bottom curvature https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-crater-bottoms
 # construct args
+# TODO run-dir was critical, defaults to homedir! Tell Oleg!
 args=(
       -i "$DEM"
-      --nodes-list "$PBS_NODEFILE"
-      --reflectance-type 1
-      --processes 10
+      --run-dir "$WORKDIR"
+      --nodes-list "$GNU_PARALLEL_NODEFILE"
+      --processes 8
       --threads 4
-      --tile-size 200
-      --padding 50        
+      --tile-size 256
+      --padding 64
+      --cache-size-mb 2048        
       --image-list "$IMAGES"    
       --camera-list "$CAMERAS"
       --shadow-threshold 0.005
       --allow-borderline-data 
       --crop-input-images
       --blending-dist 10
-      --min-blend-size 50
+      --min-blend-size 48
       --smoothness-weight 0.08
       --initial-dem-constraint-weight 0.001
       --reflectance-type 1
@@ -142,11 +161,29 @@ JOBS_FOLDER="$WORKDIR/jobs"
 mkdir -p "$LOGS_FOLDER"
 mkdir -p "$JOBS_FOLDER"
 # set log file names
-LOG_FILE="$LOGS_FOLDER/pbs_sfs_${SFS_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SFS_PREFIX:0:3}_job.log"
+LOG_FILE="$LOGS_FOLDER/pbs_sfs_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SFS_PREFIX//\//}_job.log"
 # for annoying reasons I can't seem to pass this in the array
-parallel_opts="--resume-failed --memfree 30G --joblog $JOB_FILE"
-
+parallel_opts=(
+    -u 
+    --workdir "$WORKDIR"
+    --memfree 20G
+    --retries 10
+    --resume-failed 
+    --keep-order
+    --joblog "$JOB_FILE"
+)
+if [[ $NUM_NODES -gt 1 ]]; then
+    parallel_opts+=(
+        --controlmaster 
+        --sshdelay 0.1 
+        --sshloginfile "$GNU_PARALLEL_NODEFILE"
+    )
+else
+    parallel_opts+=(
+        --jobs "$DEFAULT_JOBS"
+    )
+fi
 if [[ -n $FLOAT_ALBEDO ]]; then
     echo "We will add the optional --float-albedo option to sfs"
     args+=(--float-albedo)
@@ -156,9 +193,11 @@ if [[ -n $CROP_WIN ]]; then
     echo "We will crop the DEM to $CROP_WIN (xoff yoff width height)"
     args+=(--crop-win "$CROP_WIN")
 fi
-
+echo "Using these opts for parallel: "
+echo "${parallel_opts[@]}"
 if [[ -z "$DEBUG" && -n "$PBS_JOBID" ]]; then 
-    parallel_sfs "${args[@]}" --parallel-options "$parallel_opts" &> "$LOG_FILE"
+    $ASPROOT/bin/parallel_sfs "${args[@]}" --parallel-options '${parallel_opts[@]}' >> "$LOG_FILE" 2>&1
+    #$ASPROOT/bin/parallel_sfs "${args[@]}" --parallel-options "-u --keep-order --joblog '$JOB_FILE' --workdir '$WORKDIR' --controlmaster --sshdelay 0.1" #>> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
