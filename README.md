@@ -44,6 +44,19 @@ export NAME_SOURCE=/path/to/cities.csv or some other text file with random names
 8. To run ISIS or ASP commands invoke `source init_asp.sh`, to run sfstool tools and GDAL use `source init_sfstools.sh`.
 
 
+# Utility Scripts (base_scripts/sfs_utilities.sh)
+
+Various helpful and needed small bash utilities are contained in `base_scripts/sfs_utilities.sh`.
+
+This includes utilities for computing stats on geodiff results, converting images to LERC compressed COGs, and many other small things that are helpful to have but aren't complicated enough to warrant their own stand alone script.
+
+To access these utilities simply run `source base_scripts/sfs_utilities.sh` AFTER `source init_asp.sh`. This may change to be incorporated into `init_asp.sh` and `init_sfstools.sh` but it is still being updated.
+
+# QGIS utils (base_scripts/startup.py)
+
+Various helpful enhancements for QGIS are implemented within the `base_scripts/startup.py` python file. The intent is for users to have a local copy of this file/the sfstools installation and for them to place a symbolic link to this file in the appropriate directory for there system as documented by https://docs.qgis.org/testing/en/docs/pyqgis_developer_cookbook/intro.html#the-startup-py-file. 
+
+
 # Overview of scripts
 
 This project contains a number of types of scripts that broadly are:
@@ -120,9 +133,6 @@ Symbols:
   - PBS batch job for calibrating/spiceinit'ing images, making CSM models, etc, run on PFE to submit job.
 7. mapproj_noba.pbs (☁️)
   - PBS batch job for map projecting CUB files given CSM models to the DEM prior to bundle adjust (first bundle adjust ba0 will use map projected images to start)
-8. DEPRECATED FOR NOW prepare_ba0_lists.sh (💻)
-  - Given folder of cubs and csm cameras generate most of the list text files bundle adjust needs (may be deprecated)
-  - easier to just run find/sort/uniq/sed in command line, will update to make a simpler script
 9. find_overlaps_for_bundle_adjust.py (💻)
   - Given sfs cover output determine likely matching images by overlap and lighting geometry to feed pairs list to bundle adjust
 10. bundle_adjust_pairwise_pt1.pbs (☁️)
@@ -144,7 +154,7 @@ Symbols:
 19. lit_select.py (💻)
 
 
-## Command Line Tools
+# Command Line Tools
 
 
 ## Process Cumulative Index to parquet files
@@ -354,6 +364,25 @@ You are now ready to run the pairwise bundle adjust script that will described b
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# OLD Notes below this line as of May 2025. 
+# Eventually below will be reincorporated above or removed!
+
+
 ## Finding stereo pairs from SFS Cover outputs
 
 ```bash
@@ -548,74 +577,12 @@ launch_individual_stereo_jobs.sh
 ```
 
 
-## get metadata for product ids used in convergence angle file
-
-we need to join the two csvs and make an output similar to the find_stereo_pairs overlap file preferably as a geopackage output. For best results use the updated map projected footprints database file.
-
-```sql
-INSTALL SPATIAL;
-LOAD SPATIAL;
-CREATE TEMP TABLE conv AS SELECT * FROM  read_csv('./baD/baD-convergence_angles.txt', skip=2, header=False, sep=' ');
-CREATE TEMP TABLE md AS SELECT * FROM ST_Read('./mapprojected_footprints_noba_mons_mouton_10k.gpkg');
-CREATE TEMP TABLE 
-            pairs
-    AS SELECT
-            L.PRODUCT_ID      as L_PRODUCT_ID,
-            L.VOLUME_ID       as L_VOLUME_ID,
-            L.ORBIT_NUMBER    as L_ORBIT_NUMBER,
-            L.PHASE_ANGLE     as L_PHASE_ANGLE,
-            L.EMISSION_ANGLE  as L_EMISSION_ANGLE,
-            L.INCIDENCE_ANGLE as L_INCIDENCE_ANGLE,
-            L.ROI_SUB_SOLAR_GROUND_AZIMUTH as L_ROI_SUB_SOLAR_GROUND_AZIMUTH,
-            L.SUB_SPACECRAFT_GROUND_AZIMUTH as L_SUB_SPACECRAFT_GROUND_AZIMUTH,
-            L.RESOLUTION      as L_RESOLUTION,
-            ST_AREA(L.geom)   as L_area,
-            R.PRODUCT_ID      as R_PRODUCT_ID,
-            R.VOLUME_ID       as R_VOLUME_ID,
-            R.ORBIT_NUMBER    as R_ORBIT_NUMBER,
-            R.PHASE_ANGLE     as R_PHASE_ANGLE,
-            R.EMISSION_ANGLE  as R_EMISSION_ANGLE,
-            R.INCIDENCE_ANGLE as R_INCIDENCE_ANGLE,
-            R.ROI_SUB_SOLAR_GROUND_AZIMUTH as R_ROI_SUB_SOLAR_GROUND_AZIMUTH,
-            R.SUB_SPACECRAFT_GROUND_AZIMUTH as R_SUB_SPACECRAFT_GROUND_AZIMUTH,
-            R.RESOLUTION      as R_RESOLUTION,
-            ST_AREA(R.geom)   as R_area,
-            ST_INTERSECTION(L.geom, R.geom) as geom,
-            ABS(L.EMISSION_ANGLE - R.EMISSION_ANGLE) as EMISSION_DIFF,
-            conv.column2 as angle_percentiles_25,
-            conv.column3 as angle_percentiles_50,
-            conv.column4 as angle_percentiles_75,
-            conv.column5 as num_angles_per_pair,
-    FROM 
-        conv 
-    JOIN 
-        md AS L ON CONTAINS(conv.column0,L.PRODUCT_ID) 
-    JOIN
-        md AS R ON CONTAINS(conv.column1,R.PRODUCT_ID)
-    WHERE 
-      conv.column2 > 10 AND conv.column5 > 10  
-    ORDER BY 
-      conv.column5 DESC; 
-COPY (SELECT * FROM pairs) TO './mons_mouton_10k_baD_convergence_angles.gpkg'         
-    WITH (FORMAT GDAL, DRIVER 'GPKG', SRS 'IAU:30135');
-```
-
-
-#### TODO: 
 
 
 
 ### geodiff for stereo pairs
 
 ```bash
-function gim {                                    
-  gdalinfo -stats $1 | grep -i Maximum | grep -i mean
-}
-
-function jim {
-  gdalinfo $1 -stats -json | jq -c '.bands[0].metadata | .[""]'
-}
-
 source init_asp.sh
 for i in ./*/*DEM.tif; do ; geodiff --threads 8 $i $DEM  -o "${i%/*}/run"; done
 # then
@@ -735,12 +702,3 @@ update_db_from_footprints.py ./mons_mouton_10k_5m.gpkg ./shadow_mask_mons_mouton
 
 ```
 
-## Update DB to only include images that are contained in the verify bundle adjust largest connected component
-
-
-```bash
-
-
-
-
-```
