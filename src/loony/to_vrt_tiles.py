@@ -94,6 +94,43 @@ def _create_tiles_by_number_x(xmin, ymin, xmax, ymax, at_most_along_x=8):
             tiles.append(Tile(float(l), float(b), float(r), float(t), i=i, j=j))
     return tiles
 
+def _x_with_overlap(xmin, xmax, step_size=8192, overlap=1024):
+    if xmin < xmax:
+        yield xmin
+    current = (xmin + step_size) - overlap
+    if current >= xmax:
+        return
+    yield from _x_with_overlap(current, xmax, step_size=step_size, overlap=overlap)
+
+def _y_with_overlap(ymin, ymax, step_size=8192, overlap=1024):
+    if ymin < ymax:
+        yield ymax
+    current = (ymax - step_size) + overlap
+    if current <= ymin:
+        return
+    yield from _y_with_overlap(ymin, current, step_size=step_size, overlap=overlap)
+
+def _create_tiles_by_width_with_overlap(xmin, ymin, xmax, ymax, width: int=8_000, overlap: int = 256):
+    """
+    Create a rectangular grid with a specified overlap
+    """
+    assert overlap < width
+    if width/overlap < 4:
+        raise RuntimeError('Too much overlap!')
+    x0 = np.array(list(_x_with_overlap(xmin, xmax, step_size=width, overlap=overlap)))
+    x0 = x0[x0 <= xmax]
+    y0 = np.array(list(_y_with_overlap(ymin, ymax, step_size=width, overlap=overlap)))
+    y0 = y0[y0 >= ymin]
+    # these are the upper left corener start coordinates for each cell
+    tiles = []
+    for i, l in enumerate(x0):
+        for j, t in enumerate(y0):
+            r = l + width
+            b = t - width
+            tiles.append(Tile(float(l), float(b), float(r), float(t), i=i, j=j))
+    return tiles
+
+
 class VrtTiles(object):
 
     def __init__(self):
@@ -135,6 +172,24 @@ class VrtTiles(object):
         # and return the tiles
         return self
     
+    def dem_to_tiles_by_width_with_overlap(self, dem_path: str, width: int = 4_000, overlap: int = 768):
+        """
+        Given a dem, convert it to tile bounds following the projwin paradigm
+        """
+        # first read in the raster and get the bounds
+        with rio.open(dem_path, 'r') as src:
+            self._crs = src.crs
+            bounds = src.bounds
+        # convert to minx,miny,maxx,maxy
+        minx = bounds.left
+        miny = bounds.bottom
+        maxx = bounds.right
+        maxy = bounds.top
+        # get tiles
+        self._tiles = _create_tiles_by_width_with_overlap(minx, miny, maxx, maxy, width=width, overlap=overlap)
+        # and return the tiles
+        return self
+
     def dem_to_tiles_by_number_x(self, dem_path: str, along_x: int = 4):
         """
         Given a dem, convert it to tile bounds following the projwin paradigm
@@ -170,16 +225,10 @@ class VrtTiles(object):
         self._tiles = _create_tiles_by_number_y(minx, miny, maxx, maxy, at_most_along_y=along_y)
         # and return the tiles
         return self
-
-    def dem_to_vrt_tiles_by_width(self, dem_path: str, width: int = 4_000):
-        """
-        Given a dem, convert it to tiles as vrt files in the current working directory
-        """
+    
+    def _to_vrt_tiles(self, dem_path: str, tiles: list[Tile]):
         # get the basename
         basename = Path(dem_path).name.split('.')[0]
-        # first get the tiles
-        self.dem_to_tiles_by_width(dem_path, width=width)
-        tiles: list[Tile] = self._tiles
         # open the dem again to get access
         with rio.open(dem_path) as src:
             self._crs = src.crs
@@ -199,7 +248,26 @@ class VrtTiles(object):
                 with rio.vrt.WarpedVRT(src, **vrt_options) as vrt:
                     # save the vrt xml file
                     rio_shutil.copy(vrt, tile_path, driver='VRT')
+
+    def dem_to_vrt_tiles_by_width(self, dem_path: str, width: int = 8_192):
+        """
+        Given a dem, convert it to tiles as vrt files in the current working directory
+        """
+        # first get the tiles
+        self.dem_to_tiles_by_width(dem_path, width=width)
+        tiles: list[Tile] = self._tiles
+        # now convert to vrt tiles
+        self._to_vrt_tiles(dem_path, tiles)
                     
+    def dem_to_vrt_tiles_by_width_with_overlap(self, dem_path: str, width: int = 8_192, overlap: int = 768):
+        """
+        Given a dem, convert it to tiles with specified overlap as vrt files in the current working directory
+        """
+        # first get the tiles
+        self.dem_to_tiles_by_width_with_overlap(dem_path, width=width, overlap=overlap)
+        tiles: list[Tile] = self._tiles
+        # now convert to vrt tiles
+        self._to_vrt_tiles(dem_path, tiles)
 
 
 if __name__ == '__main__':
