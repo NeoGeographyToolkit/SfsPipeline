@@ -71,7 +71,7 @@ fi
 echo "Using MAX_PAIRWISE_MATCHES: $MAX_PAIRWISE_MATCHES"
 # Set Robust Threshold, use "5.0" first then re-run at "2.0" with RESUME_PREFIX set to the BA prefix
 if [[ -z "$ROBUST_THRESHOLD" ]]; then
-    export ROBUST_THRESHOLD=2.0
+    export ROBUST_THRESHOLD=1.0
 fi
 echo "Using ROBUST_TRESHOLD: $ROBUST_THRESHOLD"
 # determine if this is a refinement pass with DEM 
@@ -170,7 +170,7 @@ args=(
       --ip-per-image 20000      
       --num-iterations 500      
       --num-passes 2            
-      --min-matches 10          
+      --min-matches 50          
       --max-pairwise-matches "$MAX_PAIRWISE_MATCHES"
       --camera-weight 0           
       --save-intermediate-cameras 

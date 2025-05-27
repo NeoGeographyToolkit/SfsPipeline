@@ -3,8 +3,9 @@ import shapely
 import affine
 import geopandas as gp
 import rasterio as rio
+from rasterio.windows import Window, get_data_window
 from rasterio import shutil as rio_shutil
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 import numpy as np
 import json
 
@@ -36,8 +37,43 @@ class Tile:
         # todo round to nearest half meter
         return self.maxy-self.miny
     
-    def to_affine(self, res=1.0):
+    def to_affine(self, res=1.0)-> affine.Affine:
         return affine.Affine(res, 0.0, self.minx, 0.0, -res, self.maxy)  
+
+    def to_window(self) -> Window:
+        return Window(self.minx, self.maxy, self.width(), self.height())
+
+    def to_valid_only(self, src_dem: str):
+        # load the src dem for the are under consideration
+        with rio.open(src_dem, 'r') as src:
+            # need to convert from projected crs to pixels
+            window = src.window(*self.as_projwin())
+            # read the data out
+            data = src.read(masked=True, window=window)
+            print('window read shape ', data.shape)
+            # make the valid window
+            _valid_window: Window = get_data_window(data)
+            # update it to have the correct col_off, row_off
+            valid_window = Window(
+                col_off=window.col_off,
+                row_off=window.row_off,
+                width=_valid_window.width,
+                height=_valid_window.height
+                )
+            # transform to projected coordinates
+            minx, miny, maxx, maxy = src.window_bounds(valid_window)
+            # and return
+            return replace(self, 
+                           minx=minx, 
+                           miny=miny, 
+                           maxx=maxx, 
+                           maxy=maxy
+                           )
+
+    def __str__(self):
+        return f"i: {self.i}, j: {self.j}, projwin: {self.as_projwin()}, w: {self.width()}, h: {self.height()}"
+
+
 
 
 def _create_tiles_by_width(xmin, ymin, xmax, ymax, width: int = 8_000):
@@ -234,6 +270,8 @@ class VrtTiles(object):
             self._crs = src.crs
             # begin to iterate through the tiles
             for tile in tiles:
+                # get the updated tile for valid data only
+                tile = tile.to_valid_only(dem_path)
                 # set the path to the tile's vrt
                 tile_path = f'{basename}.tile.{tile.i}.{tile.j}.vrt'
                 # set the options for the vrt
@@ -242,8 +280,11 @@ class VrtTiles(object):
                     transform = tile.to_affine(),
                     width = tile.width(),
                     height = tile.height(),
+                    blockxsize=256,
+                    blockysize=256,
                     resampling = rio.enums.Resampling.cubic,
                 )
+                print(tile.i, tile.j, tile.to_affine(), tile.width(), tile.height())
                 # open the warped vrt
                 with rio.vrt.WarpedVRT(src, **vrt_options) as vrt:
                     # save the vrt xml file
