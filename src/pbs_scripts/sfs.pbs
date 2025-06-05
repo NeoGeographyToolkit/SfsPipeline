@@ -2,8 +2,8 @@
 #PBS -N pbs_sfs
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=24:model=has,walltime=1:00:00        
-#PBS -q debug
+#PBS -l select=8:ncpus=24:model=has,walltime=8:00:00        
+#PBS -q normal
 #PBS -m abe                     
 #PBS -M annex@seti.org
 #PBS -o pbs_sfs.log   
@@ -103,7 +103,7 @@ else
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
     DEFAULT_JOBS=12
-    LOCAL_JOBS=8
+    LOCAL_JOBS=12
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -135,7 +135,7 @@ args=(
       -i "$DEM"
       --run-dir "$WORKDIR"
       --nodes-list "$GNU_PARALLEL_NODEFILE"
-      --processes 10
+      --processes 12
       --threads 4
       --tile-size 256
       --padding 64

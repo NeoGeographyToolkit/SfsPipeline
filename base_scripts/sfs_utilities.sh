@@ -227,3 +227,36 @@ function extract_disparity_bands() {
     done
 
 }
+
+function blur_to_lola() {
+    # blur a sfs dem to match a 5mpp lola dem in terms of quality
+    in_dem="$1"
+    if [[ -z "$2" ]]; then
+        sigma=4
+    else
+        sigma=$2
+    fi
+    out_dem="${in_dem%.tif}.blur.tif"
+    tmp_5dem="_tmp_${in_dem%.tif}_5m.tif"
+    tmp_5dem_blur="_tmp_${in_dem%.tif}_5m_blur.tif"
+    dem_mosaic --tr 5.0 "$in_dem" -o "$tmp_5dem" 
+    dem_mosaic --dem-blur-sigma "$sigma" "$tmp_5dem" -o "$tmp_5dem_blur"
+    gdal_translate -tr 1 1 -r cubic "$tmp_5dem_blur" "$out_dem"
+    rm "$tmp_5dem_blur"
+    rm "$tmp_5dem"
+    echo "$out_dem"
+}
+
+function hillshade_dem() {
+    # function to simplify hillshading to keep the altitude consistent
+    in_dem="$1"
+    out_dem="${in_dem%.tif}.h.tif"
+    gdaldem hillshade -of COG -alt 15 -z 1 "$in_dem" "$out_dem"
+}
+
+function apply_transform() {
+    src="$1"
+    dst="${1%.tif}_align.tif"
+    pc_align --max-displacement -1 --num-iterations 0 --initial-transform "$src" -o transformed/run
+    mv
+}

@@ -29,13 +29,13 @@ class Tile:
     def as_geometry(self)-> shapely.Polygon:
         return shapely.box(*self.as_projwin())
     
-    def width(self):
+    def width(self, res: float = 1.0):
         # todo round to nearest half meter
-        return self.maxx-self.minx
+        return (self.maxx-self.minx)//res
 
-    def height(self):
+    def height(self, res: float = 1.0):
         # todo round to nearest half meter
-        return self.maxy-self.miny
+        return (self.maxy-self.miny)//res
     
     def to_affine(self, res=1.0)-> affine.Affine:
         return affine.Affine(res, 0.0, self.minx, 0.0, -res, self.maxy)  
@@ -240,7 +240,7 @@ class VrtTiles(object):
         maxx = bounds.right
         maxy = bounds.top
         # get tiles
-        self.tiles = _create_tiles_by_number_x(minx, miny, maxx, maxy, at_most_along_x=along_x)
+        self._tiles = _create_tiles_by_number_x(minx, miny, maxx, maxy, at_most_along_x=along_x)
         # and return the tiles
         return self
 
@@ -262,7 +262,7 @@ class VrtTiles(object):
         # and return the tiles
         return self
     
-    def _to_vrt_tiles(self, dem_path: str, tiles: list[Tile]):
+    def _to_vrt_tiles(self, dem_path: str, tiles: list[Tile], res:float =1.0):
         # get the basename
         basename = Path(dem_path).name.split('.')[0]
         # open the dem again to get access
@@ -277,20 +277,20 @@ class VrtTiles(object):
                 # set the options for the vrt
                 vrt_options = dict(
                     crs = self._crs,
-                    transform = tile.to_affine(),
-                    width = tile.width(),
-                    height = tile.height(),
+                    transform = tile.to_affine(res=res),
+                    width = tile.width(res=res),
+                    height = tile.height(res=res),
                     blockxsize=256,
                     blockysize=256,
                     resampling = rio.enums.Resampling.cubic,
                 )
-                print(tile.i, tile.j, tile.to_affine(), tile.width(), tile.height())
+                print(tile.i, tile.j, tile.to_affine(res=res), tile.width(res=res), tile.height(res=res))
                 # open the warped vrt
                 with rio.vrt.WarpedVRT(src, **vrt_options) as vrt:
                     # save the vrt xml file
                     rio_shutil.copy(vrt, tile_path, driver='VRT')
 
-    def dem_to_vrt_tiles_by_width(self, dem_path: str, width: int = 8_192):
+    def dem_to_vrt_tiles_by_width(self, dem_path: str, width: int = 8_192, res: float = 1.0):
         """
         Given a dem, convert it to tiles as vrt files in the current working directory
         """
@@ -298,9 +298,9 @@ class VrtTiles(object):
         self.dem_to_tiles_by_width(dem_path, width=width)
         tiles: list[Tile] = self._tiles
         # now convert to vrt tiles
-        self._to_vrt_tiles(dem_path, tiles)
+        self._to_vrt_tiles(dem_path, tiles, res=res)
                     
-    def dem_to_vrt_tiles_by_width_with_overlap(self, dem_path: str, width: int = 8_192, overlap: int = 768):
+    def dem_to_vrt_tiles_by_width_with_overlap(self, dem_path: str, width: int = 8_192, overlap: int = 768, res: float = 1.0):
         """
         Given a dem, convert it to tiles with specified overlap as vrt files in the current working directory
         """
@@ -308,7 +308,7 @@ class VrtTiles(object):
         self.dem_to_tiles_by_width_with_overlap(dem_path, width=width, overlap=overlap)
         tiles: list[Tile] = self._tiles
         # now convert to vrt tiles
-        self._to_vrt_tiles(dem_path, tiles)
+        self._to_vrt_tiles(dem_path, tiles, res=res)
 
 
 if __name__ == '__main__':
