@@ -1,10 +1,10 @@
 #!/bin/bash
-#PBS -N pbs_img_corr
+#PBS -N pbs_pc_align_hill
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=8:ncpus=20:model=ivy,walltime=08:00:00        
-#PBS -q normal
-#PBS -o pbs_img_corr.log
+#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
+#PBS -q debug
+#PBS -o pbs_pc_align_hill.log
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
@@ -19,15 +19,15 @@ if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
 # define usage
-USAGE="REF=?,SRC=? $0"
-# Ensure a IMAGE_LIST was provided
-if [[ -z "$REF" ]]; then
+USAGE="SRC=? $0"
+# Ensure a REF DEM is set
+if [[ -z "$REF" || ! -e "$REF" ]]; then
     echo "Error: $REF is not set. Use $USAGE"
     exit 1
 fi
 echo "REF file: $REF"
-# OUT_NAME
-if [[ -z "$SRC" ]]; then
+# Ensure a SRC DEM is set
+if [[ -z "$SRC" || ! -e "$SRC" ]]; then
     echo "Error: SRC is not set. Use $USAGE"
     exit 1
 fi
@@ -52,7 +52,7 @@ if [[ -n $SUBMIT ]]; then
     unset DEBUG
     # echo SUBMIT and DEBUG as sanity check
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
-    submit_name="pbs_run_img_corr_${BASE%%.tif}"
+    submit_name="pbs_run_pc_align_${BASE%%.tif}"
     echo "$submit_name"
     if [[ -z $NOSLEEP ]]; then
         # actually sleep if no sleep is not set
@@ -81,31 +81,6 @@ if [[ -n $PBS_O_WORKDIR ]]; then
 fi
 echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
-# get the number of unique nodes 
-if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
-    NUM_NODES=1
-else
-    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
-    NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
-    # create a new nodefile for gnu parallel
-    # Create a temp file
-    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_imgcorr_nodes.XXXXXX")
-    # Ensure cleanup on exit or error
-    trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
-    # write out the number of jobs per node 
-    DEFAULT_JOBS=12
-    LOCAL_JOBS=12
-    LOCAL_HOST=$(hostname -s)
-    # start the output file 
-    # Append the local node with LOCAL_JOBS
-    echo "${LOCAL_JOBS}/${LOCAL_HOST}" > "$GNU_PARALLEL_NODEFILE"
-    # Write all other nodes with DEFAULT_JOBS
-    sort -u "$PBS_NODEFILE" | grep -v "^$LOCAL_HOST\$" | while read NODE; do
-        echo "${DEFAULT_JOBS}/${NODE}" >> "$GNU_PARALLEL_NODEFILE"
-    done
-fi
-echo "running on $NUM_NODES nodes"
-echo
 ##############################################
 # source asp environment
 source init_asp.sh
@@ -115,7 +90,7 @@ echo ISIS root is "$ISISROOT"
 # echo out PATH
 echo PATH is "$PATH"
 # save the path to dem_mosaic
-PAR_STEREO=$(which parallel_stereo)
+PCALIGN=$(which pc_align)
 ##############################################
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"
@@ -123,32 +98,35 @@ JOBS_FOLDER="$WORKDIR/jobs"
 mkdir -p "$LOGS_FOLDER"
 mkdir -p "$JOBS_FOLDER"
 # set log file
-LOG_FILE="$LOGS_FOLDER/pbs_img_corr_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-# set the args for DEM mosaic
-args_parimgcorr=(
-            "$PAR_STEREO" 
-            --nodes-list "$GNU_PARALLEL_NODEFILE" 
-            --threads-singleprocess 4
-            --threads-multiprocess 4
-            --processes 8
-            --correlator-mode
-            --ip-detect-method 1
-            --ip-per-image 40000
-            --num-matches-from-disparity 40000 
-            --stereo-algorithm asp_mgm 
-            --subpixel-mode 9 
-            --max-disp-spread 50   
-            "$REF" 
-            "$SRC" 
-            -o "haps/run-$BASE"
+LOG_FILE="$LOGS_FOLDER/pbs_pc_align_hill_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+
+# set the args for pc_align (back slashes on ipmatch option important for encapsulation)
+#
+args_pc_align=(
+            "$PCALIGN" 
+            --max-displacement -1
+            --max-num-reference-points 1000 
+            --max-num-source-points 1000
+            --initial-transform-from-hillshading rigid
+            --cache-size-mb 4096
+            --hillshade-options \"--cache-size-mb 4096 --azimuth 300 --elevation 20 --align-to-georef\"
+            --ipmatch-options \"--debug-image --inlier-threshold 100 --ransac-iterations 10000 --ransac-constraint similarity\" 
+            --save-transformed-source-points 
+            --num-iterations 0
+            "$REF"
+            "$SRC"
+            -o hill_align/run 
         ) 
-# Combine both into one string
-PROCESS_IMGCORR="${args_parimgcorr[@]}"
+# Combine into one string
+PROCESS_PCALIGN="${args_pc_align[@]}"
 # prepare to run the command or print the debug
+
+# TODO should this script apply the transform to the full resolution source DEM? (should it apply a transform to the sfs dem)
+
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Starting Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
-    # run parallel stereo for image correlation
-    eval "$PROCESS_IMGCORR" >> "$LOG_FILE" 2>&1
+    # run pc_align
+    eval "$PROCESS_PCALIGN" >> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Finished Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
 else

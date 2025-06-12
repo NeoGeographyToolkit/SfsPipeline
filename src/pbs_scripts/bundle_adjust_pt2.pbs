@@ -2,10 +2,9 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=40:model=sky_ele,walltime=48:00:00      
-#PBS -q long
+#PBS -l select=1:ncpus=36:mem=500GB,walltime=24:00:00      
+#PBS -q ldan
 #PBS -m abe                     
-#PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt2.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
@@ -19,6 +18,8 @@
 # Use queue "long" for jobs up to 120 hours
 # Use queue "normal" for jobs up to 8 hours
 # Use queue "low" for jobs up to 4 hours
+# Use queue "ldan" for LDAN jobs
+# Again multiply threads at the end by the number of reserved cores by 2 (or slightly less if you worry about memory usage)
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
@@ -26,19 +27,19 @@ fi
 # define usage once
 USAGE="qsub -v DEM=/path/to/dem.tif,IMAGES=/path/to/list/of/tifs.txt,CAMERAS=/path/to/list/of/jsons.txt,MAPPROJ_DATA=/path/to/mapproj_data.txt,OVERLAP_LIST=/path/to/overlap_list.txt,BA_PREFIX=ba0/run $0"
 # Ensure a DEM was provided
-if [ -z "$DEM" ]; then
+if [[ -z "$DEM" || ! -e "$DEM" ]]; then
     echo "Error: DEM is not set. Use $USAGE"
     exit 1
 fi
 echo "DEM file: $DEM"
 # Ensure a image list is provided
-if [ -z "$IMAGES" ]; then
+if [[ -z "$IMAGES" || ! -e "$IMAGES" ]]; then
     echo "Error: IMAGES is not set. Use $USAGE"
     exit 1
 fi
 echo "Path to images list: $IMAGES"
 # Ensure a camera list is provided
-if [ -z "$CAMERAS" ]; then
+if [[ -z "$CAMERAS" || ! -e "$CAMERAS" ]]; then
     echo "Error: CAMERAS is not set. Use $USAGE"
     exit 1
 fi
@@ -46,13 +47,13 @@ echo "Path to cameras list: $CAMERAS"
 # If we aren't refining a existing bundle adjust using terrain ignore these
 if [[ -z $USE_DEM_HEIGHTS ]]; then
     # Ensure the map projected images + the DEM as the last file are included as a list
-    if [[ -z "$MAPPROJ_DATA" ]]; then
+    if [[ -z "$MAPPROJ_DATA" || ! -e "$MAPPROJ_DATA" ]]; then
         echo "Error: IMAGES is not set. Use $USAGE"
         exit 1
     fi
     echo "Path to mapprojected data list: $MAPPROJ_DATA"
     # get overlap list file
-    if [[ -z "$OVERLAP_LIST" ]]; then
+    if [[ -z "$OVERLAP_LIST" || ! -e "$OVERLAP_LIST" ]]; then
         echo "Error: OVERLAP_LIST is not set. Use $USAGE"
         exit 1
     fi
@@ -163,7 +164,7 @@ args=(
       --camera-list "$CAMERAS"  
       --mapproj-dem "$DEM"     
       --processes 1            
-      --threads 36              
+      --threads 72              
       --nodata-value 0.001      
       --ip-detect-method 1      
       --ip-per-tile  400        
@@ -173,7 +174,6 @@ args=(
       --min-matches 50          
       --max-pairwise-matches "$MAX_PAIRWISE_MATCHES"
       --camera-weight 0           
-      --save-intermediate-cameras 
       --robust-threshold "$ROBUST_THRESHOLD"     
       --tri-weight 0.1            
       --tri-robust-threshold 0.25 
@@ -181,6 +181,10 @@ args=(
       --remove-outliers-params "75.0 3.0 100 100"    
       -o "$BA_PREFIX" 
 )
+
+if [[ -n "$SAVE_INTERMEDIATE_CAMERAS" ]]; then
+    args+=(--save-intermediate-cameras)
+fi
 
 if [[ -n "$MAPPROJ_DATA" ]]; then
     args+=(--mapprojected-data-list "$MAPPROJ_DATA")

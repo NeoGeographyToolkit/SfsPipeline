@@ -254,9 +254,30 @@ function hillshade_dem() {
     gdaldem hillshade -of COG -alt 15 -z 1 "$in_dem" "$out_dem"
 }
 
+function hill_shade_align(){
+    echo "warning! be sure to have blured your sfs dem!"
+    sleep 5
+    ref=$(realpath "$1")
+    src=$(realpath "$2")
+    echo "ref: $ref"
+    echo "src: $src"
+    pc_align --hillshade-options '--cache-size-mb 4096 --azimuth 300 --elevation 20 --align-to-georef' --ipmatch-options '--debug-image --inlier-threshold 100 --ransac-iterations 10000 --ransac-constraint similarity' --cache-size-mb 4096 --max-displacement -1 --max-num-reference-points 1000 --max-num-source-points 1000 --initial-transform-from-hillshading similarity --num-iterations 0 $ref $src -o hill_align/run 
+}
+
 function apply_transform() {
-    src="$1"
-    dst="${1%.tif}_align.tif"
-    pc_align --max-displacement -1 --num-iterations 0 --initial-transform "$src" -o transformed/run
-    mv
+    transform="$1"
+    ref="$2"
+    src="$3"
+    # I think we need to apply the normal "non inverted transform" here and we need to transform the src points
+    pc_align --cache-size-mb 4096 --save-transformed-source-points --max-num-reference-points 1000 --max-num-source-points 1000 --max-displacement -1 --num-iterations 0 --initial-transform "$transform" "$ref" "$src" -o transformed/run
+    echo "done! you'll need to run point2dem on the correct files in ./transformed/run"
+}
+
+function apply_transform_to_ba() {
+    PREFIX="$1"
+    IMGS=$(realpath "$PREFIX-image_list.txt")
+    CAMS=$(realpath "$PREFIX-camera_list.txt")
+    TRFM=$(realpath "$2")
+    OUT_PREFIX="$3"
+    bundle_adjust --image-list $IMGS --camera-list $CAMS --initial-transform $TRFM --apply-initial-transform-only -o "$OUT_PREFIX"
 }

@@ -102,17 +102,21 @@ LOG_FILE="$LOGS_FOLDER/pbs_max_lit_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_lo
 # set the args for DEM mosaic
 args_maxlit=(
             "$DEM_MOSAIC" 
-            --max
+            --max 
             --threads 32
-            -l "$IMAGE_LIST"
-            -o "$OUT_NAME"
         ) 
+# use target projwin if provided
+if [[ -n "$PROJWIN" ]]; then
+    args_maxlit+=(--t_projwin "$PROJWIN")
+fi
+# append the list and out last
+args_maxlit+=(-l "$IMAGE_LIST" -o "$OUT_NAME")
 # set the args for converting to lerc cog
 out_cog="${OUT_NAME%.tif}.lerc.cog.tif"
 args_cog=(
    "$GDAL_TRANSLATE"
-   --config GDAL_NUM_THREADS 20
-   -co NUM_THREADS=20 
+   --config GDAL_NUM_THREADS 38
+   -co NUM_THREADS=38 
    -co COMPRESS=LERC_DEFLATE 
    -co MAX_Z_ERROR="0.00033" 
    -co PREDICTOR=3 
