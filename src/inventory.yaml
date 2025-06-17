@@ -14,7 +14,17 @@
 # as possible about issues encountered caveats, known artifacts in the data,
 # etc.
 
+# The DEM used to start the process. For the Moon, this is typically
+# going to be some form of LOLA that has been modified to be at the
+# ground scale distance of the desired final product.
+base_terrain_path: path/to/lola_improved.tif
+
 final_bundle_adjust_prefix: path/to/ba_dir
+
+# Any stereo models made (individual or merged) that we want to share:
+stereo_dems:
+  - path/to/dem1.tif
+  - path/to/dem2.tif
 
 # Final output terrain model
 sfs_terrain_path: path/to/sfs.tif
@@ -35,16 +45,6 @@ sfs_blend_weight_path: path/to/weight.tif
 sfs_height_error_path: path/to/height_error.tif
 
 max_lit_path: path/to/maxlit.tif
-
-# The DEM used to start the process. For the Moon, this is typically
-# going to be some form of LOLA that has been modified to be at the
-# ground scale distance of the desired final product.
-base_terrain_path: path/to/lola_improved.tif
-
-# Any stereo models made (individual or merged) that we want to share:
-stereo_dems:
-  - path/to/dem1.tif
-  - path/to/dem2.tif
 
 # Path to where the final orthoimages are (with the assumption that 
 # all *.tif files in the directory are the ortho images.)
