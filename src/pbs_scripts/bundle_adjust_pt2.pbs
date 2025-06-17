@@ -211,8 +211,8 @@ fi
 if [[ -n $USE_DEM_HEIGHTS ]]; then
     echo "We will use heights from the dem: ${DEM} as a constraint"
     args+=(--heights-from-dem "$DEM" --heights-from-dem-uncertainty 10.0 --heights-from-dem-robust-threshold 0.1)
-    if [[ -z "$MATCH_FILES_PREFIX" ]]; then
-        echo "ERROR! YOU SHOULD REALLY HAVE 'MATCH_FILES_PREFIX' SET TO PRIOR BA PASS!"
+    if [[ -z "$MATCH_FILES_PREFIX" && -z "$CLEAN_MATCH_FILES_PREFIX" ]]; then
+        echo "ERROR! YOU SHOULD REALLY HAVE 'MATCH_FILES_PREFIX' or 'CLEAN_MATCH_FILES_PREFIX' SET TO PRIOR BA PASS!"
         exit 1
     fi
 fi
@@ -220,6 +220,10 @@ fi
 if [[ -n $MATCH_FILES_PREFIX ]]; then
     echo "We will use match files from a previous bundle adjust ${MATCH_FILES_PREFIX}"
     args+=(--match-files-prefix "$MATCH_FILES_PREFIX")
+fi
+if [[ -n $CLEAN_MATCH_FILES_PREFIX ]]; then
+    echo "We will use clean match files from a previous bundle adjust ${CLEAN_MATCH_FILES_PREFIX}"
+    args+=(--clean-match-files-prefix "$CLEAN_MATCH_FILES_PREFIX")
 fi
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"

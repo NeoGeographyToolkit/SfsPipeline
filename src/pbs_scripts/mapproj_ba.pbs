@@ -22,7 +22,7 @@ fi
 # define usage once
 USAGE="qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files/,BA_PREFIX=ba0/ba0 $0"
 # Ensure a DEM was provided
-if [ -z "$DEM" ]; then
+if [[ -z "$DEM" || ! -e "$DEM" ]]; then
     echo "Error: DEM is not set. Use $USAGE"
     exit 1
 fi
@@ -245,7 +245,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     if [[ $NUM_NODES -gt 1 ]]; then
         parallel_opts+=(
             --controlmaster 
-            --sshdelay 0.1 
+            --sshdelay 0.01 
             --sshloginfile "$GNU_PARALLEL_NODEFILE"
         )
     else

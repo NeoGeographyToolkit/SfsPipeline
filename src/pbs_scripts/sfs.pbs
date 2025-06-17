@@ -66,8 +66,10 @@ if [[ -n $SUBMIT ]]; then
     # submit to qsub # Use -V to pass in all environment variables!
     submit_name="pbs_launch_stereo_${SFS_PREFIX//\//}"
     echo "submitting  $submit_name"
-    # actually sleep
-    sleep 15
+    if [[ -z $NOSLEEP ]]; then
+        # actually sleep if no sleep is not set
+        sleep 15
+    fi
     exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
     # be sure to exit the script at this point
     exit 0

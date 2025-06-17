@@ -281,3 +281,43 @@ function apply_transform_to_ba() {
     OUT_PREFIX="$3"
     bundle_adjust --image-list $IMGS --camera-list $CAMS --initial-transform $TRFM --apply-initial-transform-only -o "$OUT_PREFIX"
 }
+
+function sum_shadow_masks() {
+    # only use shadow masks here, as we don't include the threshold calc here!
+    TEMPLATE="$1"
+    OUT_NAME="$2"
+    FOLDER="$3"
+    POSTFIX="$4"
+    # init the output raster
+    gdal_create -burn 0 -ot UInt16 -if "$TEMPLATE" "$OUT_NAME"
+    # get the file list array
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(find "$(realpath "$FOLDER")" -type f -name "*$POSTFIX" -print0)
+    # peform the sum
+    for file in "${files[@]}"; do
+        echo "$file"
+        rio calc '(read 1) + (read 2)' "$OUT_NAME" "$file" -o "$OUT_NAME" --overwrite
+    done | tqdm --total "${#files[@]}"
+}
+
+function sum_rasters_w_threshold() {
+    TEMPLATE="$1"
+    OUT_NAME="$2"
+    THRESHOLD="$3"
+    FOLDER="$4"
+    POSTFIX="$5"
+    # init the output raster
+    gdal_create -burn 0 -ot UInt16 -if "$TEMPLATE" "$OUT_NAME"
+    # get the file list array
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(find "$(realpath "$FOLDER")" -type f -name "*$POSTFIX" -print0)
+    # peform the sum
+    for file in "${files[@]}"; do
+        echo "$file"
+        rio calc "'(read 1) + ((read 2) > $THRESHOLD)'" "$OUT_NAME" "$file" -o "$OUT_NAME" --overwrite
+    done | tqdm --total "${#files[@]}"
+}

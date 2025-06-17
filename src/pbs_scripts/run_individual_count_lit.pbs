@@ -2,7 +2,7 @@
 #PBS -N pbs_count_lit
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
 #PBS -q normal
 #PBS -o pbs_count_lit.log
 #PBS -r y                       
@@ -103,7 +103,6 @@ LOG_FILE="$LOGS_FOLDER/pbs_count_lit_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_
 args_countlit=(
             "$DEM_MOSAIC" 
             --count
-            --nodata-threshold 0.005
             --ot UInt16
             --threads 38
         ) 
