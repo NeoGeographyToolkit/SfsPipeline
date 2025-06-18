@@ -321,3 +321,46 @@ function sum_rasters_w_threshold() {
         rio calc "'(read 1) + ((read 2) > $THRESHOLD)'" "$OUT_NAME" "$file" -o "$OUT_NAME" --overwrite
     done | tqdm --total "${#files[@]}"
 }
+
+function calc_sfs_mask() {
+    in_max="$1"
+    out_mask="${in_max%.tif}.mask.tif"
+    if [[ -z "$2" ]]; then
+        thresh=0.005
+    else
+        thresh=$2
+    fi
+    image_calc -c "sign(max(var_0, $thresh) - $thresh)" "$in_max" -o "$out_mask"
+}
+
+
+# Usage: match_vrt_extent reference.tif source.tif [output.vrt]
+function match_vrt_extent() {
+    local ref="$1" src="$2" 
+    local out="${src%.*}_matched.vrt"
+    # dump reference metadata once
+    local info xmin ymax xmax ymin xres yres
+
+    info=$(gdalinfo -json "$ref")
+
+    # extract corner coordinates
+    xmin=$(jq '.cornerCoordinates.upperLeft[0]'  <<<"$info")
+    ymax=$(jq '.cornerCoordinates.upperLeft[1]'  <<<"$info")
+    xmax=$(jq '.cornerCoordinates.lowerRight[0]' <<<"$info")
+    ymin=$(jq '.cornerCoordinates.lowerRight[1]' <<<"$info")
+
+    # extract pixel size (geoTransform = [ulx, xres, 0, uly, 0, yres])
+    xres=$(jq '.geoTransform[1]'         <<<"$info")
+    # yres in geoTransform[5] is typically negative; take absolute
+    yres=$(jq '.geoTransform[5] | abs'   <<<"$info")
+
+    # build the aligned VRT
+    gdalbuildvrt \
+      -q \
+      -te "$xmin" "$ymin" "$xmax" "$ymax" \
+      -tr "$xres" "$yres" \
+      -tap -overwrite \
+      "$out" "$src"
+
+    echo "$out"
+}
