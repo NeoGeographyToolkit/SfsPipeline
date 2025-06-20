@@ -49,3 +49,6 @@ max_lit_path: path/to/maxlit.tif
 # Path to where the final orthoimages are (with the assumption that 
 # all *.tif files in the directory are the ortho images.)
 orthophoto_dir: path/to/lroc
+
+# If you use this, provide some comment here about how you used it.
+orthophoto_postfix: optional string
