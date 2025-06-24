@@ -118,7 +118,7 @@ else
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
     DEFAULT_JOBS=2
-    LOCAL_JOBS=1
+    LOCAL_JOBS=2
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS

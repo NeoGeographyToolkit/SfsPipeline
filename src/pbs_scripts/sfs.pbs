@@ -23,19 +23,19 @@ fi
 # define usage once
 USAGE="qsub -V $0"
 # Ensure a DEM was provided
-if [ -z "$DEM" ]; then
+if [[ -z "$DEM" || ! -e "$DEM" ]]; then
     echo "Error: DEM is not set. Use $USAGE"
     exit 1
 fi
 echo "DEM file: $DEM"
 # Ensure a image list is provided
-if [ -z "$IMAGES" ]; then
+if [[ -z "$IMAGES" || ! -e "$IMAGES" ]]; then
     echo "Error: IMAGES is not set. Use $USAGE"
     exit 1
 fi
 echo "Path to images list: $IMAGES"
 # Ensure a camera list is provided
-if [ -z "$CAMERAS" ]; then
+if [[ -z "$CAMERAS" || ! -e "$CAMERAS" ]]; then
     echo "Error: CAMERAS is not set. Use $USAGE"
     exit 1
 fi
@@ -46,6 +46,11 @@ if [ -z "$SFS_PREFIX" ]; then
     exit 1
 fi
 echo "Output Prefix: $SFS_PREFIX"
+IS_HEIGHT=''
+if [[ -n $HEIGHT_ERRORS ]]; then
+    echo "Going to Estimate Height errors, ensure you passed in SFS dem!"
+    IS_HEIGHT='est_dem_err'
+fi
 # Ensure the work dir is set to something
 if [[ -z "$WORKDIR" ]]; then
     # we will default to the current working directory wherever that is
@@ -64,7 +69,7 @@ if [[ -n $SUBMIT ]]; then
     # echo SUBMIT and DEBUG as sanity check
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
     # submit to qsub # Use -V to pass in all environment variables!
-    submit_name="pbs_launch_stereo_${SFS_PREFIX//\//}"
+    submit_name="pbs_launch_sfs_${IS_HEIGHT}_${SFS_PREFIX//\//}"
     echo "submitting  $submit_name"
     if [[ -z $NOSLEEP ]]; then
         # actually sleep if no sleep is not set
@@ -134,6 +139,10 @@ echo PATH is "$PATH"
 # construct args
 # TODO run-dir was critical, defaults to homedir! Tell Oleg!
 args=(
+      --save-sparingly
+      --resume
+      --allow-borderline-data 
+      --crop-input-images
       -i "$DEM"
       --run-dir "$WORKDIR"
       --nodes-list "$GNU_PARALLEL_NODEFILE"
@@ -145,26 +154,35 @@ args=(
       --image-list "$IMAGES"    
       --camera-list "$CAMERAS"
       --shadow-threshold 0.005
-      --allow-borderline-data 
-      --crop-input-images
       --blending-dist 10
       --min-blend-size 48
       --smoothness-weight 0.08
       --initial-dem-constraint-weight 0.001
       --reflectance-type 1
       --max-iterations 5
-      --save-sparingly
-      --resume
-      -o "$SFS_PREFIX"
 )
+if [[ -n $FLOAT_ALBEDO ]]; then
+    echo "We will add the optional --float-albedo option to sfs"
+    args+=(--float-albedo)
+fi
+if [[ -n $CROP_WIN ]]; then
+    echo "We will crop the DEM to $CROP_WIN (xoff yoff width height)"
+    args+=(--crop-win "$CROP_WIN")
+fi
+if [[ -n $HEIGHT_ERRORS ]]; then
+    echo "We will estimate hight errors. Ensure your DEM are the prior SFS products!"
+    args+=(--estimate-height-errors --height-error-params 5.0 100)
+fi
+# add the output parameter last
+args+=(-o "$SFS_PREFIX")
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"
 JOBS_FOLDER="$WORKDIR/jobs"
 mkdir -p "$LOGS_FOLDER"
 mkdir -p "$JOBS_FOLDER"
 # set log file names
-LOG_FILE="$LOGS_FOLDER/pbs_sfs_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SFS_PREFIX//\//}_job.log"
+LOG_FILE="$LOGS_FOLDER/pbs_sfs_${IS_HEIGHT}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$JOBS_FOLDER/pbs_sfs_${IS_HEIGHT}_${SFS_PREFIX//\//}_job.log"
 # for annoying reasons I can't seem to pass this in the array
 parallel_opts=(
     -u 
@@ -185,15 +203,6 @@ else
     parallel_opts+=(
         --jobs "$DEFAULT_JOBS"
     )
-fi
-if [[ -n $FLOAT_ALBEDO ]]; then
-    echo "We will add the optional --float-albedo option to sfs"
-    args+=(--float-albedo)
-fi
-
-if [[ -n $CROP_WIN ]]; then
-    echo "We will crop the DEM to $CROP_WIN (xoff yoff width height)"
-    args+=(--crop-win "$CROP_WIN")
 fi
 echo "Using these opts for parallel: "
 echo "${parallel_opts[@]}"

@@ -2,7 +2,7 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=36:mem=500GB,walltime=24:00:00      
+#PBS -l select=1:ncpus=36:mem=750GB,walltime=24:00:00      
 #PBS -q ldan
 #PBS -m abe                     
 #PBS -o pbs_ba_pt2.log   

@@ -16,7 +16,7 @@ import numpy as np
 from loony.graph_utils import check_connectivity
 
 
-def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, use_match_offsets: bool = False, plot: bool = False, db: str | None = None):
+def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, use_match_offsets: bool = False, plot: bool = False, db: str | None = None, verbose: bool = False):
     # parse in the match pairs file #TODO use https://duckdb.org/docs/stable/sql/query_syntax/prepared_statements.html
     pair_matches = duckdb.sql(f"""
         SELECT 
@@ -28,8 +28,12 @@ def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, u
              names=['left', 'right', 'p25', 'p50', 'p75', 'p85', 'p95', 'num']
         );"""
     )
+    if verbose:
+        print(f'Len {ba_prefix}-mapproj_match_offset_pair_stats.txt: {len(pair_matches)}')
     # get just the pairs with num above 0 for the moment
     vm = pair_matches.filter(f'num >= {min_match_count}').set_alias('vm')
+    if verbose:
+        print(f'Len {ba_prefix}-mapproj_match_offset_pair_stats.txt after filtering: {len(vm)}')
     # parse in both the residuals 
     residuals = duckdb.sql(f"""
         SELECT 
@@ -40,9 +44,13 @@ def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, u
             header=False,
             names=['image', 'mean', 'median', 'count']
         );"""
-    )                                                                                                                                                                                                                                                                                                                                                                          
+    )
+    if verbose:
+        print(f'Len {ba_prefix}-final_residuals_stats.txt: {len(residuals)}')                                                                                                                                                                                                                                                                                                                                                                          
     # get just the images with residuals 
     vr = residuals.filter(f'median < {max_residual_error}').filter(f'count >= {min_match_count}').set_alias('vr')
+    if verbose:
+        print(f'Len {ba_prefix}-final_residuals_stats.txt after filtering: {len(vr)}')         
     # get the matches where both the left and right images are also in the good residuals list
     val_pairs = duckdb.sql("""
         SELECT 
@@ -54,6 +62,8 @@ def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, u
         JOIN 
                            vr as vr2 ON pt.right = vr2.image;
     """).set_alias('val_pairs')
+    if verbose:
+        print(f'Len val_pairs: {len(val_pairs)}') 
     # parse in the match offsets file if requested
     if use_match_offsets:
         match_offsets = duckdb.sql(f"""
@@ -66,8 +76,12 @@ def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, u
                  names=['image', 'p25', 'p50', 'p75', 'p85', 'p95', 'count']
             );"""
         )
+        if verbose:
+            print(f'Len {ba_prefix}-mapproj_match_offset_stats.txt: {len(match_offsets)}') 
         # filter the match offsets to only include those images who's p85 is less than max_residual_error
         vo = match_offsets.filter(f'count >= {min_match_count}').filter(f'p85 <= {max_residual_error}').set_alias('vo')
+        if verbose:
+            print(f'Len {ba_prefix}-mapproj_match_offset_stats.txt after filtering: count >= {min_match_count} & p85 <= {max_residual_error}: {len(vo)}') 
         # update val_pairs to only include pairs where both images are also in v0
         val_pairs = duckdb.sql(f"""
             SELECT
@@ -79,8 +93,12 @@ def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, u
             JOIN
                                vo as vo2 ON vp.RIGHT = vo2.image;                       
         """).set_alias('val_pairs')
+        if verbose:
+            print(f'Updated len val_pairs: {len(val_pairs)}') 
     # get the data into numpy
-    df = duckdb.sql('SELECT * FROM val_pairs;').fetchnumpy()
+    df = duckdb.sql('SELECT * FROM val_pairs;').fetchnumpy()    
+    if verbose:
+        print(f'Final # Pairs: {len(df['left'])}')
     # compute the graph and determine the checks
     res = check_connectivity(np.vstack((df['left'],df['right'])).T)
     # add query params
