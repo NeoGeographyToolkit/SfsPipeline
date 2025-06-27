@@ -40,6 +40,13 @@ sfs_terrain_log: path/to/sfs.log
 
 sfs_blend_terrain_path: path/to/sfs_blend.tif
 
+sfs_blend_terrain_log: path/to/sfs.log
+# or sfs_blend_terrain_log: >-
+#  This is where the description of the command line used 
+#  to produce the terrain model can be provided, but the path
+#  to a log file is preferred which will also contain this 
+#  information.
+
 sfs_blend_weight_path: path/to/weight.tif
 
 sfs_height_error_path: path/to/height_error.tif
