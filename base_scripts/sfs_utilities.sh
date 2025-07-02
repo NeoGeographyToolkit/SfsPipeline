@@ -251,7 +251,7 @@ function hillshade_dem() {
     # function to simplify hillshading to keep the altitude consistent
     in_dem="$1"
     out_dem="${in_dem%.tif}.h.tif"
-    gdaldem hillshade -of COG -alt 15 -z 1 "$in_dem" "$out_dem"
+    gdaldem hillshade --config GDAL_NUM_THREADS 16 -of COG -co NUM_THREADS=16 -co COMPRESS=ZSTD -co PREDICTOR=2 -alt 15 -z 1 "$in_dem" "$out_dem"
 }
 
 function hill_shade_align(){
@@ -359,8 +359,58 @@ function match_vrt_extent() {
       -q \
       -te "$xmin" "$ymin" "$xmax" "$ymax" \
       -tr "$xres" "$yres" \
-      -tap -overwrite \
+      -overwrite \
       "$out" "$src"
 
     echo "$out"
 }
+
+function serve_cogs() {
+    rclone_path='/vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/rclone'
+    "$rclone_path" serve http /nobackupp27/aannex/DATA --addr ":8080" --read-only --copy-links --no-modtime --disable-http-keep-alives --buffer-size 32Mi --transfers 16 --vfs-cache-mode off --include "*.tif" --include "*.json" --stats 120s --log-level INFO &
+}
+
+
+function sfs_gdal_bounds_geojson() {
+    local first=true
+
+    # start the GeoJSON FeatureCollection
+    printf '%s\n' '{ "type": "FeatureCollection", "features": ['
+
+    # loop over any tif/tiff in immediate subdirs
+    for file in */*DEM-final.tif; do
+        # skip if no match
+        [ -e "$file" ] || continue
+
+        # comma-separate features
+        if $first; then
+            first=false
+        else
+            printf ',\n'
+        fi
+
+        # pull corner coords & emit a Polygon feature
+        gdalinfo -json "$file" | jq --arg path "$file" '
+        {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              .cornerCoordinates.upperLeft,
+              .cornerCoordinates.upperRight,
+              .cornerCoordinates.lowerRight,
+              .cornerCoordinates.lowerLeft,
+              .cornerCoordinates.upperLeft
+            ]]
+          },
+          properties: {
+            path: $path
+          }
+        }
+        '
+    done
+
+    # close out the FeatureCollection
+    printf '\n]}\n'
+}
+

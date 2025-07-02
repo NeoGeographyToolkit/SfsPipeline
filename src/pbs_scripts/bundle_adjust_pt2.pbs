@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=36:mem=750GB,walltime=24:00:00      
-#PBS -q ldan
+#PBS -l select=1:ncpus=128:model=rom_ait,walltime=8:00:00        
+#PBS -q normal
 #PBS -m abe                     
 #PBS -o pbs_ba_pt2.log   
 #PBS -r y                       
@@ -11,10 +11,12 @@
 #PBS -V                         
 #PBS -W group_list=e2305     
 # TODO run this on the AMD nodes?
+# for ldan select=1:ncpus=36:mem=750GB,walltime=12:00:00  , -q ldan  
 # TODO LDAN bigmem nodes https://www.nas.nasa.gov/hecc/support/kb/how-to-get-more-memory-for-your-pbs-job_222.html
 # LDAN detail https://www.nas.nasa.gov/hecc/support/kb/lou-data-analysis-nodes_413.html
 # TODO use $TMPDIR and mv to lfs after finishing https://www.nas.nasa.gov/hecc/support/kb/memory-usage-overview_216.html
 # Enable stepwise debugging if DEBUG is set to "true"
+# FOR AMD aitken submit job on PFE and use ncpus=128:model=rom_ait, they have 512gb of ram
 # Use queue "long" for jobs up to 120 hours
 # Use queue "normal" for jobs up to 8 hours
 # Use queue "low" for jobs up to 4 hours
@@ -156,7 +158,7 @@ echo PATH is "$PATH"
 # think --match-files-prefix would also be ba0/ba0, although if I enter only at optimization I don't think I need this as it implies skip matching
 # well, actually I may want to expose it if for example I want to refine a bundle adjustment
 # later I can consider --fixed-image-list so I can "lock in" images that have low residuals
-
+# convertide raising the nodata value to 0.005 or 0.002 to avoid fewer dim pixels contributing to bundle adjust
 # construct args
 args=(
       --entry-point 2           
@@ -164,7 +166,7 @@ args=(
       --camera-list "$CAMERAS"  
       --mapproj-dem "$DEM"     
       --processes 1            
-      --threads 72              
+      --threads 256             
       --nodata-value 0.001      
       --ip-detect-method 1      
       --ip-per-tile  400        
@@ -218,7 +220,7 @@ if [[ -n $USE_DEM_HEIGHTS ]]; then
 fi
 
 if [[ -n $MATCH_FILES_PREFIX ]]; then
-    echo "We will use match files from a previous bundle adjust ${MATCH_FILES_PREFIX}"
+    echo "We will use match files from a previous bundle adjust ${MATCH_FILES_PREFIX}" 
     args+=(--match-files-prefix "$MATCH_FILES_PREFIX")
 fi
 if [[ -n $CLEAN_MATCH_FILES_PREFIX ]]; then
@@ -233,26 +235,34 @@ mkdir -p "$JOBS_FOLDER"
 # set log file names
 LOG_FILE="$LOGS_FOLDER/pbs_ba_${KIND}_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 JOB_FILE="$JOBS_FOLDER/pbs_ba_${KIND}_${BA_PREFIX%/*}_job.log"
+echo "running bundle adjust pbs script.." | tee -a "$LOG_FILE"
+echo "Parallel has started at $(date)" | tee -a "$LOG_FILE"
+echo ISIS data is "$ISISDATA"  | tee -a "$LOG_FILE"
+echo ISIS root is "$ISISROOT"  | tee -a "$LOG_FILE"
+# echo out PATH
+echo PATH is "$PATH"  | tee -a "$LOG_FILE"
+ls ~/ -lahtr | tee -a "$LOG_FILE"
+ls / -lahtr | tee -a "$LOG_FILE"
+# ensure parallel_bundle_adjust is found
+command -v "parallel_bundle_adjust" >/dev/null 2>&1 || { echo "$(date +'%Y-%m-%d %H:%M:%S') ERROR: 'parallel_bundle_adjust' not found in PATH"; IFS=:; for d in $PATH; do [ -d "$d" ] || echo "  PATH entry '$d' does not exist"; done; } | tee -a "$LOG_FILE"
 # start call
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
-    echo "Args: "
-    echo "${args[@]}"
-    echo "Parallel options: "
-    echo "$parallel_opts"
-    echo "Log File: "
-    echo "$LOG_FILE"
-    echo "Job File: "
-    echo "$JOB_FILE"
-    echo "Parallel has started at $(date)"
-    parallel_bundle_adjust "${args[@]}" | grep -E -v ".ech.adjust|.match" &>> "$LOG_FILE"
+    echo "Args: " | tee -a "$LOG_FILE"
+    echo "${args[@]}" | tee -a "$LOG_FILE"
+    echo "Log File: " | tee -a "$LOG_FILE"
+    echo "$LOG_FILE"  | tee -a "$LOG_FILE"
+    echo "Job File: " | tee -a "$LOG_FILE"
+    echo "$JOB_FILE"  | tee -a "$LOG_FILE"
+    #parallel_bundle_adjust "${args[@]}" | grep -E -v ".ech.adjust|.match" &>> "$LOG_FILE"
+    parallel_bundle_adjust "${args[@]}" 2>&1 | grep -E -v '\.ech\.adjust|\.match|\Reducing' | tee -a "$LOG_FILE"
     # The jobs have actually completed 
-    echo "Parallel has finished with all jobs at $(date)"
+    echo "Parallel has finished with all jobs at $(date)" | tee -a "$LOG_FILE"
     # move the joblog file to preserve its state and to avoid re-running it
     mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
 else
     # I am debugging of a pfe or something
-    echo "would have run: "
-    echo "parallel_bundle_adjust" "${args[@]}"
+    echo "would have run: " | tee -a "$LOG_FILE"
+    echo "parallel_bundle_adjust" "${args[@]}" | tee -a "$LOG_FILE"
 fi
 # we are now done!
-echo "Job finished at $(date)"
+echo "Job finished at $(date)" | tee -a "$LOG_FILE"

@@ -27,5 +27,5 @@ export GDAL_PAM_ENABLED=NO
 # set the LERC precision level to 0.001, 0.0001 is almost indistinguishable from raw but going above 0.001 started to introduce minor issues up to 0.002 so thinking 0.001 is pretty good with a bonus compression over 0.0001
 PREC=0.001
 # convert to lerc
-gdal_translate --config GDAL_NUM_THREADS 4 -co NUM_THREADS=4 -co COMPRESS=LERC_DEFLATE -co MAX_Z_ERROR="$PREC" -co PREDICTOR=3 -ot Float32 -of COG "$in_name" "$out_cog"
+gdal_translate --config GDAL_NUM_THREADS 8 -co NUM_THREADS=8 -co COMPRESS=LERC_DEFLATE -co MAX_Z_ERROR="$PREC" -co PREDICTOR=3 -ot Float32 -of COG "$in_name" "$out_cog"
 echo "Finished $in_name made $out_cog"

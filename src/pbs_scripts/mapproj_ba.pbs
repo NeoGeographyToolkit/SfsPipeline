@@ -14,6 +14,7 @@
 # Use queue "long" for jobs up to 120 hours
 # Use queue "normal" for jobs up to 8 hours
 # Use queue "low" for jobs up to 4 hours
+# if switching to rome_ait nodes, try to run 16 jobs at a time each with 4 processes and 4 threads per for 256 threads 
 
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
@@ -107,18 +108,19 @@ echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
 # get the number of unique nodes 
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
+    DEFAULT_JOBS=10
     NUM_NODES=1
 else
     echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
     # create a new nodefile for gnu parallel
     # Create a temp file
-    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_ba_pt1_nodes.XXXXXX")
+    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_mapproj_ba_nodes.XXXXXX")
     # Ensure cleanup on exit or error
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
-    DEFAULT_JOBS=2
-    LOCAL_JOBS=2
+    DEFAULT_JOBS=3
+    LOCAL_JOBS=3
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -267,5 +269,6 @@ else
     # have been given the parallel
     cat "$TMPFILE"
 fi
+rm -f "$GNU_PARALLEL_NODEFILE"
 # we are now done!
 echo "Job finished at $(date)"

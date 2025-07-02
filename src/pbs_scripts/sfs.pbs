@@ -1,25 +1,32 @@
 #!/bin/bash
-#PBS -N pbs_sfs
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=8:ncpus=24:model=has,walltime=8:00:00        
-#PBS -q normal
 #PBS -m abe                     
 #PBS -M annex@seti.org
-#PBS -o pbs_sfs.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
 #PBS -W group_list=e2305     
-# TODO run this on the AMD nodes?
 # Enable stepwise debugging if DEBUG is set to "true"
-# Use queue "long" for jobs up to 120 hours
-# Use queue "normal" for jobs up to 8 hours
-# Use queue "low" for jobs up to 4 hours
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
-
+if [[ -z "$DEFAULT_JOBS" ]]; then
+    DEFAULT_JOBS=12
+fi
+if [[ -z "$LOCAL_JOBS" ]]; then
+    LOCAL_JOBS=12
+fi
+if [[ -z "$ASP_PROCESSES" ]]; then
+    ASP_PROCESSES=9
+fi
+if [[ -z "$ASP_THREADS" ]]; then
+    ASP_THREADS=6
+fi
+# define the run type
+if [[ -z "$RUN_MODE" ]]; then
+    RUN_MODE='standard'
+fi
 # define usage once
 USAGE="qsub -V $0"
 # Ensure a DEM was provided
@@ -46,10 +53,16 @@ if [ -z "$SFS_PREFIX" ]; then
     exit 1
 fi
 echo "Output Prefix: $SFS_PREFIX"
-IS_HEIGHT=''
+SPECIAL_RUN=''
 if [[ -n $HEIGHT_ERRORS ]]; then
     echo "Going to Estimate Height errors, ensure you passed in SFS dem!"
-    IS_HEIGHT='est_dem_err'
+    SPECIAL_RUN='est_dem_err'
+    RUN_MODE='errors'
+fi
+if [[ -n $EXPOSURES_ONLY ]]; then
+    echo "Going to Compute Exposures Only!"
+    SPECIAL_RUN="exposures_only"
+    RUN_MODE='exposures'
 fi
 # Ensure the work dir is set to something
 if [[ -z "$WORKDIR" ]]; then
@@ -60,6 +73,58 @@ echo "Workdir: $WORKDIR"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
+    ##############################################
+    # determine the resources to use for sfs
+    # TODO what about local_jobs vs asp_processes? I think it could be that ASP passes --processes to --jobs in gnu parallel 
+    case "${RUN_MODE:-standard}" in      
+        standard)
+          SELECT=8
+          NCPUS=24
+          MODEL="has"
+          WALLTIME="8:00:00"
+          QUEUE="normal"
+          DEFAULT_JOBS=12
+          LOCAL_JOBS=12
+          ASP_PROCESSES=12
+          ASP_THREADS=6
+          ;;
+        amdstandard)
+          SELECT=1 
+          NCPUS=128
+          MODEL="rom_ait"
+          WALLTIME="8:00:00"
+          QUEUE="normal"
+          LOCAL_JOBS=44
+          ASP_PROCESSES=44
+          ASP_THREADS=6
+          ;;
+        errors)
+          SELECT=8
+          NCPUS=24
+          MODEL="has"
+          WALLTIME="3:00:00"
+          QUEUE="normal"
+          DEFAULT_JOBS=12
+          LOCAL_JOBS=12
+          ASP_PROCESSES=12
+          ASP_THREADS=6
+          ;;
+        exposures)
+          SELECT=1 
+          NCPUS=24
+          MODEL="has"
+          WALLTIME="2:00:00"
+          QUEUE="normal"
+          LOCAL_JOBS=12
+          ASP_PROCESSES=12
+          ASP_THREADS=6
+          ;;
+        *)
+          echo "⚠️ Unknown RUN_MODE='${RUN_MODE}', exiting" >&2
+          exit 1
+          ;;
+    esac
+    ##############################################
     # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
     echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
     # unset SUBMIT so that this isn't recursive
@@ -69,13 +134,23 @@ if [[ -n $SUBMIT ]]; then
     # echo SUBMIT and DEBUG as sanity check
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
     # submit to qsub # Use -V to pass in all environment variables!
-    submit_name="pbs_launch_sfs_${IS_HEIGHT}_${SFS_PREFIX//\//}"
-    echo "submitting  $submit_name"
+    submit_name="pbs_launch_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}"
+    echo "submitting $submit_name"
     if [[ -z $NOSLEEP ]]; then
         # actually sleep if no sleep is not set
         sleep 15
     fi
-    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
+    # Build the qsub options in one variable
+    QSUB_OPTS=(
+      -N "$submit_name" 
+      -o "$WORKDIR/$submit_name.log"
+      -l "select=$SELECT:ncpus=$NCPUS:model=$MODEL"
+      -l "walltime=$WALLTIME"
+      -q "$QUEUE"
+      -V
+    )
+    # excute qsub TODO should I have the trailing $@?
+    exec qsub "${QSUB_OPTS[@]}" "$0" "$@"
     # be sure to exit the script at this point
     exit 0
 fi
@@ -109,8 +184,6 @@ else
     # Ensure cleanup on exit or error
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
-    DEFAULT_JOBS=12
-    LOCAL_JOBS=12
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -146,8 +219,8 @@ args=(
       -i "$DEM"
       --run-dir "$WORKDIR"
       --nodes-list "$GNU_PARALLEL_NODEFILE"
-      --processes 12
-      --threads 4
+      --processes "$ASP_PROCESSES"
+      --threads "$ASP_THREADS"
       --tile-size 256
       --padding 64
       --cache-size-mb 2048        
@@ -161,6 +234,10 @@ args=(
       --reflectance-type 1
       --max-iterations 5
 )
+if [[ -n $EXPOSURES_ONLY ]]; then
+    echo "We will only compute the exposures, do this to compute skipped/used images lists if missing"
+    args+=(--compute-exposures-only)
+fi
 if [[ -n $FLOAT_ALBEDO ]]; then
     echo "We will add the optional --float-albedo option to sfs"
     args+=(--float-albedo)
@@ -181,8 +258,8 @@ JOBS_FOLDER="$WORKDIR/jobs"
 mkdir -p "$LOGS_FOLDER"
 mkdir -p "$JOBS_FOLDER"
 # set log file names
-LOG_FILE="$LOGS_FOLDER/pbs_sfs_${IS_HEIGHT}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-JOB_FILE="$JOBS_FOLDER/pbs_sfs_${IS_HEIGHT}_${SFS_PREFIX//\//}_job.log"
+LOG_FILE="$LOGS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_job.log"
 # for annoying reasons I can't seem to pass this in the array
 parallel_opts=(
     -u 
@@ -201,14 +278,13 @@ if [[ $NUM_NODES -gt 1 ]]; then
     )
 else
     parallel_opts+=(
-        --jobs "$DEFAULT_JOBS"
+        --jobs "$LOCAL_JOBS"
     )
 fi
 echo "Using these opts for parallel: "
 echo "${parallel_opts[@]}"
 if [[ -z "$DEBUG" && -n "$PBS_JOBID" ]]; then 
     $ASPROOT/bin/parallel_sfs "${args[@]}" --parallel-options '${parallel_opts[@]}' >> "$LOG_FILE" 2>&1
-    #$ASPROOT/bin/parallel_sfs "${args[@]}" --parallel-options "-u --keep-order --joblog '$JOB_FILE' --workdir '$WORKDIR' --controlmaster --sshdelay 0.1" #>> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it

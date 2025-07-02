@@ -2,7 +2,7 @@
 #PBS -N pbs_shadow_mask       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=6:ncpus=20:model=ivy,walltime=02:00:00        
+#PBS -l select=6:ncpus=20:model=ivy,walltime=03:00:00        
 #PBS -q normal                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -81,8 +81,8 @@ else
     # Ensure cleanup on exit or error
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
-    DEFAULT_JOBS=20
-    LOCAL_JOBS=20
+    DEFAULT_JOBS=16
+    LOCAL_JOBS=16
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -165,4 +165,5 @@ else
     # have been given the parallel
     cat "$TMPFILE"
 fi
+rm -f "$GNU_PARALLEL_NODEFILE"
 echo "Job finished at $(date)"
