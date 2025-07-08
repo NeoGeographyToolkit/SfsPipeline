@@ -83,9 +83,9 @@ if [[ -n $SUBMIT ]]; then
           MODEL="has"
           WALLTIME="8:00:00"
           QUEUE="normal"
-          DEFAULT_JOBS=12
-          LOCAL_JOBS=12
-          ASP_PROCESSES=12
+          DEFAULT_JOBS=8
+          LOCAL_JOBS=8
+          ASP_PROCESSES=8
           ASP_THREADS=6
           ;;
         amdstandard)
@@ -100,13 +100,13 @@ if [[ -n $SUBMIT ]]; then
           ;;
         errors)
           SELECT=8
-          NCPUS=24
-          MODEL="has"
-          WALLTIME="3:00:00"
+          NCPUS=20
+          MODEL="ivy"
+          WALLTIME="4:00:00"
           QUEUE="normal"
-          DEFAULT_JOBS=12
-          LOCAL_JOBS=12
-          ASP_PROCESSES=12
+          DEFAULT_JOBS=10
+          LOCAL_JOBS=10
+          ASP_PROCESSES=10
           ASP_THREADS=6
           ;;
         exposures)
@@ -115,8 +115,8 @@ if [[ -n $SUBMIT ]]; then
           MODEL="has"
           WALLTIME="2:00:00"
           QUEUE="normal"
-          LOCAL_JOBS=12
-          ASP_PROCESSES=12
+          LOCAL_JOBS=9
+          ASP_PROCESSES=9
           ASP_THREADS=6
           ;;
         *)
@@ -219,7 +219,7 @@ args=(
       -i "$DEM"
       --run-dir "$WORKDIR"
       --nodes-list "$GNU_PARALLEL_NODEFILE"
-      --processes "$ASP_PROCESSES"
+      --processes "$DEFAULT_JOBS"
       --threads "$ASP_THREADS"
       --tile-size 256
       --padding 64
@@ -259,7 +259,7 @@ mkdir -p "$LOGS_FOLDER"
 mkdir -p "$JOBS_FOLDER"
 # set log file names
 LOG_FILE="$LOGS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_job.log"
+JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_job.log"
 # for annoying reasons I can't seem to pass this in the array
 parallel_opts=(
     -u 

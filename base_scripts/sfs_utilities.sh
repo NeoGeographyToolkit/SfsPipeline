@@ -414,3 +414,18 @@ function sfs_gdal_bounds_geojson() {
     printf '\n]}\n'
 }
 
+
+run_and_check_stderr() {
+    local tmp=$(mktemp)
+    "$@" 2> "$tmp"
+    local rc=$?
+    if [[ -s "$tmp" || $rc -ne 0 ]]; then
+        echo "Error running $*"
+        cat "$tmp"
+        rm "$tmp"
+        return 1
+    fi
+    rm "$tmp"
+    return 0
+}
+

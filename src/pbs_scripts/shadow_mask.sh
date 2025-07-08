@@ -50,6 +50,44 @@ if [[ -f $out_mask_geojson ]]; then
     rm $out_mask_geojson
 fi
 # now only the good illuminated pixels are not nodata, can't get stats per say but can get geometry
-gdal_footprint -q -overwrite -write_absolute_path -max_points 5000 -simplify 10 $tmp_mask -of GeoJSON $out_mask_geojson
+# now this program can run into issues if it runs into a topology issue, so let's do a gracefull re-attempt if that occurs
+try_run() {
+    local tmp_err=$(mktemp)
+    "$@" 2> "$tmp_err"
+    local rc=$?
+    if [[ -s "$tmp_err" || $rc -ne 0 ]]; then
+        echo "Attempt failed: $*" >&2
+        cat "$tmp_err" >&2
+        rm "$tmp_err"
+        rm "$out_mask_geojson"
+        return 1
+    fi
+    rm "$tmp_err"
+    return 0
+}
+
+#gdal_footprint -q -overwrite -write_absolute_path -max_points 5000 -simplify 10 $tmp_mask -of GeoJSON $out_mask_geojson
+if try_run gdal_footprint -q -overwrite -write_absolute_path -max_points 5000 -simplify 10 $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 1"
+elif try_run gdal_footprint -q -overwrite -write_absolute_path -max_points 4000 $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 2"
+elif try_run gdal_footprint -q -overwrite -write_absolute_path -max_points 3000 $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 3"
+elif try_run gdal_footprint -q -overwrite -write_absolute_path -max_points 2500 $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 4"
+elif try_run gdal_footprint -q -overwrite -write_absolute_path -max_points 2000 $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 5"
+elif try_run gdal_footprint -q -overwrite -write_absolute_path -max_points 1000 $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 6"
+elif try_run gdal_footprint -q -overwrite -write_absolute_path -max_points 500 $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 7"
+elif try_run gdal_footprint -q -overwrite -write_absolute_path $tmp_mask -of GeoJSON $out_mask_geojson; then
+    echo "Success making a footprint for $tmp_mask using variant 8"
+else
+    echo "All attempts at computing the footprint for $tmp_mask failed" >&2
+    exit 1
+fi
+
 # now we are done 
 echo "Finished $in_img"
+exit 0
