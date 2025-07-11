@@ -1,0 +1,246 @@
+#!/bin/bash
+#PBS -j oe                      
+#PBS -k oe                      
+#PBS -m abe                     
+#PBS -M annex@seti.org
+#PBS -r y                       
+#PBS -S /bin/bash               
+#PBS -V                         
+#PBS -W group_list=e2305     
+# Enable stepwise debugging if DEBUG is set to "true"
+if [[ "$DEBUG" == "true" ]]; then
+    trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
+fi
+if [[ -z "$DEFAULT_JOBS" ]]; then
+    DEFAULT_JOBS=12
+fi
+if [[ -z "$LOCAL_JOBS" ]]; then
+    LOCAL_JOBS=12
+fi
+if [[ -z "$ASP_PROCESSES" ]]; then
+    ASP_PROCESSES=9
+fi
+if [[ -z "$ASP_THREADS" ]]; then
+    ASP_THREADS=6
+fi
+# define the run type
+if [[ -z "$RUN_MODE" ]]; then
+    RUN_MODE='standard'
+fi
+# define usage once
+USAGE="qsub -V $0"
+# Ensure a image list is provided
+if [[ -z "$IMAGES" || ! -e "$IMAGES" ]]; then
+    echo "Error: IMAGES is not set. Use $USAGE"
+    exit 1
+fi
+echo "Path to images list: $IMAGES"
+# Ensure a camera list is provided
+if [[ -z "$CAMERAS" || ! -e "$CAMERAS" ]]; then
+    echo "Error: CAMERAS is not set. Use $USAGE"
+    exit 1
+fi
+echo "Path to cameras list: $CAMERAS"
+# Ensure a output prefix is provided
+if [ -z "$SFS_PREFIX" ]; then
+    echo "Error: SFS_PREFIX is not set. Use $USAGE"
+    exit 1
+fi
+echo "Output Prefix: $SFS_PREFIX"
+SPECIAL_RUN='exposures'
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
+##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    ##############################################
+    # determine the resources to use for sfs
+    # TODO what about local_jobs vs asp_processes? I think it could be that ASP passes --processes to --jobs in gnu parallel 
+    case "${RUN_MODE:-standard}" in      
+        standard)
+          SELECT=2
+          NCPUS=24
+          MODEL="has"
+          WALLTIME="1:00:00"
+          QUEUE="normal"
+          DEFAULT_JOBS=8
+          LOCAL_JOBS=8
+          ASP_PROCESSES=8
+          ASP_THREADS=8
+          ;;
+        *)
+          echo "⚠️ Unknown RUN_MODE='${RUN_MODE}', exiting" >&2
+          exit 1
+          ;;
+    esac
+    ##############################################
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # submit to qsub # Use -V to pass in all environment variables!
+    submit_name="pbs_launch_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}"
+    echo "submitting $submit_name"
+    if [[ -z $NOSLEEP ]]; then
+        # actually sleep if no sleep is not set
+        sleep 15
+    fi
+    # Build the qsub options in one variable
+    QSUB_OPTS=(
+      -N "$submit_name" 
+      -o "$WORKDIR/$submit_name.log"
+      -l "select=$SELECT:ncpus=$NCPUS:model=$MODEL"
+      -l "walltime=$WALLTIME"
+      -q "$QUEUE"
+      -V
+    )
+    # excute qsub TODO should I have the trailing $@?
+    exec qsub "${QSUB_OPTS[@]}" "$0" "$@"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
+# Change to the working directory
+echo Working directory is "$PBS_O_WORKDIR"
+if [[ -n $PBS_O_WORKDIR ]]; then
+    cd "$PBS_O_WORKDIR" || exit
+fi
+echo "machine is $(uname -a)"
+echo "machine file is $PBS_NODEFILE"
+# get the number of unique nodes 
+if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
+    NUM_NODES=1
+else
+    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
+    NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+    # create a new nodefile for gnu parallel
+    # Create a temp file
+    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_sfs_exposures_nodes.XXXXXX")
+    # Ensure cleanup on exit or error
+    trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
+    # write out the number of jobs per node 
+    LOCAL_HOST=$(hostname -s)
+    # start the output file 
+    # Append the local node with LOCAL_JOBS
+    echo "${LOCAL_JOBS}/${LOCAL_HOST}" > "$GNU_PARALLEL_NODEFILE"
+    # Write all other nodes with DEFAULT_JOBS
+    sort -u "$PBS_NODEFILE" | grep -v "^$LOCAL_HOST\$" | while read NODE; do
+        echo "${DEFAULT_JOBS}/${NODE}" >> "$GNU_PARALLEL_NODEFILE"
+    done
+fi
+echo "running on $NUM_NODES nodes"
+echo
+##############################################
+# source asp environment
+source init_asp.sh
+# echo out ISISDATA and ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
+# echo out PATH
+echo PATH is "$PATH"
+##############################################
+#https://stereopipeline.readthedocs.io/en/latest/tools/parallel_sfs.html#parallel-sfs
+# https://stereopipeline.readthedocs.io/en/latest/tools/sfs.html
+# todo add --custom-shadow-threshold-list
+# todo enable a --compute-exposures-only run and re-use with --image-exposures-prefix (not compatible with --resume option)
+# todo add crater bottom curvature https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-crater-bottoms
+# construct args
+# TODO run-dir was critical, defaults to homedir! Tell Oleg!
+
+TMPFILE=$(mktemp "$WORKDIR/sfs_exposures_${TILE}_cmds.XXXXXX")
+# Ensure cleanup on exit or error
+#trap 'rm -f "$TMPFILE"' EXIT
+
+# so sfs prefix would be sfs_ba1/ULMM_1m_lola_tile_0_0/ULMM_1m_lola_tile_0_0 as done for sfs
+# but we need the first part below to resolve to sfs_ba1/ULMM_1m_lola_tile_0_0
+# and the next to ULMM_1m_lola_tile_0_0
+
+TILE_FOLDER="${SFS_PREFIX%/*}"
+TILE="${SFS_PREFIX##*/}" # should get us to just the tile name
+
+for file in $(find "$TILE_FOLDER/" -mindepth 2 -type f -name "$TILE-DEM-final.tif" | sort); do
+    echo "$file"
+    local dem=$(realpath $file)
+    local outprefix="${file%%-DEM-final.tif}"
+    echo /vast_swbuild/swbuild3/aannex/tools/StereoPipeline-3.6.0-alpha-2025-07-02-x86_64-Linux/libexec/sfs \
+        -i "$dem"\
+        -o "$outprefix"\
+        --image-exposures-prefix "$outprefix" \
+        --image-list "$imlist" \
+        --camera-list "$cmlist" \
+        --compute-exposures-only \
+        --threads "$ASP_THREADS" \
+        --save-sparingly \
+        --allow-borderline-data \
+        --crop-input-images \
+        --cache-size-mb 2048 \
+        --shadow-threshold 0.005 \
+        --blending-dist 10 \
+        --reflectance-type 1 \
+        --min-blend-size 48 >> "$TMPFILE"
+done
+# sort the TMPFILE to ensure repeatability
+sort -o "$TMPFILE"{,}
+# create output folders as needed
+LOGS_FOLDER="$WORKDIR/logs"
+JOBS_FOLDER="$WORKDIR/jobs"
+mkdir -p "$LOGS_FOLDER"
+mkdir -p "$JOBS_FOLDER"
+# set log file names
+LOG_FILE="$LOGS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_job.log"
+# for annoying reasons I can't seem to pass this in the array
+parallel_opts=(
+    -u 
+    -a "$TMPFILE"
+    --workdir "$WORKDIR"
+    --memfree 10G
+    --retries 10
+    --resume-failed 
+    --keep-order
+    --joblog "$JOB_FILE"
+)
+if [[ $NUM_NODES -gt 1 ]]; then
+    parallel_opts+=(
+        --controlmaster 
+        --sshdelay 0.1 
+        --sshloginfile "$GNU_PARALLEL_NODEFILE"
+    )
+else
+    parallel_opts+=(
+        --jobs "$LOCAL_JOBS"
+    )
+fi
+echo "Using these opts for parallel: "
+echo "${parallel_opts[@]}"
+if [[ -z "$DEBUG" && -n "$PBS_JOBID" ]]; then 
+    $ASPROOT/bin/parallel "${parallel_opts[@]}" >> "$LOG_FILE" 2>&1
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
+else
+    # I am debugging of a pfe or something
+    echo "would have run: "
+    echo "parallel ${args[@]}"
+fi
+# we are now done!
+echo "Job finished at $(date)"
