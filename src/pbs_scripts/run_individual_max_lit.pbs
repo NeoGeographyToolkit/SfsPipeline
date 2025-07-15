@@ -103,6 +103,7 @@ LOG_FILE="$LOGS_FOLDER/pbs_max_lit_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_lo
 args_maxlit=(
             "$DEM_MOSAIC" 
             --max 
+            --save-index-map
             --threads 32
         ) 
 # use target projwin if provided

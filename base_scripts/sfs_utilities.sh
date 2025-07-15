@@ -429,3 +429,18 @@ run_and_check_stderr() {
     return 0
 }
 
+
+add_rat_to_vrt() {
+  local tif="$1"
+  local lookup="$2"
+  local vrt="${tif%.*}_rat.vrt"
+
+  # 1) generate a VRT wrapper
+  gdal_translate -of VRT "$tif" "$vrt" >/dev/null
+
+  # 2) add the RAT 
+  
+  add_rat_to_vrt.py "$vrt" "$lookup"
+
+  echo "RAT written to: $vrt"
+}

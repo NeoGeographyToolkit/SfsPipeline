@@ -178,24 +178,9 @@ TILE="${SFS_PREFIX##*/}" # should get us to just the tile name
 
 for file in $(find "$TILE_FOLDER/" -mindepth 2 -type f -name "$TILE-DEM-final.tif" | sort); do
     echo "$file"
-    local dem=$(realpath $file)
-    local outprefix="${file%%-DEM-final.tif}"
-    echo /vast_swbuild/swbuild3/aannex/tools/StereoPipeline-3.6.0-alpha-2025-07-02-x86_64-Linux/libexec/sfs \
-        -i "$dem"\
-        -o "$outprefix"\
-        --image-exposures-prefix "$outprefix" \
-        --image-list "$imlist" \
-        --camera-list "$cmlist" \
-        --compute-exposures-only \
-        --threads "$ASP_THREADS" \
-        --save-sparingly \
-        --allow-borderline-data \
-        --crop-input-images \
-        --cache-size-mb 2048 \
-        --shadow-threshold 0.005 \
-        --blending-dist 10 \
-        --reflectance-type 1 \
-        --min-blend-size 48 >> "$TMPFILE"
+    dem=$(realpath $file)
+    outprefix="${file%%-DEM-final.tif}"
+    echo /vast_swbuild/swbuild3/aannex/tools/StereoPipeline-3.6.0-alpha-2025-07-02-x86_64-Linux/libexec/sfs -i "$dem" -o "$outprefix" --image-exposures-prefix "$outprefix" --image-list "$IMAGES" --camera-list "$CAMERAS" --compute-exposures-only --threads "$ASP_THREADS" --save-sparingly --allow-borderline-data --crop-input-images --cache-size-mb 2048 --shadow-threshold 0.005 --blending-dist 10 --reflectance-type 1 --min-blend-size 48 >> "$TMPFILE"
 done
 # sort the TMPFILE to ensure repeatability
 sort -o "$TMPFILE"{,}
@@ -209,6 +194,8 @@ LOG_FILE="$LOGS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_$(date +"%Y-%m-
 JOB_FILE="$JOBS_FOLDER/pbs_sfs_${SPECIAL_RUN}_${SFS_PREFIX//\//}_$(date +"%Y-%m-%d_%H-%M-%S")_job.log"
 # for annoying reasons I can't seem to pass this in the array
 parallel_opts=(
+    --env ISISROOT
+    --env ISISDATA 
     -u 
     -a "$TMPFILE"
     --workdir "$WORKDIR"
@@ -232,7 +219,7 @@ fi
 echo "Using these opts for parallel: "
 echo "${parallel_opts[@]}"
 if [[ -z "$DEBUG" && -n "$PBS_JOBID" ]]; then 
-    $ASPROOT/bin/parallel "${parallel_opts[@]}" >> "$LOG_FILE" 2>&1
+    $ASPROOT/bin/parallel --env ISISROOT --env ISISDATA "${parallel_opts[@]}" >> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Parallel has finished with all jobs at $(date)"
     # move the joblog file to preserve its state and to avoid re-running it
