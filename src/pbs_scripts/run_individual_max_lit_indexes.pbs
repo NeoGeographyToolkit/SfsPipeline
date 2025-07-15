@@ -1,10 +1,10 @@
 #!/bin/bash
-#PBS -N pbs_max_lit
+#PBS -N pbs_max_lit_index
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
+#PBS -l select=1:ncpus=20:model=ivy,walltime=00:20:00        
 #PBS -q normal
-#PBS -o pbs_max_lit.log
+#PBS -o pbs_max_lit_index.log
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
@@ -51,7 +51,7 @@ if [[ -n $SUBMIT ]]; then
     unset DEBUG
     # echo SUBMIT and DEBUG as sanity check
     echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
-    submit_name="pbs_run_max_lit_${BASE%%.tif}"
+    submit_name="pbs_run_max_lit_index_${BASE%%.tif}"
     echo "$submit_name"
     if [[ -z $NOSLEEP ]]; then
         # actually sleep if no sleep is not set
@@ -98,11 +98,12 @@ JOBS_FOLDER="$WORKDIR/jobs"
 mkdir -p "$LOGS_FOLDER"
 mkdir -p "$JOBS_FOLDER"
 # set log file
-LOG_FILE="$LOGS_FOLDER/pbs_max_lit_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+LOG_FILE="$LOGS_FOLDER/pbs_max_lit_index_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
 # set the args for DEM mosaic
 args_maxlit=(
             "$DEM_MOSAIC" 
             --max 
+            --save-index-map
             --threads 32
         ) 
 # use target projwin if provided
@@ -111,30 +112,13 @@ if [[ -n "$PROJWIN" ]]; then
 fi
 # append the list and out last
 args_maxlit+=(-l "$IMAGE_LIST" -o "$OUT_NAME")
-# set the args for converting to lerc cog
-out_cog="${OUT_NAME%.tif}.lerc.cog.tif"
-args_cog=(
-   "$GDAL_TRANSLATE"
-   --config GDAL_NUM_THREADS 38
-   -co NUM_THREADS=38 
-   -co COMPRESS=LERC_DEFLATE 
-   -co MAX_Z_ERROR="0.00033" 
-   -co PREDICTOR=3 
-   -ot Float32 
-   -of COG 
-   "$OUT_NAME" 
-   "$out_cog" 
-)
 # Combine both into one string
-PROCESS_MOSAIC="${args_maxlit[@]}"
-PROCESS_COG="${args_cog[@]}"
+PROCESS_INDEX="${args_maxlit[@]}"
 # prepare to run the command or print the debug
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Starting Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
     # run dem_mosaic
-    eval "$PROCESS_MOSAIC" >> "$LOG_FILE" 2>&1
-    # run gdal_translate to make a cog
-    eval "$PROCESS_COG" >> "$LOG_FILE" 2>&1
+    eval "$PROCESS_INDEX" >> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Finished Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
 else
