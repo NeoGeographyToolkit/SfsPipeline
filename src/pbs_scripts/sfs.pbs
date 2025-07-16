@@ -94,8 +94,8 @@ if [[ -n $SUBMIT ]]; then
           MODEL="rom_ait"
           WALLTIME="8:00:00"
           QUEUE="normal"
-          LOCAL_JOBS=44
-          ASP_PROCESSES=44
+          LOCAL_JOBS=43
+          ASP_PROCESSES=43
           ASP_THREADS=6
           ;;
         errors)
@@ -220,12 +220,12 @@ args=(
       --run-dir "$WORKDIR"
       --nodes-list "$GNU_PARALLEL_NODEFILE"
       --processes "$DEFAULT_JOBS"
-      --threads "$ASP_THREADS"
-      --tile-size 256
-      --padding 64
-      --cache-size-mb 2048        
+      --threads "$ASP_THREADS"      
       --image-list "$IMAGES"    
       --camera-list "$CAMERAS"
+      --tile-size 256
+      --padding 32
+      --cache-size-mb 2048  
       --shadow-threshold 0.005
       --blending-dist 10
       --min-blend-size 48
@@ -234,6 +234,11 @@ args=(
       --reflectance-type 1
       --max-iterations 5
 )
+if [[ -z $ROBUST_THRESHOLD ]]; then
+    ROBUST_THRESHOLD=0.01
+fi
+args+=(--robust-threshold "$ROBUST_THRESHOLD")
+echo "Using a Robust Threshold of $ROBUST_THRESHOLD"
 if [[ -n $EXPOSURES_ONLY ]]; then
     echo "We will only compute the exposures, do this to compute skipped/used images lists if missing"
     args+=(--compute-exposures-only)

@@ -1,9 +1,11 @@
 import json 
 import fire
 import geopandas as gp
+import pandas as pd
 import rasterio as rio
 from pathlib import Path
 
+from loony.utils import filename_to_pid
 
 def set_coverage(df, threshold: float = 100.0, verbose: bool = False):
     candidates = df.copy().reset_index(drop=True)
@@ -53,6 +55,7 @@ def run(
         component_index: int = 0,
         dem_path: str | None = None,
         de_densify: bool = False,
+        productid_non_grata_file: str | None = None,
         verbose: bool = False
     ):
     """
@@ -82,6 +85,14 @@ def run(
         component_pids = [Path(_).name.replace('.ech.cub', '') for _ in component_pids]
         # now update the df to only include those 
         df = df[df['PRODUCT_ID'].isin(component_pids)]
+    if productid_non_grata_file:
+        # we will load the nongrata list to remove and productids we don't want to carry forward
+        non_grata = pd.read_csv(productid_non_grata_file, header=None, sep=' ')[0] #get a series
+        # get just the product ids without any extensions I may have included
+        non_grata_pids = non_grata.apply(filename_to_pid).to_list()
+        # TODO ensure left and right are excluded? nahh...
+        # update df to exclude these pids
+        df = df[~df['PRODUCT_ID'].isin(non_grata_pids)]
     # attempt to filter the input df by that provided column and min/max value range
     if column in df.columns:
         # only do it inclusive on left side to treat max_v as < max_v

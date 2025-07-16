@@ -336,7 +336,7 @@ function calc_sfs_mask() {
 
 # Usage: match_vrt_extent reference.tif source.tif [output.vrt]
 function match_vrt_extent() {
-    local ref="$1" src="$2" 
+    local ref="$1" src=$(realpath "$2") 
     local out="${src%.*}_matched.vrt"
     # dump reference metadata once
     local info xmin ymax xmax ymin xres yres
