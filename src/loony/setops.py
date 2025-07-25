@@ -4,7 +4,7 @@ import fire
 import pandas as pd
 from lark import Lark, Transformer
 
-LROC_PID = r'\b([MECS]\d{9}[RLMCVU]E)\b'
+LROC_PID = r'\b([MECS]\d{9,10}[RLMCVU]E)\b'
 
 # TODO Idea:
 # add a flag to parse out the product ids in the readme following regex

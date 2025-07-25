@@ -14,19 +14,24 @@ fi
 if [[ -z "$DEFAULT_JOBS" ]]; then
     DEFAULT_JOBS=12
 fi
+echo "DEFAULT_JOBS: $DEFAULT_JOBS"
 if [[ -z "$LOCAL_JOBS" ]]; then
     LOCAL_JOBS=12
 fi
+echo "LOCAL_JOBS: $LOCAL_JOBS"
 if [[ -z "$ASP_PROCESSES" ]]; then
     ASP_PROCESSES=9
 fi
+echo "ASP_PROCESSES: $ASP_PROCESSES"
 if [[ -z "$ASP_THREADS" ]]; then
     ASP_THREADS=6
 fi
+echo "ASP_THREADS: $ASP_THREADS"
 # define the run type
 if [[ -z "$RUN_MODE" ]]; then
     RUN_MODE='standard'
 fi
+echo "RUN_MODE: $RUN_MODE"
 # define usage once
 USAGE="qsub -V $0"
 # Ensure a DEM was provided
@@ -83,10 +88,10 @@ if [[ -n $SUBMIT ]]; then
           MODEL="has"
           WALLTIME="8:00:00"
           QUEUE="normal"
-          DEFAULT_JOBS=8
-          LOCAL_JOBS=8
-          ASP_PROCESSES=8
-          ASP_THREADS=6
+          export DEFAULT_JOBS=8
+          export LOCAL_JOBS=8
+          export ASP_PROCESSES=8
+          export ASP_THREADS=6
           ;;
         amdstandard)
           SELECT=1 
@@ -94,9 +99,10 @@ if [[ -n $SUBMIT ]]; then
           MODEL="rom_ait"
           WALLTIME="8:00:00"
           QUEUE="normal"
-          LOCAL_JOBS=43
-          ASP_PROCESSES=43
-          ASP_THREADS=6
+          export LOCAL_JOBS=96
+          export DEFAULT_JOBS=96
+          export ASP_PROCESSES=96
+          export ASP_THREADS=4
           ;;
         errors)
           SELECT=8
@@ -104,10 +110,10 @@ if [[ -n $SUBMIT ]]; then
           MODEL="ivy"
           WALLTIME="4:00:00"
           QUEUE="normal"
-          DEFAULT_JOBS=10
-          LOCAL_JOBS=10
-          ASP_PROCESSES=10
-          ASP_THREADS=6
+          export DEFAULT_JOBS=10
+          export LOCAL_JOBS=10
+          export ASP_PROCESSES=10
+          export ASP_THREADS=6
           ;;
         exposures)
           SELECT=1 
@@ -115,9 +121,10 @@ if [[ -n $SUBMIT ]]; then
           MODEL="has"
           WALLTIME="2:00:00"
           QUEUE="normal"
-          LOCAL_JOBS=9
-          ASP_PROCESSES=9
-          ASP_THREADS=6
+          export DEFAULT_JOBS=9
+          export LOCAL_JOBS=9
+          export ASP_PROCESSES=9
+          export ASP_THREADS=6
           ;;
         *)
           echo "⚠️ Unknown RUN_MODE='${RUN_MODE}', exiting" >&2
@@ -218,7 +225,6 @@ args=(
       --crop-input-images
       -i "$DEM"
       --run-dir "$WORKDIR"
-      --nodes-list "$GNU_PARALLEL_NODEFILE"
       --processes "$DEFAULT_JOBS"
       --threads "$ASP_THREADS"      
       --image-list "$IMAGES"    
@@ -234,6 +240,9 @@ args=(
       --reflectance-type 1
       --max-iterations 5
 )
+if [[ $NUM_NODES -gt 1 ]]; then
+    args+=(--nodes-list "$GNU_PARALLEL_NODEFILE")
+fi
 if [[ -z $ROBUST_THRESHOLD ]]; then
     ROBUST_THRESHOLD=0.01
 fi

@@ -117,6 +117,9 @@ class InsepctBA(object):
     
     def get_residuals(self, product_id):
         return self.vr.filter(f'"image" LIKE \'%{product_id}%\'')
+    
+    def get_residuals_by_stat(self, stat, op, value):
+        return self.vr.filter(f'{stat} {op} {value}').order('median')
 
     def get_pair_matches(self, product_id):
         return self.vm.filter(f'"left" LIKE \'%{product_id}%\'').order('p95')
@@ -127,6 +130,9 @@ class InsepctBA(object):
     def get_pair_matches_right(self, product_id):
         return self.vm.filter(f'"right" LIKE \'%{product_id}%\'').order('p95')
     
+    def get_pair_matches_by_stat(self, stat, op, value):
+        return self.vm.filter(f'{stat} {op} {value}').order('p95')
+    
     def get_val_pairs(self, product_id):
         return self.val_pairs.filter(f'"left" LIKE \'%{product_id}%\'').order('p95')
 
@@ -135,6 +141,9 @@ class InsepctBA(object):
     
     def get_val_pairs_right(self, product_id):
         return self.val_pairs.filter(f'"right" LIKE \'%{product_id}%\'').order('p95')
+    
+    def get_val_pairs_by_stat(self, stat, op, value):
+        return self.val_pairs.filter(f'{stat} {op} {value}').order('p95')
 
     def get_match_offsets(self, product_id):
         return self.vo.filter(f'"image" LIKE \'%{product_id}%\'')
