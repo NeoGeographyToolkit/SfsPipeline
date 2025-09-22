@@ -2,8 +2,8 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=32:ncpus=20:model=ivy,walltime=16:00:00        
-#PBS -q long                 
+#PBS -l select=10:ncpus=128:model=rom_ait,walltime=8:00:00        
+#PBS -q normal                 
 #PBS -m abe                     
 #PBS -o pbs_mapproj_ba.log   
 #PBS -r y                       
@@ -11,6 +11,8 @@
 #PBS -V                         
 #PBS -W group_list=e2305        
 # group list for job
+
+# for rome #PBS -l select=1:ncpus=128:model=rom_ait,walltime=24:00:00    
 # Use queue "long" for jobs up to 120 hours
 # Use queue "normal" for jobs up to 8 hours
 # Use queue "low" for jobs up to 4 hours
@@ -33,7 +35,12 @@ if [ -z "$BA_PREFIX" ]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
     exit 1
 fi
-echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX%/*}.tif"
+# if the SFS flag is not provided, set it to empty string
+if [ -z "$SFS_FLAG" ]; then
+    export SFS_FLAG=""
+    echo "SFS_FLAG not specified, so setting it to exmpty string" 
+fi
+echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX%/*}${SFS_FLAG}.tif"
 # If CAMERA_LIST and IMAGE_LIST provided, use them instead of INPUT_DIR and passing in a BA prefix
 if [[ -n "$CAMERA_LIST"  &&  -n "$IMAGE_LIST"  ]]; then
     # ensure list files exist
@@ -119,8 +126,8 @@ else
     # Ensure cleanup on exit or error
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
-    DEFAULT_JOBS=3
-    LOCAL_JOBS=3
+    DEFAULT_JOBS=10
+    LOCAL_JOBS=10
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -188,9 +195,9 @@ trap 'rm -f "$TMPFILE"' EXIT
             "$DEM" 
             "$IMG" 
             "$CAM"
-            "${IMG%%.cub}.map.${BA_PREFIX%/*}.tif"
-            --processes 5 
-            --threads 4 
+            "${IMG%%.cub}.map.${BA_PREFIX%/*}${SFS_FLAG}.tif"
+            --processes 6 
+            --threads 8 
             --tr 1
         )
         # use BA prefix if using input_dir
@@ -205,8 +212,8 @@ trap 'rm -f "$TMPFILE"' EXIT
             -overwrite
             -write_absolute_path 
             -of GeoJSON 
-            "${IMG%%.cub}.map.${BA_PREFIX%/*}.tif" 
-            "${IMG%%.cub}.map.${BA_PREFIX%/*}.geojson"
+            "${IMG%%.cub}.map.${BA_PREFIX%/*}${SFS_FLAG}.tif" 
+            "${IMG%%.cub}.map.${BA_PREFIX%/*}${SFS_FLAG}.geojson"
         )      
         echo "${args_mapproj[@]}" "${args_foot[@]}" >> "$TMPFILE";
     done
@@ -226,8 +233,8 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     mkdir -p "$LOGS_FOLDER"
     mkdir -p "$JOBS_FOLDER"
     # set log file names
-    LOG_FILE="$LOGS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
-    JOB_FILE="$JOBS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}_job.log"
+    LOG_FILE="$LOGS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}${SFS_FLAG}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    JOB_FILE="$JOBS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}${SFS_FLAG}_job.log"
     # Run GNU Parallel with the temp file if not in debug mode   
     echo "Log File: "
     echo "$LOG_FILE"
@@ -247,7 +254,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     if [[ $NUM_NODES -gt 1 ]]; then
         parallel_opts+=(
             --controlmaster 
-            --sshdelay 0.01 
+            --sshdelay 0.1 
             --sshloginfile "$GNU_PARALLEL_NODEFILE"
         )
     else

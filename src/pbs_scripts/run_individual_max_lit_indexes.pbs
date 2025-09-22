@@ -2,7 +2,7 @@
 #PBS -N pbs_max_lit_index
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=00:20:00        
+#PBS -l select=1:ncpus=20:model=rom_ait,walltime=00:20:00        
 #PBS -q normal
 #PBS -o pbs_max_lit_index.log
 #PBS -r y                       

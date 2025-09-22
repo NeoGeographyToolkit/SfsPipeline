@@ -146,8 +146,7 @@ args=(
       --threads 4               
       --nodata-value 0.001      
       --ip-detect-method 1      
-      --ip-per-tile  400        
-      --ip-per-image 20000      
+      --ip-per-tile  400             
       --num-iterations 500      
       --num-passes 2            
       --min-matches 10          

@@ -2,7 +2,7 @@
 #PBS -N pbs_launch_stereo
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=4:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=1:ncpus=80:model=rom_ait,walltime=08:00:00        
 #PBS -q normal
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 

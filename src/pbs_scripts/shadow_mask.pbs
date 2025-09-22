@@ -2,7 +2,7 @@
 #PBS -N pbs_shadow_mask       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=6:ncpus=20:model=ivy,walltime=03:00:00        
+#PBS -l select=1:ncpus=128:model=rom_ait,walltime=8:00:00          
 #PBS -q normal                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
@@ -26,13 +26,18 @@ if [ -z "$INPUT_DIR" ]; then
     echo "Error: INPUT_DIR is not set. Use qsub -v INPUT_DIR=/path/to/IMG/files shadow_mask.pbs"
     exit 1
 fi
-echo "Path to CUBs: $INPUT_DIR"
+echo "Path to TIFs: $INPUT_DIR"
 # Ensure the work dir is set to something
 if [[ -z "$WORKDIR" ]]; then
     # we will default to the current working directory wherever that is
     export WORKDIR="$PWD"
 fi
 echo "Workdir: $WORKDIR"
+# SHADOW_THRESHOLD default should be 0.005, use 0.003 for sun down ridge fixes
+if [[ -z $SHADOW_THRESHOLD ]]; then
+    SHADOW_THRESHOLD=0.003
+fi
+echo "SHADOW_THRESHOLD: $SHADOW_THRESHOLD"
 ##############################################
 # Check if the user want's this acutally submitted to PBS
 if [[ -n $SUBMIT ]]; then
@@ -81,8 +86,8 @@ else
     # Ensure cleanup on exit or error
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
-    DEFAULT_JOBS=16
-    LOCAL_JOBS=16
+    DEFAULT_JOBS=256
+    LOCAL_JOBS=256
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -142,7 +147,7 @@ if [[ -z "$DEBUG" ]]; then
     if [[ $NUM_NODES -gt 1 ]]; then
         parallel_opts+=(
             --controlmaster 
-            --sshdelay 0.01
+            --sshdelay 0.05
             --sshloginfile "$GNU_PARALLEL_NODEFILE"
         )
     else

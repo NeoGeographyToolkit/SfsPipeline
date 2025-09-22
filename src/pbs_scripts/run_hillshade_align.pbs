@@ -2,7 +2,7 @@
 #PBS -N pbs_pc_align_hill
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
+#PBS -l select=1:ncpus=20:model=rom_ait,walltime=01:00:00        
 #PBS -q debug
 #PBS -o pbs_pc_align_hill.log
 #PBS -r y                       

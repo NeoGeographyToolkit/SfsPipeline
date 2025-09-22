@@ -2,7 +2,7 @@
 #PBS -N pbs_point_dem
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=02:00:00        
+#PBS -l select=1:ncpus=20:model=rom_ait,walltime=02:00:00        
 #PBS -q normal
 #PBS -o pbs_point_dem.log
 #PBS -r y                       

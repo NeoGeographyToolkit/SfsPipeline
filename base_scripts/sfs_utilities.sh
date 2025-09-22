@@ -52,14 +52,26 @@ function to_lerc_cog() {
 function check_files() {
     # for each file in a list file check if it exists, return false at the first missed file
     local list_file="$1"
+    local retcode=0
     while IFS= read -r file; do
         if [ ! -r "$file" ]; then
-            echo "no"
-            return 1
+            if [ -n "$2" ]; then
+                echo "missing: $file"
+            fi
+            if [ -z "$3" ]; then
+                echo "no"
+                return 1
+            else
+                retcode=1
+            fi
         fi
     done < "$list_file"
-    echo "yes"
-    return 0
+    if [ "$retcode" -eq 0 ]; then
+        echo "yes"
+    else
+        echo "no"
+    fi
+    return retcode
 }
 
 function collect_geojson_stream() {
@@ -239,9 +251,9 @@ function blur_to_lola() {
     out_dem="${in_dem%.tif}.blur.tif"
     tmp_5dem="_tmp_${in_dem%.tif}_5m.tif"
     tmp_5dem_blur="_tmp_${in_dem%.tif}_5m_blur.tif"
-    dem_mosaic --tr 5.0 "$in_dem" -o "$tmp_5dem" 
-    dem_mosaic --dem-blur-sigma "$sigma" "$tmp_5dem" -o "$tmp_5dem_blur"
-    gdal_translate -tr 1 1 -r cubic "$tmp_5dem_blur" "$out_dem"
+    dem_mosaic --threads 16 --cache-size-mb 2048 --tr 5.0 "$in_dem" -o "$tmp_5dem" 
+    dem_mosaic --threads 16 --cache-size-mb 2048 --dem-blur-sigma "$sigma" "$tmp_5dem" -o "$tmp_5dem_blur"
+    gdal_translate --config GDAL_NUM_THREADS 38 -co BIGTIFF=YES -co NUM_THREADS=38 -tr 1 1 -r cubic "$tmp_5dem_blur" "$out_dem"
     rm "$tmp_5dem_blur"
     rm "$tmp_5dem"
     echo "$out_dem"
@@ -252,6 +264,13 @@ function hillshade_dem() {
     in_dem="$1"
     out_dem="${in_dem%.tif}.h.tif"
     gdaldem hillshade --config GDAL_NUM_THREADS 16 -of COG -co NUM_THREADS=16 -co COMPRESS=ZSTD -co PREDICTOR=2 -alt 15 -z 1 "$in_dem" "$out_dem"
+}
+
+function hillshade_dem_jpg() {
+    # function to simplify hillshading to keep the altitude consistent
+    in_dem="$1"
+    out_dem="${in_dem%.tif}.h.jpg"
+    gdaldem hillshade -of JPEG -co NUM_THREADS=16 -alt 15 -z 1 "$in_dem" "$out_dem"
 }
 
 function hill_shade_align(){
@@ -443,4 +462,60 @@ add_rat_to_vrt() {
   add_rat_to_vrt.py "$vrt" "$lookup"
 
   echo "RAT written to: $vrt"
+}
+
+
+filter_out_files() {
+    local banlist="$1"
+    shift
+    if [[ ! -f "$banlist" ]]; then
+        echo "Banlist file not found: $banlist" >&2
+        return 1
+    fi
+
+    # Join all banned strings into a single regex pattern (OR'ed with |)
+    local pattern
+    # pattern=$(sed 's/[^^]/[&]/g; s/\^/\\^/g' "$banlist" | paste -sd'|' -)
+    pattern=$(paste -sd'|' "$banlist")
+
+    for file in "$@"; do
+        if [[ -f "$file" ]]; then
+            # Only create backup if it doesn't already exist
+            if [[ ! -f "$file.bak" ]]; then
+                cp "$file" "$file.bak"
+            fi
+            # Filter out lines containing any banned substring
+            grep -Fv -f "$banlist" "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+        else
+            echo "Skipping missing file: $file" >&2
+        fi
+    done
+}
+
+
+# Keep only lines that contain a "good" substring
+filter_in_files() {
+    local goodlist="$1"
+    shift
+    if [[ ! -f "$goodlist" ]]; then
+        echo "Good list file not found: $goodlist" >&2
+        return 1
+    fi
+
+    #Join all banned strings into a single regex pattern (OR'ed with |)
+    local pattern
+    # pattern=$(sed 's/[^^]/[&]/g; s/\^/\\^/g' "$goodlist" | paste -sd'|' -)
+    pattern=$(paste -sd'|' "$goodlist")
+
+    for file in "$@"; do
+        if [[ -f "$file" ]]; then
+            # Only create backup if it doesn't already exist
+            if [[ ! -f "$file.bak" ]]; then
+                cp "$file" "$file.bak"
+            fi
+            grep -F -f "$goodlist" "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+        else
+            echo "Skipping missing file: $file" >&2
+        fi
+    done
 }

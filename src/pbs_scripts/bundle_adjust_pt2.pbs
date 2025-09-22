@@ -2,16 +2,17 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=128:model=rom_ait,walltime=8:00:00        
-#PBS -q normal
+#PBS -l select=1:ncpus=128:model=rom_ait,walltime=24:00:00    
+#PBS -q long
 #PBS -m abe                     
 #PBS -o pbs_ba_pt2.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
 #PBS -V                         
 #PBS -W group_list=e2305     
-# TODO run this on the AMD nodes?
-# for ldan select=1:ncpus=36:mem=750GB,walltime=12:00:00  , -q ldan  
+# TODO Issue a warning if more than 40 million points as the jacobian allocation overflows!
+# for ldan -l select=1:ncpus=36:mem=1.5TB,walltime=12:00:00  , -q ldan  
+# for amd -l select=1:ncpus=128:model=rom_ait,walltime=24:00:00  
 # TODO LDAN bigmem nodes https://www.nas.nasa.gov/hecc/support/kb/how-to-get-more-memory-for-your-pbs-job_222.html
 # LDAN detail https://www.nas.nasa.gov/hecc/support/kb/lou-data-analysis-nodes_413.html
 # TODO use $TMPDIR and mv to lfs after finishing https://www.nas.nasa.gov/hecc/support/kb/memory-usage-overview_216.html
@@ -169,8 +170,7 @@ args=(
       --threads 256             
       --nodata-value 0.001      
       --ip-detect-method 1      
-      --ip-per-tile  400        
-      --ip-per-image 20000      
+      --ip-per-tile  400            
       --num-iterations 500      
       --num-passes 2            
       --min-matches 50          

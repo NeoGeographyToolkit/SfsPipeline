@@ -2,7 +2,7 @@
 #PBS -N pbs_count_lit
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=ivy,walltime=01:00:00        
+#PBS -l select=1:ncpus=20:model=rom_ait,walltime=01:00:00        
 #PBS -q normal
 #PBS -o pbs_count_lit.log
 #PBS -r y                       

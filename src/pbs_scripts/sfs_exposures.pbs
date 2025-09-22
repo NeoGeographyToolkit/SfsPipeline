@@ -62,15 +62,15 @@ if [[ -n $SUBMIT ]]; then
     # TODO what about local_jobs vs asp_processes? I think it could be that ASP passes --processes to --jobs in gnu parallel 
     case "${RUN_MODE:-standard}" in      
         standard)
-          SELECT=2
-          NCPUS=24
-          MODEL="has"
+          SELECT=1
+          NCPUS=48
+          MODEL="rom_ait"
           WALLTIME="1:00:00"
           QUEUE="normal"
-          DEFAULT_JOBS=8
-          LOCAL_JOBS=8
-          ASP_PROCESSES=8
-          ASP_THREADS=8
+          DEFAULT_JOBS=16
+          LOCAL_JOBS=16
+          ASP_PROCESSES=16
+          ASP_THREADS=16
           ;;
         *)
           echo "⚠️ Unknown RUN_MODE='${RUN_MODE}', exiting" >&2

@@ -29,11 +29,36 @@ fi
 echo "ASP_THREADS: $ASP_THREADS"
 # define the run type
 if [[ -z "$RUN_MODE" ]]; then
-    RUN_MODE='standard'
+    RUN_MODE='amdstandard'
 fi
 echo "RUN_MODE: $RUN_MODE"
 # define usage once
 USAGE="qsub -V $0"
+# SHADOW_THRESHOLD default should be 0.005, use 0.003 for sun down ridge fixes
+if [[ -z $SHADOW_THRESHOLD ]]; then
+    SHADOW_THRESHOLD=0.0025
+fi
+echo "SHADOW_THRESHOLD: $SHADOW_THRESHOLD"
+# ROBUST_THRESHOLD default should be 0.5 or not set at all, use 0.1 generally, or use 0.005 for shadow ridge fixes
+if [[ -z $ROBUST_THRESHOLD ]]; then
+    ROBUST_THRESHOLD=0.1
+fi
+echo "ROBUST_THRESHOLD: $ROBUST_THRESHOLD"
+# BLENDING_DIST default should be 10, use 16 or more for shadow issues
+if [[ -z $BLENDING_DIST ]]; then
+    BLENDING_DIST=10
+fi
+echo "BLENDING_DIST: $BLENDING_DIST"
+# MIN_BLEND_SIZE default should be 48, use smaller for shadow issues to erode more
+if [[ -z $MIN_BLEND_SIZE ]]; then
+    MIN_BLEND_SIZE=48
+fi
+echo "MIN_BLEND_SIZE: $MIN_BLEND_SIZE"
+# PADDING_SIZE default should be 64, use smaller for fewer jobs and faster completion
+if [[ -z $PADDING_SIZE ]]; then
+    PADDING_SIZE=64
+fi
+echo "PADDING_SIZE: $PADDING_SIZE"
 # Ensure a DEM was provided
 if [[ -z "$DEM" || ! -e "$DEM" ]]; then
     echo "Error: DEM is not set. Use $USAGE"
@@ -83,15 +108,26 @@ if [[ -n $SUBMIT ]]; then
     # TODO what about local_jobs vs asp_processes? I think it could be that ASP passes --processes to --jobs in gnu parallel 
     case "${RUN_MODE:-standard}" in      
         standard)
-          SELECT=8
-          NCPUS=24
-          MODEL="has"
+          SELECT=1 
+          NCPUS=128
+          MODEL="rom_ait"
           WALLTIME="8:00:00"
           QUEUE="normal"
-          export DEFAULT_JOBS=8
-          export LOCAL_JOBS=8
-          export ASP_PROCESSES=8
-          export ASP_THREADS=6
+          export LOCAL_JOBS=56
+          export DEFAULT_JOBS=56
+          export ASP_PROCESSES=56
+          export ASP_THREADS=4
+          ;;
+        long)
+          SELECT=1 
+          NCPUS=128
+          MODEL="rom_ait"
+          WALLTIME="16:00:00"
+          QUEUE="long"
+          export LOCAL_JOBS=48
+          export DEFAULT_JOBS=48
+          export ASP_PROCESSES=48
+          export ASP_THREADS=4
           ;;
         amdstandard)
           SELECT=1 
@@ -99,26 +135,26 @@ if [[ -n $SUBMIT ]]; then
           MODEL="rom_ait"
           WALLTIME="8:00:00"
           QUEUE="normal"
-          export LOCAL_JOBS=96
-          export DEFAULT_JOBS=96
-          export ASP_PROCESSES=96
+          export LOCAL_JOBS=56
+          export DEFAULT_JOBS=56
+          export ASP_PROCESSES=56
           export ASP_THREADS=4
           ;;
         errors)
-          SELECT=8
-          NCPUS=20
-          MODEL="ivy"
+          SELECT=1
+          NCPUS=32
+          MODEL="rom_ait"
           WALLTIME="4:00:00"
           QUEUE="normal"
-          export DEFAULT_JOBS=10
-          export LOCAL_JOBS=10
-          export ASP_PROCESSES=10
-          export ASP_THREADS=6
+          export LOCAL_JOBS=32
+          export DEFAULT_JOBS=32
+          export ASP_PROCESSES=32
+          export ASP_THREADS=8
           ;;
         exposures)
           SELECT=1 
           NCPUS=24
-          MODEL="has"
+          MODEL="rom_ait"
           WALLTIME="2:00:00"
           QUEUE="normal"
           export DEFAULT_JOBS=9
@@ -132,6 +168,11 @@ if [[ -n $SUBMIT ]]; then
           ;;
     esac
     ##############################################
+    echo "DEFAULT_JOBS: $DEFAULT_JOBS"
+    echo "LOCAL_JOBS: $LOCAL_JOBS"
+    echo "ASP_PROCESSES: $ASP_PROCESSES"
+    echo "ASP_THREADS: $ASP_THREADS"
+    echo "RUN_MODE: $RUN_MODE"
     # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
     echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
     # unset SUBMIT so that this isn't recursive
@@ -230,24 +271,20 @@ args=(
       --image-list "$IMAGES"    
       --camera-list "$CAMERAS"
       --tile-size 256
-      --padding 32
       --cache-size-mb 2048  
-      --shadow-threshold 0.005
-      --blending-dist 10
-      --min-blend-size 48
       --smoothness-weight 0.08
       --initial-dem-constraint-weight 0.001
       --reflectance-type 1
       --max-iterations 5
 )
+args+=(--padding "$PADDING_SIZE")
+args+=(--blending-dist "$BLENDING_DIST")
+args+=(--min-blend-size "$MIN_BLEND_SIZE")
+args+=(--robust-threshold "$ROBUST_THRESHOLD")
+args+=(--shadow-threshold "$SHADOW_THRESHOLD")
 if [[ $NUM_NODES -gt 1 ]]; then
     args+=(--nodes-list "$GNU_PARALLEL_NODEFILE")
 fi
-if [[ -z $ROBUST_THRESHOLD ]]; then
-    ROBUST_THRESHOLD=0.01
-fi
-args+=(--robust-threshold "$ROBUST_THRESHOLD")
-echo "Using a Robust Threshold of $ROBUST_THRESHOLD"
 if [[ -n $EXPOSURES_ONLY ]]; then
     echo "We will only compute the exposures, do this to compute skipped/used images lists if missing"
     args+=(--compute-exposures-only)
