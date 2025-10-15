@@ -519,3 +519,14 @@ filter_in_files() {
         fi
     done
 }
+
+function folder_has_dem() {
+    folder_path="$1"
+    postfix="DEM-final.tif"
+
+    if find "$folder_path" -maxdepth 1 -type f -name "*$postfix" | grep -q .; then
+        echo "0"
+    else
+        echo "1"
+    fi
+}

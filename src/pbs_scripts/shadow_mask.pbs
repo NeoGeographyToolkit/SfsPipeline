@@ -2,8 +2,8 @@
 #PBS -N pbs_shadow_mask       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=128:model=rom_ait,walltime=8:00:00          
-#PBS -q normal                  
+#PBS -l select=16:ncpus=40:model=cas_ait,walltime=8:00:00          
+#PBS -q normal
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_shadow_mask.log   
@@ -35,7 +35,7 @@ fi
 echo "Workdir: $WORKDIR"
 # SHADOW_THRESHOLD default should be 0.005, use 0.003 for sun down ridge fixes
 if [[ -z $SHADOW_THRESHOLD ]]; then
-    SHADOW_THRESHOLD=0.003
+    SHADOW_THRESHOLD=0.002
 fi
 echo "SHADOW_THRESHOLD: $SHADOW_THRESHOLD"
 ##############################################
@@ -86,8 +86,8 @@ else
     # Ensure cleanup on exit or error
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
-    DEFAULT_JOBS=256
-    LOCAL_JOBS=256
+    DEFAULT_JOBS=80
+    LOCAL_JOBS=80
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -124,7 +124,9 @@ TMPFILE=$(mktemp "$WORKDIR/shadow_mask_cmds.XXXXXX")
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file # NOTE if you need to do more complicated stuff here look at maprpoj_ba.pbs
-find "$INPUT_DIR" -type f -name "*.$TIF_POSTFIX" -exec echo "$SHADOW_MASK" '{}' \; >> "$TMPFILE"
+find "$INPUT_DIR" -type f -name "*.$TIF_POSTFIX" -exec echo "$SHADOW_MASK" '{}' "$SHADOW_THRESHOLD" \; >> "$TMPFILE"
+echo "NUMBER OF JOBS TO RUN: "
+wc -l "$TMPFILE"
 # sort the TMPFILE to ensure repeatability
 sort -o "$TMPFILE"{,}
 #
@@ -147,7 +149,7 @@ if [[ -z "$DEBUG" ]]; then
     if [[ $NUM_NODES -gt 1 ]]; then
         parallel_opts+=(
             --controlmaster 
-            --sshdelay 0.05
+            --sshdelay 0.025
             --sshloginfile "$GNU_PARALLEL_NODEFILE"
         )
     else

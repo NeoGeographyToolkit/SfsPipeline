@@ -34,6 +34,13 @@ fi
 echo "RUN_MODE: $RUN_MODE"
 # define usage once
 USAGE="qsub -V $0"
+
+#--initial-dem-constraint-weight 0.001
+# INITIAL_DEM_CONSTRAINT_WEIGHT default should be 0.001, higher means preserve more lola values
+if [[ -z $INITIAL_DEM_CONSTRAINT_WEIGHT ]]; then
+    INITIAL_DEM_CONSTRAINT_WEIGHT=0.001
+fi
+echo "INITIAL_DEM_CONSTRAINT_WEIGHT: $INITIAL_DEM_CONSTRAINT_WEIGHT"
 # SHADOW_THRESHOLD default should be 0.005, use 0.003 for sun down ridge fixes
 if [[ -z $SHADOW_THRESHOLD ]]; then
     SHADOW_THRESHOLD=0.0025
@@ -113,9 +120,9 @@ if [[ -n $SUBMIT ]]; then
           MODEL="rom_ait"
           WALLTIME="8:00:00"
           QUEUE="normal"
-          export LOCAL_JOBS=56
-          export DEFAULT_JOBS=56
-          export ASP_PROCESSES=56
+          export LOCAL_JOBS=58
+          export DEFAULT_JOBS=58
+          export ASP_PROCESSES=58
           export ASP_THREADS=4
           ;;
         long)
@@ -138,6 +145,39 @@ if [[ -n $SUBMIT ]]; then
           export LOCAL_JOBS=56
           export DEFAULT_JOBS=56
           export ASP_PROCESSES=56
+          export ASP_THREADS=4
+          ;;
+        cheap)
+          SELECT=1 
+          NCPUS=40
+          MODEL="cas_ait"
+          WALLTIME="8:00:00"
+          QUEUE="normal"
+          export LOCAL_JOBS=20
+          export DEFAULT_JOBS=20
+          export ASP_PROCESSES=20
+          export ASP_THREADS=4
+          ;;
+        fastamd)
+          SELECT=1 
+          NCPUS=48
+          MODEL="rom_ait"
+          WALLTIME="4:00:00"
+          QUEUE="normal"
+          export LOCAL_JOBS=22
+          export DEFAULT_JOBS=22
+          export ASP_PROCESSES=22
+          export ASP_THREADS=4
+          ;;
+        fastivy)
+          SELECT=1 
+          NCPUS=20
+          MODEL="ivy"
+          WALLTIME="8:00:00"
+          QUEUE="normal"
+          export LOCAL_JOBS=10
+          export DEFAULT_JOBS=10
+          export ASP_PROCESSES=10
           export ASP_THREADS=4
           ;;
         errors)
@@ -273,10 +313,10 @@ args=(
       --tile-size 256
       --cache-size-mb 2048  
       --smoothness-weight 0.08
-      --initial-dem-constraint-weight 0.001
       --reflectance-type 1
       --max-iterations 5
 )
+args+=(--initial-dem-constraint-weight "$INITIAL_DEM_CONSTRAINT_WEIGHT")
 args+=(--padding "$PADDING_SIZE")
 args+=(--blending-dist "$BLENDING_DIST")
 args+=(--min-blend-size "$MIN_BLEND_SIZE")

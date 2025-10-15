@@ -2,7 +2,7 @@
 #PBS -N pbs_sfs_blend
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=rom_ait,walltime=08:00:00        
+#PBS -l select=1:ncpus=20:model=cas_ait,walltime=04:00:00        
 #PBS -q normal
 #PBS -o pbs_sfs_blend.log
 #PBS -r y                       
@@ -130,7 +130,7 @@ args_sfs_blend=(
             --lola-dem "$REF_DEM"
             --sfs-dem "$VRT_SFS_DEM"
             --max-lit-image-mosaic "$VRT_MAX_LIT"
-            --image-threshold 0.005 
+            --image-threshold 0.002 
             --lit-blend-length 25 
             --shadow-blend-length 5    
             --min-blend-size 50 
