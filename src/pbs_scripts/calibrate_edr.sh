@@ -7,12 +7,13 @@ if [ -n "$PBS_NODEFILE" ]; then
 fi
 ##############################################
 # source asp environment
-source init_asp.sh
+source init_isis.sh
 # echo out ISISDATA and ISISROOT
 echo ISIS data is "$ISISDATA" 
 echo ISIS root is "$ISISROOT"
 # echo out PATH
 echo PATH is "$PATH"
+echo PYTHONPATH is "$PYTHONPATH"
 ################################################
 # Must have 1 arguments. Print usage on failure.
 if [ "$#" -ne 1 ]; then
