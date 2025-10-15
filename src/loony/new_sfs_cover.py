@@ -54,7 +54,7 @@ def _perform_geo_selection_sql(con, wkt_geometry: str, centroid_longitude: float
     CROSS JOIN 
         temp_query_geom AS q
     WHERE 
-        ST_Intersects(a.geometry, q.geom) AND a.INCIDENCE_ANGLE < 95 AND RESOLUTION::float <= 5.0 AND EMISSION_ANGLE::float <= 20.0;
+        ST_Intersects(a.geometry, q.geom) AND a.INCIDENCE_ANGLE < 95 AND RESOLUTION::float <= 5.0 AND EMISSION_ANGLE::float <= 20.0 AND SLEW_ANGLE <=10.0;
     """)
     # Final step: Query the final results sorted by ROI_SUB_SOLAR_GROUND_AZIMUTH, ST_Hilbert(geometry), INCIDENCE_ANGLE and fraction_area.
     # TODO this doesn't go quite as far as I'd want to order the results such that more likely than not nearby rows overlap

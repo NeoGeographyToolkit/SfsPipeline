@@ -26,7 +26,7 @@ class CRS_CLI(object):
             # get the center long lat
             lon, lat = src.lnglat()
         # convert to wkt
-        wkt = CRS_CLI.long_lat_to_wkt_stereographic(lon, lat, name=name)
+        wkt = CRS_CLI.lon_lat_to_wkt_stereographic(lon, lat, name=name)
         # and return to user
         return wkt
 
@@ -45,7 +45,7 @@ class CRS_CLI(object):
         # convert to geographic longitude and latitude
         lon, lat = transform.transform(cen_x, cen_y)
         # convert to wkt
-        wkt = CRS_CLI.long_lat_to_wkt_stereographic(lon, lat, name=name)
+        wkt = CRS_CLI.lon_lat_to_wkt_stereographic(lon, lat, name=name)
         # and return to user
         return wkt
 

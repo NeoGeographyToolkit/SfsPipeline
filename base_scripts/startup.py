@@ -8,10 +8,26 @@ for your operating system as described in QGIS docs:
 https://docs.qgis.org/testing/en/docs/pyqgis_developer_cookbook/intro.html#the-startup-py-file
 
 """
+from pathlib import Path
+import sys
+# ─── add this script's folder to Python path ───────────────────────────────
+this_folder = Path(__file__).resolve().parent
+if str(this_folder) not in sys.path:
+    sys.path.insert(0, str(this_folder))
+# ────────────────────────────────────────────────────────────────────────────
 
+
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QApplication, QLabel
 from qgis.utils import iface
 from qgis.core import *
+
+
+from raster_matcher import RasterMatchDock
+# instantiate and add to QGIS
+dock = RasterMatchDock()
+iface.addDockWidget(Qt.RightDockWidgetArea, dock)
+
 
 ###############################
 # selected layers count toolbar
