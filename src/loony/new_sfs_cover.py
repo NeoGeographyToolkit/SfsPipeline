@@ -36,6 +36,10 @@ from .utils import get_embedded_provenance
 
 
 def _perform_geo_selection_sql(con, wkt_geometry: str, centroid_longitude: float, centroid_latitude: float):
+    """
+    Perform the actual geospatial query operation using duckdb
+
+    """
     # Step 1: Create a temp table with the query geometry.
     con.execute(f"""
     CREATE TEMPORARY TABLE temp_query_geom AS

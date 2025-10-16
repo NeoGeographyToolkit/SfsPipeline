@@ -74,10 +74,13 @@ The Python scripts are (unless I forgot to update the pyproject.toml) installed 
 
 ## PBS Scripts detail
 
-The PBS scripts are a bit special and some explaination is needed for their use. 
-They are mostly configured via environment variables that must be set for them to, although
-a few things like the PBS queue and node allocations are currently hard set at the top of the file and must be 
-adjusted manually. This may change soon hopefully so that they can also be configured but are also set to sensible defaults.
+The PBS scripts (ending with `.pbs`) are a bit special and some explaination is needed for their use. 
+
+The PBS scripts are self-submitting workflows. To submit the job to the cluster, run `export SUBMIT=true` prior to the script. This will create a job on the queue that actually runs the rest of the script to map project images, run sfs, run bundle adjust, etc.
+The jobs are configured using a variety of environment variables particular to each script (working as required and optional parameters).
+
+A few things like the PBS queue used and node allocations are currently hard set at the top of the file and must be 
+adjusted manually. 
 
 By default the scripts will not run any real commands (mapproject, bundle adjust, stereo, etc) UNLESS 
 you set the environment variable `SUBMIT=true`. By default running the scripts will just execute the workings of the script 
@@ -138,7 +141,7 @@ Symbols:
 10. bundle_adjust_pairwise_pt1.pbs (☁️)
   - PBS batch job First pass bundle adjust that just computes statistics and matches for bundle adjust using many nodes
 11. bundle_adjust_pt2.pbs (☁️)
-  - PBS batch job that only runs 1 node to perform bundle adjust optimization
+  
 12. verify_bundle_adjust.py (💻/☁️)
   - Used to investigate the graph from the bundle adjust and determine the largest connected group of cameras/plot footprints and illumination coverage 
 13. get_stereo_pairs_from_bundle_adjust.py (💻)
@@ -152,6 +155,105 @@ Symbols:
 17. downselect_stereo_for_pc_align.py (💻)
 18. 
 19. lit_select.py (💻)
+
+# Base Scripts
+ * stereo.sh
+  - old script from Moses/Ross for stereo processing
+ * random_sample.sh
+  - Utility to take a random sample from a list file
+ * ds_by_attr.sh
+  - Subset a GPKG file using an attribute and a value range
+ * rescale_raster.sh
+  - Deprecated script to scale a floating point image to 8 bit
+ * raster_matcher.py
+  - QGIS plugin module for locating tif files from the file system to load using a vector layer (eg the sfs cover output) to determine the subset to load
+ * startup.py
+  - QGIS plugin module main file
+ * add_rat_to_vrt.py
+  - Script to add Raster Attribute Table to Max Lit Index files, allows QGIS to convert DN value to source LROC NAC Product ID.
+ * sfs_utilities.sh
+  - Large collection of bash function helper utilities critical to SFS processing. Source this file to add functions to terminal.
+ * db_to_urls.sh
+  - Script to get https urls for NAC IMG files so you can download them from the PDS from a GPKG source file.
+
+# Bash Scripts
+
+ * calibrate_edr.sh
+  - Internally used script to run ISIS calibration/CSM Camera generation
+ * init_asp.sh
+  - Init the ASP/SFSTools environment.
+ * init_isis.sh
+  - Init the ISIS conda environment.
+ * init_sfstools.sh
+  - Init the SFSTools environment (ASP bin not in PATH).
+ * launch_individual_mapproj_jobs.sh
+  - Deprecated bash script to help launch many mapproj jobs.
+ * launch_individual_stereo_jobs.sh
+  - Deprecated bash script to help launch many stereo jobs.
+ * make_lerc_cog.sh
+  - Deprecated script to help make lerc cogs.
+ * prepare_ba0_lists.sh
+  - Deprecated script to help prepare lists for bundle adjust.
+ * shadow_mask.sh
+  - Internally used script to help compute shadow masks.
+
+# PBS Scripts
+
+ * bundle_adjust_pairwise_pt1.pbs
+   - Runs IP matching prior to bundle adjustment (optimization of cameras), using many nodes.
+ * bundle_adjust_pt0.pbs
+   - Deprecated script to run step 0 in bundle adjust, using many nodes.
+ * bundle_adjust_pt1.pbs
+   - Deprecated script to run step 1 in bundle adjust, using many nodes.
+ * bundle_adjust_pt2.pbs
+   - Optimize Cameras/Refine to topography (the actual bundle adjustment), uses 1 node.
+ * calibrate_edr.pbs
+   - Calibrate IMG to CUB and generate CSM Cameras, using many nodes.
+ * gdal_footprints.pbs
+   - Deprecated script to create image footprint geojson files, using many nodes.
+ * launch_stereo.pbs
+   - Deprecated script to run stereo, using many nodes.
+ * make_lerc_cogs.pbs
+   - Deprecated script to convert TIF files to LERC compressed COG TIFs, using many nodes.
+ * mapproj_ba.pbs
+   - Mapproject images using BA'd CSM Cameras and Topography, using many nodes. 
+   - Also computes footprints.
+ * mapproj_noba.pbs
+   - Mapproject images using Topography without BA'd CSM Cameras, using many nodes.
+   - Also computes footprints.
+ * run_command_list.pbs
+   - Unused script to run arbitrary lists of commands, using many nodes.
+ * run_geodiffs.pbs
+   - Unused script to run large numbers of geodiff calls, using many nodes.
+ * run_hillshade_align.pbs
+   - Hillshade align two DEMs, using a single node.
+ * run_individual_count_lit.pbs
+   - Generate SFS count map product for a single tile, uses a single node.
+ * run_individual_dem_mosaic.pbs
+   - Run dem_mosaic to merge DEM tiles, kinda optional, uses a single node.
+ * run_individual_image_correlation.pbs
+   - Deprecated script to run image correlation.
+ * run_individual_mapproj.pbs
+   - Deprecated script to map project a single image, uses a single node.
+ * run_individual_max_lit_indexes.pbs
+   - Generate SFS max lit index (which image contributed each pixel) map product for a single tile, uses a single node.
+ * run_individual_max_lit.pbs
+   - Generate SFS max lit map product for a single tile, uses a single node.
+ * run_individual_point2dem.pbs
+   - Run point2dem for stereo job. 
+ * run_individual_stereo.pbs
+   - Run a single stereo pair as a distinct job.
+ * run_sfs_blend.pbs
+   - Run SFS Blend step for SFS processing, using a single node.
+ * serve_folder.pbs
+   - Serve a folder from NAS over http for viewing COGs, not much faster than downloading individual files though.
+ * sfs_exposures.pbs
+   - Deprecated script to run SFS to precompute exposure lists.
+ * sfs.pbs
+   - Run SFS, or optionally run height uncertainty jobs, using many or 1 node.
+ * shadow_mask.pbs
+   - Generate shadow mask tif files and footprint geojsons, using many nodes.
+
 
 
 # Command Line Tools
@@ -363,85 +465,17 @@ echo "$DEM" >> MAPPROJ_DATA.txt
 You are now ready to run the pairwise bundle adjust script that will described below.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# OLD Notes below this line as of May 2025. 
-# Eventually below will be reincorporated above or removed!
-
-
-## Finding stereo pairs from SFS Cover outputs
-
-```bash
-find-stereo-pairs --db_path /tmp/mons_mouton_regional.gpkg -p "POLYGON((72471.2817000002 158818.3489,128308.508199999 158818.3489,128308.508199999 119030.173,72471.2817000002 119030.173,72471.2817000002 158818.3489))" -g /tmp/stereo_pairs_mons_mouton_regional.gpkg
-```
-
-and again metadata is propogated from the source GPKG file:
-
-```bash
-ogrinfo /tmp/stereo_pairs_mons_mouton_regional.gpkg stereo_pairs_mons_mouton_regional -so | head
-INFO: Open of `/tmp/stereo_pairs_mons_mouton_regional.gpkg'
-      using driver `GPKG' successful.
-
-Layer name: stereo_pairs_mons_mouton_regional
-Metadata:
-  PROVENANCE={"date":"2025-01-31 09:29:41.468754","user":"aannex","hostname":"starmirage","md5sum":"828e6e35a977a67f4ab16eab59dd2bfe"}
-Geometry: Unknown (any)
-Feature Count: 273
-Extent: (37521.275857, 67456.116796) - (153931.222797, 187826.424185)
-Layer SRS WKT:
-```
-
 ## Downloading EDRs fast
 
 ```bash
-db_to_urls.sh lrocedrlist.gpkg | xargs -n 1 -P 8  -I {} wget {} -P ~/nobackup/LROCNACEDR/
+db_to_urls.sh lrocedrlist.gpkg im | xargs -n 1 -P 8  -I {} wget {} -P ~/nobackup/LROCNACEDR/
 ```
 
 db_to_urls.sh (in base scripts) outputs a list of formatted URLs from a GeoPackage/other spatial format (for now just output from sfs-cover)
-into URLs that by default use the USGS AWS mirror of LROC NAC PDS data, which has much more bandwidth than the ASU servers.
+into URLs that by default use the USGS AWS mirror of LROC NAC PDS data, which has much more bandwidth than the ASU/IM servers. But it's suggested to just use the IM server to avoid giving the USGS a big bill.
 
 You can pass those to xargs and wget them in parallel, an example that downloaded almost 600 Gb only took a few minutes (maybe 10-15)
 
-## Get the list of Product Id's and their sub solar ground azimuths as a list
-
-This will just output two columns with no header due to the sed call
-```bash
-ogr2ogr -f CSV /vsistdout/  buffered_1km_mons_mouton_regional.gpkg -sql 'SELECT PRODUCT_ID, ROI_SUB_SOLAR_GROUND_AZIMUTH from buffered_1km_mons_mouton_regional ORDER BY ROI_SUB_SOLAR_GROUND_AZIMUTH ASC' | sed '1d'
-```
-
-
-## Get the projected extent of a raster (eg the DEM) 
-
-```bash
-rio bounds M2M_mons_mouton_lola_5mpp_erode_blend.tif --projected | jq -c '.bbox'
-```
-
-## Convert a bounds to a WKT polygon
-```bash
-python -m fire shapely box 72470.0 119030.0 128310.0 158820.0
-
-POLYGON ((128310 119030, 128310 158820, 72470 158820, 72470 119030, 128310 119030))
-```
-
-## Expand projwin by half a meter
-```bash
-wkt-round-out 'POLYGON ((128310 119030, 128310 158820, 72470 158820, 72470 119030, 128310 119030))'
-72469.5 119029.5 128310.5 158820.5
-```
 
 
 ## First round ba0 bundle adjust make lists of good images/cameras/mapprojected images
@@ -453,39 +487,6 @@ cat ../images.txt | prepare_ba0_lists.sh
 # IMAGES.txt, CAMERAS.txt, MAPPROJ_DATA.txt will be made
 # append the dem
 echo "path/to/dem.tif" >> MAPPROJ_DATA.txt
-```
-
-
-## combine folder of geojson files into one geojson file
-
-```bash
-jq '{"type": "FeatureCollection", "features": [.[] | .features[]]}' --slurp ./folder/*.geojson  > ./all_footprints.geojson
-```
-
-## combine the footprints geojson with the source database, retaining the new geometies
-
-TODO recompute fractional area
-
-```bash
-duckdb -c "LOAD spatial; CREATE TEMP TABLE df AS SELECT * FROM ST_READ('/tmp/buffered_1km_mons_mouton_regional.gpkg'); CREATE TEMP TABLE ov AS SELECT split_part(parse_filename(O.location, true),'.',1) as PRODUCT_ID, ST_ConvexHull(geom) as geom FROM ST_READ('./all_footprints.geojson') O; CREATE TEMP TABLE merged AS SELECT * EXCLUDE (geom), ov.geom FROM df JOIN ov ON df.PRODUCT_ID == ov.PRODUCT_ID; COPY merged TO 'mapprojected_footprints_noba.gpkg' WITH (FORMAT GDAL, DRIVER 'GPKG', SRS 'IAU:30135');"
-```
-
-
-## get the image ids that had high mean residuals as a CSV
-
-```bash
-duckdb -csv -c "SELECT \"# Image\" FROM read_csv('./ba0/ba0-final_residuals_stats.txt', skip=1, header=True) WHERE median > 2 AND isfinite(median)"
-```
-
-
-## inspect the mapproj_match_offset_stats and mapproj_match_offset_pair_stats.txt files
-
-```bash
-duckdb -c "SELECT * FROM read_csv('./baA/baA-mapproj_match_offset_stats.txt', skip=0, sep=' ',  header=False);"
-
-
-duckdb -c "SELECT * FROM read_csv('./baA/baA-mapproj_match_offset_pair_stats.txt', skip=0, sep=' ',  header=False) WHERE column5 <= 1.75 AND column5 > 0"
-
 ```
 
 
@@ -508,197 +509,6 @@ python ~/projects/sfstools/src/loony/verify_bundle_adjust.py 'baB/baB' --min_mat
 
 You will need to use this in joins later on like so
 
-TODO join also with residuals to pick low residuals only
 
-```bash
-duckdb -csv -c "INSTALL json; LOAD json; WITH comp AS (SELECT UNNEST(components[1]) as product_ids FROM read_json_auto('./test_delta/bundle_adjust_components.json')) SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./baD/baD-convergence_angles.txt', skip=2, header=False, sep=' ') JOIN comp ON comp.product_ids = column1 WHERE column2 > 10 AND column5 > 1000 ORDER BY column5 DESC;" | sed 's/,/ /g' | tail -n +2 > ./test_delta/CAMERA_PAIR_LIST.txt
-```
 
-```bash
-duckdb -csv -c "INSTALL json; LOAD json; WITH comp AS (SELECT UNNEST(components[1]) as product_ids FROM read_json_auto('./test_delta/bundle_adjust_components.json')), final_resid AS (SELECT \"# Image\" as product_ids FROM read_csv('./baD/baD-final_residuals_stats.txt', skip=1, header=True) WHERE median < 1.5 AND isfinite(median)) SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./baD/baD-convergence_angles.txt', skip=2, header=False, sep=' ') JOIN final_resid AS fr0 ON fr0.product_ids = column0 JOIN final_resid AS fr1 ON fr1.product_ids = column1 JOIN comp AS c0 ON c0.product_ids = column0 JOIN comp AS c1 ON c1.product_ids = column1  WHERE column2 > 10 AND column5 > 1000 ORDER BY column5 DESC;" | sed 's/,/ /g' | tail -n +2 > ./test_delta/CAMERA_PAIR_LIST.txt
-```
-
-
-### print out just the largest component list to txt list
-
-```bash
-cat bundle_adjust_components.json | jq  -r '.["components"][0][]' > BEST_IMAGES.txt
-# use sed to generate cameras
-cat bundle_adjust_components.json | jq  -r '.["components"][0][]' | sed 's/cub/json/g' > BEST_CAMERAS.txt
-# and get the best bundle adjusted versions of these cameras
-
-```
-
-
-TODO don't I have a generic utility for plotting anticipated stereo pairs? 
-
-
-
-## get the good stereo pair options from the convergence angle file
-column2 is the 25% value for the convergence angle (conservative)
-and column5 is the number of matches between the two images.
-
-```bash
-duckdb  -c "SELECT * FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10 ORDER BY column5 DESC"
-```
-note this will return the image files, not the map projected images so to get a more usable list do
-
-```bash
-duckdb -csv -c "SELECT replace(column0,'.cub', '.map.noba.tif'), replace(column1, '.cub', '.map.noba.tif') FROM read_csv('./ba0/ba0-convergence_angles.txt', skip=2, header=False, sep=' ') WHERE column2 > 10 AND column5 > 10"
-```
-
-to get a stereo pair list file use the `get_stereo_pairs_from_bundle_adjust.py` script
-
-```bash
-# first get the list assuming bundle-adjusted map projected images
-get_stereo_pairs_from_bundle_adjust.py baD/baD ./test_delta/bundle_adjust_components.json --use_ba_mapproj_tifs  --max_residual_error 1.25 --max_mapproj_error 1.75 > ./test_delta/STEREO_PAIR_LIST_BA.txt 
-# and next from raw cameras
-get_stereo_pairs_from_bundle_adjust.py baD/baD ./test_delta/bundle_adjust_components.json --max_residual_error 1.25 --max_mapproj_error 1.75 > ./test_delta/STEREO_PAIR_LIST_NOBA.txt 
-```
-(these files are the IMAGE_PAIR_LIST.txt files to use)
-
-and then use SED to get the corresponding adjusted_cameras for the CAMERA_PAIR_LIST.txt:
-
-```bash
-cat ./test_delta/STEREO_PAIR_LIST_NOBA.txt | sed 's/IMAGES\//baD\/baD-/g' | sed 's/.map.noba.tif/.adjusted_state.json/g' > ./test_delta/CAMERA_PAIR_LIST.txt 
-```
-
-## running stereo pairs as individual jobs
-
-we will use the launch_individual_stereo_jobs.sh script to parse the image and camera pairs and launch a bunch of small low priority jobs 
-
-```bash
-export DEM=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/m2m_mons_mouton_10k.tif
-export IMAGE_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/STEREO_PAIR_LIST_NOBA.txt
-export CAMERA_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/CAMERA_PAIR_LIST.txt
-export BA_PREFIX='baD/baD'
-export SUBMIT=true
-launch_individual_stereo_jobs.sh
-```
-
-
-
-
-
-### geodiff for stereo pairs
-
-```bash
-source init_asp.sh
-for i in ./*/*DEM.tif; do ; geodiff --threads 8 $i $DEM  -o "${i%/*}/run"; done
-# then
-```
-
-
-### various untested bash commands
-
-```bash
-# evict images that had high error
-grep -F -x -v -f bad_images.txt all_images.txt
-
-# get good images only (might be kinda useless, just use the good list at this point)
-grep -F -x -f good_images.txt all_images.txt
-```
-
-## dem mosaic
-first decide which are good
-
-```bash
-function jim {
-  gdalinfo $1 -stats -json | jq -c ".bands[0].metadata | .[""] + {file: \"$1\"}"
-}
-dem_mosaic ./*/run-DEM.tif -o all_dem_mosaic.tif
-for i in ./*/*DEM.tif; do gdal_translate -r average -outsize 50% 50% $i ${i%.tif}.half.tif; done
-#for i in ./*/*DEM.half.tif; do; geodiff --threads 8 $i $DEM -o "${i%/*}/run-ref"; done
-for i in ./*/*DEM.half.tif; do; geodiff --threads 8 $i all_dem_mosaic.tif -o "${i%/*}/run-all"; done
-#for i in <good images>; do; geodiff --threads 8 $i good_dem_mosaic.tif -o "${i%/*}/run-good"; done
-# look for the ones with low mean differences here
-# cross reference with low triangulation error
-for i in ./*/run-all-diff.tif; do echo $(jim $i) >> diff_all_jim.txt; done
-for i in ./*/*IntersectionErr.tif; do echo $(jim $i) >> inter_all_jim.txt; done 
-# remove diffs with means larger than 10/less than-10
-# remove intersection errors larger than 1 meter mean
-
-
-
-
-
-# then make the good_dem_mosaic
-dem_mosaic <good dems only> -o good_dem_mosaic.tif
-# then diff again
-for i in `cat good_list.txt`; do geodiff --threads 8 $i good_dem_mosaic.tif -o "${i%/*}/run-good"; done
-
-for i in ./*/run-good-diff.tif; do echo $i $(gim $i); done
-
-
-```
-
-## triangulation error plotting
-I needed more control over error plotting so I AI-slopped the script `triangulation_plot.py`
-```bash
-# plot the hillshades
-python ~/projects/sfstools/src/loony/triangulation_plot.py ./*/*DEM.half.tif --hillshade
-# plot the intersection errors
-python ~/projects/sfstools/src/loony/triangulation_plot.py ./*/*IntersectionErr.tif --out-prefix intersec
-```
-
-
-
-## pc align
-```bash
-pc_align --threads 8 --max-displacement 500 all_dem_mosaic_baD.tif $DEM --save-inv-transformed-reference-points -o run_align_all/run 
-
-pc_align --threads 8 --alignment-method nuth --max-displacement 500 all_dem_mosaic_baD.tif $DEM --save-inv-transformed-reference-points -o run_align_all_nuth/run 
-
-
-
-pc_align --threads 8 --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mouton_lola_5mpp_erode_blend.tif --save-inv-transformed-reference-points -o run_align_good/run 
-
-
-
-pc_align --threads 8 --alignment-method nuth --max-displacement 500 good_dem_mosaic.tif ../M2M_mons_mouton_lola_5mpp_erode_blend.tif --save-inv-transformed-reference-points -o run_align_good_nuth/run 
-```
-
-
-## compute valid pixels for avoiding shadowed images
-
-todo I suspect bundle adjust basically computes this already, but we could potentially
-pre-filter the images we use to ensure at least some of the pixels are actually illuminated after map projection to 
-the reference DEM.
-
-```bash
-# todo move to funct
-gdal_calc -A $1.noba.tif --calc="A>0.001" --outfile ~/$1_mask.tif --NoData=0 --type Byte --overwrite --co=COMPRESS=LZW
-gdalinfo ~/$1_mask.tif -stats # get the valid pixels from here
-```
-
-
-
-## get lists of files after bundle adjust refinement for maximally lit mosaics
-
-```bash
-duckdb -csv -c "WITH tbl AS (SELECT * FROM read_csv('../baD_align_ref/baD-mapproj_match_offset_pair_stats.txt', skip=0, sep=' ',  header=False) WHERE column5 < 1.0 AND column5 > 0 AND column7 > 1000 ORDER BY column5) SELECT column0 as img FROM tbl UNION SELECT column1 FROM tbl AS img;" | tail -n +2 | sort > max_list_list_limit_1.txt
-```
-
-from testing, raising the max 85% error value (column5) past 1 meter didn't add as many images as changing the tolerance on the number of matches (column7). For that, a value of 100 was found to be too permissive. 500 was found to be just on the edge (maybe a bad image or two is included), while 1000 seemed perfect, although some illumination diversity was lost.
-
-
-
-
-## Collect map projected footprints into a update geodatabase (GPKG) file using new scripts (deprecating lots of steps above)
-
-
-```bash
-# need to make this part easier
-source ~/projects/sfstools/base_scripts/sfs_utilities.sh
-
-collect_geojson ./IMAGES 'map.baD_align_ref.geojson' > all_map_baD_align_ref_footprints.geojson
-
-collect_geojson ./IMAGES 'map.noba.mask.geojson' > all_map_noba_mask_footprints.geojson
-
-collect_geojson ./IMAGES 'map.baD_align_ref.mask.geojson' > all_map_baD_align_ref_mask_footprints.geojson
-
-
-update_db_from_footprints.py ./mons_mouton_10k_5m.gpkg ./shadow_mask_mons_mouton_10k_5m.gpkg ./all_map_baD_align_ref_mask_footprints.geojson
-
-```
 

@@ -18,7 +18,6 @@ if [[ "$DEBUG" == "true" ]]; then
 fi
 # define usage once
 USAGE="qsub -v INPUT_DIR=/path/to/tif/files/ $0"
-
 # Ensure an input directory is provided
 if [ -z "$INPUT_DIR" ]; then
     echo "Error: INPUT_DIR is not set. Use $USAGE"
