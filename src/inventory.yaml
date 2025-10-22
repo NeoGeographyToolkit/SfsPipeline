@@ -1,7 +1,7 @@
 # This is an example of what we're calling an "inventory" file for 
 # an SfS project.  The goal of this file is to be placed in an SfS
 # project directory (typically on pleiades) when work on the project is finished.
-# This every project will have an inventory.yaml that someone can look at
+# Thus every project will have an inventory.yaml that someone can look at
 # and learn about the key data produced and the important information relevant
 # to the creation of the data from notes to command line switches, etc.
 #
