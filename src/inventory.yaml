@@ -1,0 +1,61 @@
+# This is an example of what we're calling an "inventory" file for 
+# an SfS project.  The goal of this file is to be placed in an SfS
+# project directory (typically on pleiades) when work on the project is finished.
+# This every project will have an inventory.yaml that someone can look at
+# and learn about the key data produced and the important information relevant
+# to the creation of the data from notes to command line switches, etc.
+#
+# This inventory file documents the relevant files in the project directory
+# that will be gathered up and delivered.  It also serves as a kind of final
+# report of program flags used or choices made during processing which resulted
+# in the files being pointed at.
+#
+# Beyond just these YAML items, please also use the comments to be as verbose
+# as possible about issues encountered caveats, known artifacts in the data,
+# etc.
+
+# The DEM used to start the process. For the Moon, this is typically
+# going to be some form of LOLA that has been modified to be at the
+# ground scale distance of the desired final product.
+base_terrain_path: path/to/lola_improved.tif
+
+final_bundle_adjust_prefix: path/to/ba_dir
+
+# Any stereo models made (individual or merged) that we want to share:
+stereo_dems:
+  - path/to/dem1.tif
+  - path/to/dem2.tif
+
+# Final output terrain model
+sfs_terrain_path: path/to/sfs.tif
+
+# This could be the path to the logfile that records all of the 
+# command line entries that produced the sfs_terrain_path
+sfs_terrain_log: path/to/sfs.log
+# or sfs_terrain_log: >-
+#  This is where the description of the command line used 
+#  to produce the terrain model can be provided, but the path
+#  to a log file is preferred which will also contain this 
+#  information.
+
+sfs_blend_terrain_path: path/to/sfs_blend.tif
+
+sfs_blend_terrain_log: path/to/sfs.log
+# or sfs_blend_terrain_log: >-
+#  This is where the description of the command line used 
+#  to produce the terrain model can be provided, but the path
+#  to a log file is preferred which will also contain this 
+#  information.
+
+sfs_blend_weight_path: path/to/weight.tif
+
+sfs_height_error_path: path/to/height_error.tif
+
+max_lit_path: path/to/maxlit.tif
+
+# Path to where the final orthoimages are (with the assumption that 
+# all *.tif files in the directory are the ortho images.)
+orthophoto_dir: path/to/lroc
+
+# If you use this, provide some comment here about how you used it.
+orthophoto_postfix: optional string
