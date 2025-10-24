@@ -204,6 +204,22 @@ bundle_adjust_pt2.pbs
 
 ## 5. 2nd Pass BA using Terrain Refinement
 
+This time we'll run BA again using the LOLA terrain as a constraint, the only difference this time is adding the `USE_DEM_HEIGHTS` and the `MATCH_FILES_PREFIX`
+
+```bash
+unset DEBUG
+export SUBMIT=true
+export DEM="roi_1m_lola.tif"
+export IMAGES="./ba0/ba0-image_list.txt"
+export IMAGES="./ba0/ba0-camera_list.txt"
+export MAPPROJ_DATA="alpha/MAPPROJ_DATA.txt"
+export BA_PREFIX='ba0_ref/ba0_ref'
+export MATCH_FILES_PREFIX='ba0/ba0'
+export USE_DEM_HEIGHTS=true
+bundle_adjust_pt2.pbs
+
+```
+
 
 ## 6. First pass SFS for hill shade alignment
 
@@ -231,26 +247,81 @@ Next we use a script called lit_select (not the one in ASP) to select the images
 ```bash
 for i in roi_1m_lola.tile.*.vrt; do; do
     echo $i
-    python ~/projects/sfstools/src/loony/lit_select.py roi_mask_ba0s_ref_footprints.gpkg --dem_path $i --verify_out_json=alpha/ba0s_ref_components.json  --verbose --min_v 0 --max_v 370 | sort > "./sfs/${i%.vrt}.txt"
+    python ~/projects/sfstools/src/loony/lit_select.py roi_mask_ba0_ref_footprints.gpkg --dem_path $i --verify_out_json=alpha/ba0_ref_components.json  --verbose --min_v 0 --max_v 370 | sort > "./sfs/${i%.vrt}.txt"
 done
 
 for i in ./sfs/roi_1m_lola.tile.*.txt; do
     # convert to image list (be sure to use the full resolve path to IMAGES below)
     awk '{print "IMAGES/"$1".ech.cub"}' $i > "${i%.txt}.IMAGES.txt"
     # and convert the image list to cameras
-    cat "${i%.txt}.IMAGES.txt" | sed 's/IMAGES\//ba0s_ref\/ba0s_ref-ba0s-/g' | sed 's/.cub/.adjusted_state.json/g'  > "${i%.txt}.CAMERAS.txt"
+    cat "${i%.txt}.IMAGES.txt" | sed 's/IMAGES\//ba0_ref\/ba0_ref-ba0s-/g' | sed 's/.cub/.adjusted_state.json/g'  > "${i%.txt}.CAMERAS.txt"
 done
 
 for i in roi_1m_lola.tile.*.vrt; do; do
     export IMAGES="sfs/${i%.vrt}.IMAGES.txt"
     export MAPPROJ_IMAGE_LIST="sfs/${i%.vrt}.MAPPROJ_IMAGES.txt"
-    cat "$IMAGES" | sed 's/.cub/.map.ba0s_ref.tif/g' > "$MAPPROJ_IMAGE_LIST"
+    cat "$IMAGES" | sed 's/.cub/.map.ba0_ref.tif/g' > "$MAPPROJ_IMAGE_LIST"
 done
 ```
 
+### 6.3 Make the SFS DEM
+
+```bash
+export NOSLEEP=true
+export SUBMIT=true
+export RUN_MODE='standard'
+export ROBUST_THRESHOLD=0.05
+export PADDING_SIZE=32
+export INITIAL_DEM_CONSTRAINT_WEIGHT=0.001
+export SHADOW_THRESHOLD=0.005
+for i in roi_1m_lola.tile.*.vrt; do
+    export DEM=$(realpath $i)
+    export IMAGES="sfs/${i%.vrt}.IMAGES.txt"
+    export CAMERAS="sfs/${i%.vrt}.CAMERAS.txt"
+    export _SFS_PREFIX="sfs/${i%.vrt}/${i%.vrt}"
+    export SFS_PREFIX="${_SFS_PREFIX//./_}"
+    echo $DEM
+    echo $IMAGES
+    echo $CAMERAS
+    echo $SFS_PREFIX
+    sfs.pbs
+done
+
+# when the jobs complete, log into a devel/debug interactive job and make the merged DEM
+cd sfs/
+dem_mosaic ./*/*-DEM-final.tif  -o roi_sfs_dem.tif 
+hillshade_dem roi_sfs_dem.tif
+
+```
 
 
 ## 7. Hillshade alignment and new Bundle Adjust
+
+To run the Hillshade alignment, we first need to blur the SFS dem to match the texture we see in the LOLA at 1mpp.
+
+The `blur_to_lola` script does this, by downscaling the data to 5mpp first and then interpolating it back down to 1mpp.
+
+
+```bash
+# first blur the sfs dem
+blur_to_lola sfs/roi_sfs_dem.tif
+
+# run the new pbs script to perform the hillshade alignment, run it inside alpha folder to keep things tidy
+cd alpha/
+export SUBMIT=true
+export REF="roi_1m_lola.tif" 
+export SRC=sfs/roi_sfs_dem.blur.tif
+run_hillshade_align.pbs
+```
+
+#### 5.1 Apply the hillshade alignment transform to all the cameras
+
+```bash
+
+# use bundle adjust to apply the transform to all the cameras in a devel job
+bundle_adjust --image-list ba0_ref/ba0_ref-image_list.txt  --camera-list ba0_ref/ba0_ref-camera_list.txt --initial-transform alpha/hill_align/run-transform.txt --apply-initial-transform-only -o ba0_ref_hsa/ba0_ref_hsa
+
+```
 
 
 ## 8. Second Pass SFS for final products
