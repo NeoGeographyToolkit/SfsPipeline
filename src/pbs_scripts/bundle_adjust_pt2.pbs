@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt2
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=128:model=rom_ait,walltime=24:00:00    
-#PBS -q long
+#PBS -l select=1:ncpus=128:model=rom_ait,walltime=8:00:00    
+#PBS -q normal
 #PBS -m abe                     
 #PBS -o pbs_ba_pt2.log   
 #PBS -r y                       
@@ -31,8 +31,10 @@ fi
 USAGE="qsub -v DEM=/path/to/dem.tif,IMAGES=/path/to/list/of/tifs.txt,CAMERAS=/path/to/list/of/jsons.txt,MAPPROJ_DATA=/path/to/mapproj_data.txt,OVERLAP_LIST=/path/to/overlap_list.txt,BA_PREFIX=ba0/run $0"
 # Ensure a DEM was provided
 if [[ -z "$DEM" || ! -e "$DEM" ]]; then
-    echo "Error: DEM is not set. Use $USAGE"
-    exit 1
+    if [[ -z "$GCP_FILE" ]]; then
+        echo "Error: DEM is not set. Use $USAGE"
+        exit 1
+    fi
 fi
 echo "DEM file: $DEM"
 # Ensure a image list is provided
@@ -48,19 +50,21 @@ if [[ -z "$CAMERAS" || ! -e "$CAMERAS" ]]; then
 fi
 echo "Path to cameras list: $CAMERAS"
 # If we aren't refining a existing bundle adjust using terrain ignore these
-if [[ -z $USE_DEM_HEIGHTS ]]; then
-    # Ensure the map projected images + the DEM as the last file are included as a list
-    if [[ -z "$MAPPROJ_DATA" || ! -e "$MAPPROJ_DATA" ]]; then
-        echo "Error: IMAGES is not set. Use $USAGE"
-        exit 1
+if [[ -z "GCP_FILE" ]]; then
+    if [[ -z $USE_DEM_HEIGHTS ]]; then
+        # Ensure the map projected images + the DEM as the last file are included as a list
+        if [[ -z "$MAPPROJ_DATA" || ! -e "$MAPPROJ_DATA" ]]; then
+            echo "Error: IMAGES is not set. Use $USAGE"
+            exit 1
+        fi
+        echo "Path to mapprojected data list: $MAPPROJ_DATA"
+        # get overlap list file
+        if [[ -z "$OVERLAP_LIST" || ! -e "$OVERLAP_LIST" ]]; then
+            echo "Error: OVERLAP_LIST is not set. Use $USAGE"
+            exit 1
+        fi
+        echo "Path to overlap list: $OVERLAP_LIST"
     fi
-    echo "Path to mapprojected data list: $MAPPROJ_DATA"
-    # get overlap list file
-    if [[ -z "$OVERLAP_LIST" || ! -e "$OVERLAP_LIST" ]]; then
-        echo "Error: OVERLAP_LIST is not set. Use $USAGE"
-        exit 1
-    fi
-    echo "Path to overlap list: $OVERLAP_LIST"
 fi
 # Ensure a output prefix is provided
 if [[ -z "$BA_PREFIX" ]]; then
@@ -78,6 +82,19 @@ if [[ -z "$ROBUST_THRESHOLD" ]]; then
     export ROBUST_THRESHOLD=1.0
 fi
 echo "Using ROBUST_TRESHOLD: $ROBUST_THRESHOLD"
+# set dem height uncertainty
+if [[ -z "$DEM_HEIGHT_UNCERTAINTY" ]]; then
+    export DEM_HEIGHT_UNCERTAINTY=10.0
+fi
+echo "Using DEM_HEIGHT_UNCERTAINTY: $DEM_HEIGHT_UNCERTAINTY"
+# if gcps are passed in use them
+if [[ -n "GCP_FILE" ]]; then
+    echo "Using GCP_FILE: $GCP_FILE"
+fi
+if [[ -z "$GCP_REPROJ_ERR" ]]; then
+    export GCP_REPROJ_ERR=2.0
+fi
+echo "Using GCP_REPROJ_ERR: $GCP_REPROJ_ERR"
 # determine if this is a refinement pass with DEM 
 if [[ -n $USE_DEM_HEIGHTS ]]; then
     export KIND='ref'
@@ -164,25 +181,38 @@ echo PATH is "$PATH"
 args=(
       --entry-point 2           
       --image-list "$IMAGES"    
-      --camera-list "$CAMERAS"  
-      --mapproj-dem "$DEM"     
+      --camera-list "$CAMERAS"     
       --processes 1            
       --threads 256             
       --nodata-value 0.001      
       --ip-detect-method 1      
-      --ip-per-tile  400            
+      --ip-per-tile 1648
+      --matches-per-tile 512
+      --matches-per-tile-params 384 758          
       --num-iterations 500      
-      --num-passes 2            
-      --min-matches 50          
+      --num-passes 4            
+      --min-matches 50         
       --max-pairwise-matches "$MAX_PAIRWISE_MATCHES"
       --camera-weight 0           
       --robust-threshold "$ROBUST_THRESHOLD"     
       --tri-weight 0.1            
       --tri-robust-threshold 0.25 
       --min-triangulation-angle 0.1 
+      --max-gcp-reproj-err "$GCP_REPROJ_ERR"
       --remove-outliers-params "75.0 3.0 100 100"    
-      -o "$BA_PREFIX" 
 )
+if [[ -n $GCP_FILE ]]; then
+    echo "We will use gcp file in the bundle adjust: ${GCP_FILE}"
+    args+=("$GCP_FILE")
+    #args+=("")
+fi
+
+# output must be close to last I think
+args+=(-o "$BA_PREFIX" )
+
+if [[ -n "$DEM" ]]; then
+    args+=(--mapproj-dem "$DEM")
+fi
 
 if [[ -n "$SAVE_INTERMEDIATE_CAMERAS" ]]; then
     args+=(--save-intermediate-cameras)
@@ -210,12 +240,14 @@ if [[ -n $FIXED_IMAGES ]]; then
     args+=(--fixed-image-list "$FIXED_IMAGES")
 fi
 
-if [[ -n $USE_DEM_HEIGHTS ]]; then
-    echo "We will use heights from the dem: ${DEM} as a constraint"
-    args+=(--heights-from-dem "$DEM" --heights-from-dem-uncertainty 10.0 --heights-from-dem-robust-threshold 0.1)
-    if [[ -z "$MATCH_FILES_PREFIX" && -z "$CLEAN_MATCH_FILES_PREFIX" ]]; then
-        echo "ERROR! YOU SHOULD REALLY HAVE 'MATCH_FILES_PREFIX' or 'CLEAN_MATCH_FILES_PREFIX' SET TO PRIOR BA PASS!"
-        exit 1
+if [[ -z $GCP_FILE ]]; then
+    if [[ -n $USE_DEM_HEIGHTS ]]; then
+        echo "We will use heights from the dem: ${DEM} as a constraint"
+        args+=(--heights-from-dem "$DEM" --heights-from-dem-uncertainty "$DEM_HEIGHT_UNCERTAINTY" --heights-from-dem-robust-threshold 0.1)
+        if [[ -z "$MATCH_FILES_PREFIX" && -z "$CLEAN_MATCH_FILES_PREFIX" ]]; then
+            echo "ERROR! YOU SHOULD REALLY HAVE 'MATCH_FILES_PREFIX' or 'CLEAN_MATCH_FILES_PREFIX' SET TO PRIOR BA PASS!"
+            exit 1
+        fi
     fi
 fi
 
@@ -227,6 +259,8 @@ if [[ -n $CLEAN_MATCH_FILES_PREFIX ]]; then
     echo "We will use clean match files from a previous bundle adjust ${CLEAN_MATCH_FILES_PREFIX}"
     args+=(--clean-match-files-prefix "$CLEAN_MATCH_FILES_PREFIX")
 fi
+
+
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"
 JOBS_FOLDER="$WORKDIR/jobs"

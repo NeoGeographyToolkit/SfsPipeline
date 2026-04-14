@@ -2,7 +2,7 @@
 #PBS -N pbs_ba_pt0
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=32:ncpus=20:model=ivy,walltime=08:00:00        
+#PBS -l select=8:ncpus=128:model=rom_ait,walltime=08:00:00        
 #PBS -q normal                
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 

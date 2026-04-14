@@ -2,7 +2,7 @@
 #PBS -N pbs_sfs_blend
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=1:ncpus=20:model=cas_ait,walltime=04:00:00        
+#PBS -l select=1:ncpus=10:model=rom_ait,walltime=04:00:00        
 #PBS -q normal
 #PBS -o pbs_sfs_blend.log
 #PBS -r y                       
@@ -52,6 +52,11 @@ if [[ -z "$OUT_WEIGHT" ]]; then
     export OUT_WEIGHT="${STEM}.weight.tif"
 fi
 echo "OUT_WEIGHT file: $OUT_WEIGHT"
+# SHADOW_THRESHOLD default should be 0.005, use 0.003 for sun down ridge fixes
+if [[ -z "$SHADOW_THRESHOLD" ]]; then
+    export SHADOW_THRESHOLD=0.005
+fi
+echo "SHADOW_THRESHOLD: $SHADOW_THRESHOLD"
 # Ensure the work dir is set to something
 if [[ -z "$WORKDIR" ]]; then
     # we will default to the current working directory wherever that is
@@ -130,7 +135,7 @@ args_sfs_blend=(
             --lola-dem "$REF_DEM"
             --sfs-dem "$VRT_SFS_DEM"
             --max-lit-image-mosaic "$VRT_MAX_LIT"
-            --image-threshold 0.002 
+            --image-threshold "$SHADOW_THRESHOLD" 
             --lit-blend-length 25 
             --shadow-blend-length 5    
             --min-blend-size 50 
@@ -174,10 +179,13 @@ PROCESS_WEIGHT_COG="${args_weight_cog[@]}"
 if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
     echo "Starting Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
     # run sfs_blend
+    echo "$PROCESS_BLEND" >> "$LOG_FILE" 2>&1
     eval "$PROCESS_BLEND" >> "$LOG_FILE" 2>&1
     # run gdal_translate to make the blended dem a cog
+    echo "$PROCESS_BLEND_COG" >> "$LOG_FILE" 2>&1
     eval "$PROCESS_BLEND_COG" >> "$LOG_FILE" 2>&1
     # run gdal_translate to make the weight raster a cog
+    echo "$PROCESS_WEIGHT_COG" >> "$LOG_FILE" 2>&1
     eval "$PROCESS_WEIGHT_COG" >> "$LOG_FILE" 2>&1
     # The jobs have actually completed 
     echo "Finished Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
