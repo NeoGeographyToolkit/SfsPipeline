@@ -107,7 +107,7 @@ echo "machine file is $PBS_NODEFILE"
 # source asp environment
 source init_asp.sh
 # source the sfs_utils
-source "$HOME/projects/sfstools/base_scripts/sfs_utilities.sh"
+source "$HOME/projects/SfsPipeline/base_scripts/sfs_utilities.sh"
 # echo out ISISDATA and ISISROOT
 echo ISIS data is "$ISISDATA" 
 echo ISIS root is "$ISISROOT"

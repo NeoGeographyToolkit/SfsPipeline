@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/NeoGeographyToolkit/sfstools.git"
+Repository = "https://github.com/NeoGeographyToolkit/SfsPipeline.git"
 
 [tool.setuptools.packages.find]
 where = ["src"]

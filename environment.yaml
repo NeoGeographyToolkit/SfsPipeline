@@ -1,4 +1,4 @@
-name: loony
+name: SfsPipeline
 channels:
   - conda-forge
 dependencies:

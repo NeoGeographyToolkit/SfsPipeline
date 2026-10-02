@@ -110,11 +110,11 @@ shadow_mask.pbs
 When that's done, we can generate the updated gpkg file by the following two step process
 
 ```bash
-source sfstools/base_scripts/sfs_utilities.sh
+source SfsPipeline/base_scripts/sfs_utilities.sh
 # collect geojson stream is a bash utility function in sfs_utilities.sh
 collect_geojson_stream ./IMAGES 'map.noba.mask.geojson' > noba_mask_footprints.geojson
 # run the update_db_from_footprints.py file
-python sfstools/src/loony/update_db_from_footprints.py roi.gpkg roi_noba_mask_footprints.gpkg  ./noba_mask_footprints.geojson
+python SfsPipeline/src/loony/update_db_from_footprints.py roi.gpkg roi_noba_mask_footprints.gpkg  ./noba_mask_footprints.geojson
 ```
 
 ### 3.2 Generate the overlaps list
@@ -236,8 +236,8 @@ Aim to make tiles no larger than 5128x5128 pixels (5.128km x 5.128km), for small
 
 ```bash
 # first run the following command to generate a minimal acceptable number of tiles, and view the gpkg in QGIS to make sure it looks good
-python sfstools/src/loony/to_vrt_tiles.py dem_to_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 to_gpkg roi_3k_tiles.gpkg
-python sfstools/src/loony/to_vrt_tiles.py dem_to_vrt_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 # this will actually generate the vrts
+python SfsPipeline/src/loony/to_vrt_tiles.py dem_to_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 to_gpkg roi_3k_tiles.gpkg
+python SfsPipeline/src/loony/to_vrt_tiles.py dem_to_vrt_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 # this will actually generate the vrts
 ```
 
 ### 6.2 Make the list files for the SFS Jobs
@@ -247,7 +247,7 @@ Next we use a script called lit_select (not the one in ASP) to select the images
 ```bash
 for i in roi_1m_lola.tile.*.vrt; do; do
     echo $i
-    python ~/projects/sfstools/src/loony/lit_select.py roi_mask_ba0_ref_footprints.gpkg --dem_path $i --verify_out_json=alpha/ba0_ref_components.json  --verbose --min_v 0 --max_v 370 | sort > "./sfs/${i%.vrt}.txt"
+    python ~/projects/SfsPipeline/src/loony/lit_select.py roi_mask_ba0_ref_footprints.gpkg --dem_path $i --verify_out_json=alpha/ba0_ref_components.json  --verbose --min_v 0 --max_v 370 | sort > "./sfs/${i%.vrt}.txt"
 done
 
 for i in ./sfs/roi_1m_lola.tile.*.txt; do

@@ -158,9 +158,9 @@ for i in ./*/run-good-diff.tif; do echo $i $(gim $i); done
 I needed more control over error plotting so I AI-slopped the script `triangulation_plot.py`
 ```bash
 # plot the hillshades
-python ~/projects/sfstools/src/loony/triangulation_plot.py ./*/*DEM.half.tif --hillshade
+python ~/projects/SfsPipeline/src/loony/triangulation_plot.py ./*/*DEM.half.tif --hillshade
 # plot the intersection errors
-python ~/projects/sfstools/src/loony/triangulation_plot.py ./*/*IntersectionErr.tif --out-prefix intersec
+python ~/projects/SfsPipeline/src/loony/triangulation_plot.py ./*/*IntersectionErr.tif --out-prefix intersec
 ```
 
 
@@ -211,7 +211,7 @@ from testing, raising the max 85% error value (column5) past 1 meter didn't add 
 
 ```bash
 # need to make this part easier
-source ~/projects/sfstools/base_scripts/sfs_utilities.sh
+source ~/projects/SfsPipeline/base_scripts/sfs_utilities.sh
 
 collect_geojson ./IMAGES 'map.baD_align_ref.geojson' > all_map_baD_align_ref_footprints.geojson
 

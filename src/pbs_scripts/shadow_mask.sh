@@ -4,7 +4,7 @@
 [ -f ~/.bashrc ] && source ~/.bashrc
 # source asap environment
 source init_sfstools.sh
-micromamba activate sfstools
+micromamba activate SfsPipeline
 export PYTHONHOME=$CONDA_PREFIX
 ################################################
 # Must have 1 arguments. Print usage on failure.
