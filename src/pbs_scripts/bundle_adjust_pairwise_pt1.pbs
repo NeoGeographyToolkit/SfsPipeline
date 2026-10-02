@@ -2,8 +2,8 @@
 #PBS -N pbs_ba_pt1_pairwise
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=26:ncpus=20:model=ivy,walltime=24:00:00        
-#PBS -q long              
+#PBS -l select=16:ncpus=128:model=rom_ait,walltime=08:00:00            
+#PBS -q normal              
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_ba_pt1_pairwise.log   
@@ -23,27 +23,27 @@ if [[ "$DEBUG" == "true" ]]; then
 fi
 # get the number of nodes (will typically be high)
 if [[ -z "$NUM_NODES" ]]; then
-    export NUM_NODES=32
+    export NUM_NODES=16
 fi;
 echo "Using NUM_NODES $NUM_NODES"
 # get the number of cpus per node
 if [[ -z "$NUM_CPUS" ]]; then
-    export NUM_CPUS=20
+    export NUM_CPUS=128
 fi;
 echo "Using NUM_CPUS $NUM_CPUS"
 # get the model (node type)
 if [[ -z "$MODEL" ]]; then
-    export MODEL='ivy'
+    export MODEL='rom_ait'
 fi;
 echo "Using MODEL $MODEL"
 # get the walltime
 if [[ -z "$WALLTIME" ]]; then
-    export WALLTIME="24:00:00"
+    export WALLTIME="8:00:00"
 fi;
 echo "Using WALLTIME $WALLTIME"
 # get the queue (low, normal, long, ldan)
 if [[ -z "$QUEUE" ]]; then
-    export QUEUE="long"
+    export QUEUE="normal"
 fi;
 echo "Using QUEUE $QUEUE"
 # define usage once
@@ -146,8 +146,8 @@ else
     # Ensure cleanup on exit or error
     trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
     # write out the number of jobs per node 
-    DEFAULT_JOBS=9
-    LOCAL_JOBS=6
+    DEFAULT_JOBS=60
+    LOCAL_JOBS=60
     LOCAL_HOST=$(hostname -s)
     # start the output file 
     # Append the local node with LOCAL_JOBS
@@ -283,9 +283,11 @@ if [[ -z "$PARALLEL_JOBS_LIST_FILE" ]]; then
                 --threads 3              
                 --nodata-value 0.001      
                 --ip-detect-method 1      
-                --ip-per-tile  400            
+                --ip-per-tile  500
+                --matches-per-tile 100
+                --matches-per-tile-params 512 768             
                 --num-iterations 500      
-                --num-passes 2            
+                --num-passes 4            
                 --min-matches 10          
                 --max-pairwise-matches "$MAX_PAIRWISE_MATCHES"
                 --camera-weight 0           
@@ -335,7 +337,7 @@ if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then
     if [[ $NUM_NODES -gt 1 ]]; then
         parallel_opts+=(
             --controlmaster 
-            --sshdelay 0.1 
+            --sshdelay 0.01 
             --sshloginfile "$GNU_PARALLEL_NODEFILE"
         )
     else

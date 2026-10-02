@@ -2,7 +2,7 @@
 #PBS -N pbs_make_lerc_cogs       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=2:ncpus=128:model=rom_ait,walltime=08:00:00        
+#PBS -l select=1:ncpus=128:model=rom_ait,walltime=08:00:00        
 #PBS -q normal                  
 #PBS -m abe                     
 #PBS -M andrew.m.annex@nasa.gov 

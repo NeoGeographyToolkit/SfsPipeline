@@ -56,13 +56,13 @@ class InsepctBA(object):
             );"""
         )             
 
-    def __init__(self, ba_prefix: str, min_match_count = 400, max_residual_error: float = 1.25):
+    def __init__(self, ba_prefix: str, min_match_count = 400, max_residual_error: float = 1.25, component_index: int = 0):
         # load residuals, match pairs, and map project offsets
         self.__load_residuals(ba_prefix)
         self.__load_pair_matches(ba_prefix)
         self.__load_match_offsets(ba_prefix)
         # get just the images with valid residuals 
-        vr = self.residuals.filter(f'median < {max_residual_error}').filter(f'count >= {min_match_count}').set_alias('vr')   
+        vr = self.residuals.filter(f'median <= {max_residual_error}').filter(f'count >= {min_match_count}').set_alias('vr')   
         # get just the pairs with num above min match count
         vm = self.pair_matches.filter(f'num >= {min_match_count}').set_alias('vm')
         # filter the match offsets to only include those images who's p85 is less than max_residual_error
@@ -99,7 +99,7 @@ class InsepctBA(object):
         self.G.add_edges_from(lr)
         components = list(nx.connected_components(self.G))
         components = sorted(components, key=len, reverse=True)
-        self.G = self.G.subgraph(components[0]).copy() 
+        self.G = self.G.subgraph(components[component_index]).copy() 
         # final updates
         self.vr=vr
         self.vm=vm
