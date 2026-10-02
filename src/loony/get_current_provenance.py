@@ -11,7 +11,7 @@ def run():
         "date": str(datetime.datetime.now()),
         "user": getpass.getuser(),
         "hostname": socket.gethostname(),
-        "md5sum": sh.md5sum(Path('~/CUMINDEX.TAB').expanduser()).split(' ')[0]
+        "md5sum": sh.md5sum(Path('~/LRO_EDR_CUMINDEX/CUMINDEX.TAB').expanduser()).split(' ')[0]
     }
     provenance_info_json = json.dumps(provenance_info, separators=(',', ':'))
     print(provenance_info_json, flush=True)

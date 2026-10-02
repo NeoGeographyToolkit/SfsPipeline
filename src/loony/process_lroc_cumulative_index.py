@@ -9,7 +9,7 @@ from .ground_azimuth import ground_azimuth_numpy as ground_azimuth
 # next download CUMINDEX.TAB to your home dir 
 
 
-def run(lbl_path: str = '~/CUMINDEX.LBL'):
+def run(lbl_path: str = '~/LRO_EDR_CUMINDEX/CUMINDEX.LBL'):
     lbl_path: Path = Path(lbl_path).expanduser()
     db_path: Path = lbl_path.with_suffix('.TAB')
     assert lbl_path.exists() and db_path.exists()
@@ -83,6 +83,7 @@ def run(lbl_path: str = '~/CUMINDEX.LBL'):
 
     ### compute SubSpacecraft Ground Azimuth and SupSolar Ground Azimuth
     # Grab the columns we need from the current database
+    # Note this is not the SUB_SOLAR_GROUND_AZIMUHTH to use really, we compute a ROI_SSGA later
     # TODO I don't like this SELECT here, but this is much less lines of code than making intermediate tables and inserting new columns and such
     df = con.execute("""SELECT * FROM cleaned""").pl()
     df_cleaned_with_ground_azimuths = df.with_columns(
@@ -113,7 +114,7 @@ def run(lbl_path: str = '~/CUMINDEX.LBL'):
         CREATE TEMP TABLE 
             lrocnac_all
         AS SELECT 
-            PRODUCT_ID, VOLUME_ID, ORBIT_NUMBER, FILE_SPECIFICATION_NAME, START_TIME, EMISSION_ANGLE, INCIDENCE_ANGLE, PHASE_ANGLE, CENTER_LONGITUDE, CENTER_LATITUDE, NORTH_AZIMUTH, SUB_SOLAR_AZIMUTH, SUB_SOLAR_LATITUDE, SUB_SOLAR_LONGITUDE, SUB_SPACECRAFT_LATITUDE, SUB_SPACECRAFT_LONGITUDE, SOLAR_DISTANCE, SOLAR_LONGITUDE, SUB_SOLAR_GROUND_AZIMUTH, SUB_SPACECRAFT_GROUND_AZIMUTH, SCALED_PIXEL_WIDTH, SCALED_PIXEL_HEIGHT, RESOLUTION, TARGET_CENTER_DISTANCE,
+            PRODUCT_ID, VOLUME_ID, ORBIT_NUMBER, FILE_SPECIFICATION_NAME, START_TIME, EMISSION_ANGLE, INCIDENCE_ANGLE, PHASE_ANGLE, CENTER_LONGITUDE, CENTER_LATITUDE, NORTH_AZIMUTH, SUB_SOLAR_AZIMUTH, SUB_SOLAR_LATITUDE, SUB_SOLAR_LONGITUDE, SUB_SPACECRAFT_LATITUDE, SUB_SPACECRAFT_LONGITUDE, SOLAR_DISTANCE, SOLAR_LONGITUDE, SUB_SOLAR_GROUND_AZIMUTH, SUB_SPACECRAFT_GROUND_AZIMUTH, SCALED_PIXEL_WIDTH::DOUBLE as SCALED_PIXEL_WIDTH, SCALED_PIXEL_HEIGHT::DOUBLE as SCALED_PIXEL_HEIGHT, RESOLUTION::DOUBLE as RESOLUTION, TARGET_CENTER_DISTANCE::DOUBLE as TARGET_CENTER_DISTANCE, SLEW_ANGLE::DOUBLE as SLEW_ANGLE,
             ST_GeomFromText(
             'POLYGON((' || 
                 LOWER_RIGHT_LONGITUDE || ' ' || LOWER_RIGHT_LATITUDE  || ', ' ||

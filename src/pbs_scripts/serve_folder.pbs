@@ -1,0 +1,79 @@
+#!/bin/bash
+#PBS -N pbs_serve_folder
+#PBS -j oe                      
+#PBS -k oe                      
+#PBS -l select=1:ncpus=4:model=rom_ait,walltime=01:00:00        
+#PBS -q devel                
+#PBS -m abe                     
+#PBS -M andrew.m.annex@nasa.gov 
+#PBS -o pbs_serve_folder.log
+#PBS -e pbs_serve_folder.err      
+#PBS -r y                       
+#PBS -S /bin/bash               
+#PBS -V                         
+#PBS -W group_list=e2305
+# Enable stepwise debugging if DEBUG is set to "true"
+if [[ "$DEBUG" == "true" ]]; then
+    trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
+fi     
+# Ensure a PORT is set
+if [ -z "$PORT" ]; then
+    export PORT=8080    
+fi
+echo "Using Port: $PORT"
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
+cd "$WORKDIR" || exit
+##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # submit to qsub
+    submit_name="pbs_serve_folder"
+    echo "about to submit $submit_name"
+    # actually sleep
+    sleep 15
+    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log"  -V "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# source asp environment
+source init_asp.sh
+# echo out ISISDATA and ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
+# echo out PATH
+echo PATH is "$PATH"
+# save the path to rclone
+RCLONE_BIN=$(which rclone)
+echo "Path to rclone: $RCLONE_BIN"
+##############################################
+# https://rclone.org/commands/rclone_serve_http/
+# TODO add read timeout
+# TODO add max header bytes
+echo "Starting rclone HTTP server..."
+"$RCLONE_BIN" serve http . \
+    --addr ":$PORT" \
+    --read-only \
+    --copy-links \
+    --no-modtime \
+    --disable-http-keep-alives \
+    --buffer-size 64Mi \
+    --transfers 16 \
+    --vfs-cache-mode off \
+    --include "*.tif" \
+    --include "*.json" \
+    --stats 120s \
+    --log-level INFO

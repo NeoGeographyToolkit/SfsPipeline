@@ -1,0 +1,128 @@
+#!/bin/bash
+#PBS -N pbs_point_dem
+#PBS -j oe                      
+#PBS -k oe                      
+#PBS -l select=1:ncpus=20:model=rom_ait,walltime=02:00:00        
+#PBS -q normal
+#PBS -o pbs_point_dem.log
+#PBS -r y                       
+#PBS -S /bin/bash               
+#PBS -V                         
+#PBS -W group_list=e2305     
+# Enable stepwise debugging if DEBUG is set to "true"
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours
+
+# Enable stepwise debugging if DEBUG is set to "true"
+if [[ "$DEBUG" == "true" ]]; then
+    trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
+fi
+# define usage
+USAGE="SRC=? $0"
+# Ensure a SRS is set
+if [[ -z "$SRS" ]]; then
+    export SRS='IAU_2015:30135'
+fi
+echo "SRS: $SRS"
+# Ensure a MPP is set
+if [[ -z "$MPP" ]]; then
+    export MPP=1.0
+fi
+echo "MPP: $MPP"
+# OUT_NAME
+if [[ -z "$SRC" || ! -e "$SRC" ]]; then
+    echo "Error: SRC is not set. Use $USAGE"
+    exit 1
+fi
+echo "SRC file: $SRC"
+# precompute the base filename for the output image
+BASE=$(basename "$SRC")
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
+cd "$WORKDIR" || exit 
+##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    submit_name="pbs_run_point_dem_${BASE%%.tif}"
+    echo "$submit_name"
+    if [[ -z $NOSLEEP ]]; then
+        # actually sleep if no sleep is not set
+        sleep 15
+    fi
+    # submit to qsub
+    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log" -V "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
+# Change to the working directory
+echo Working directory is "$PBS_O_WORKDIR"
+if [[ -n $PBS_O_WORKDIR ]]; then
+    cd "$PBS_O_WORKDIR" || exit
+fi
+echo "machine is $(uname -a)"
+echo "machine file is $PBS_NODEFILE"
+##############################################
+# source asp environment
+source init_asp.sh
+# echo out ISISDATA and ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
+# echo out PATH
+echo PATH is "$PATH"
+# save the path to dem_mosaic
+POINTDEM=$(which point2dem)
+##############################################
+# create output folders as needed
+LOGS_FOLDER="$WORKDIR/logs"
+JOBS_FOLDER="$WORKDIR/jobs"
+mkdir -p "$LOGS_FOLDER"
+mkdir -p "$JOBS_FOLDER"
+# set log file
+LOG_FILE="$LOGS_FOLDER/pbs_point_dem_${BASE%%.tif}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+# set the args for DEM mosaic
+args_pointdem=(
+            "$POINTDEM" 
+            --t_srs "$SRS"
+            --tr "$MPP"
+            "$SRC"
+            --threads 40
+        ) 
+# Combine both into one string
+PROCESS_POINTDEM="${args_pointdem[@]}"
+# prepare to run the command or print the debug
+if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
+    echo "Starting Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
+    # run point2dem
+    eval "$PROCESS_POINTDEM" >> "$LOG_FILE" 2>&1
+    # The jobs have actually completed 
+    echo "Finished Job for $BASE at $(date)" >> "$LOG_FILE" 2>&1
+else
+    # we are in debug mode so just log out the commands that would run
+    echo "$PROCESS"
+fi
+# we are now done!
+echo "Job finished at $(date)"  >> "$LOG_FILE" 2>&1

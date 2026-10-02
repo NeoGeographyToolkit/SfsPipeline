@@ -20,6 +20,7 @@ import argparse
 import textwrap as tw
 
 import fiona
+import duckdb
 import geopandas as gp
 import pyproj
 import shapely
@@ -27,100 +28,128 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 import matplotlib
-from pyproj.crs import ProjectedCRS
-from pyproj.crs.coordinate_operation import StereographicConversion
 
+from .proj_utils import make_stereographic_moon_projection, moon_crs_ge
+from .ground_azimuth import ground_azimuth_scalar as ground_azimuth
 from .utils import get_embedded_provenance
 
-# setup pyproj CRSs and transforms
-moon_crs_ge = pyproj.CRS.from_user_input('IAU_2015:30100')
-moon_crs_np = pyproj.CRS.from_user_input('IAU_2015:30130')
-moon_crs_sp = pyproj.CRS.from_user_input('IAU_2015:30135')
 
 
-def get_provenance(df: gp.GeoDataFrame):
-    """Get the max volume/orbit/most recent date in the dataframe"""
-    most_recent = df.loc[df['ORBIT_NUMBER'].idxmax(),:]
-    message = f"As of PDS Volume {most_recent['VOLUME_ID']},\norbit {most_recent['ORBIT_NUMBER']}, {most_recent['START_TIME']}"
-    return message
-
-
-def make_stereographic_moon_projection(lon, lat):
-    conversion = StereographicConversion(lat, lon)
-    proj_crs = ProjectedCRS(conversion, geodetic_crs=moon_crs_ge)
-    return proj_crs
-
-def calculate_initial_compass_bearing(deg_lon_A, deg_lat_A, deg_lon_B, deg_lat_B):
+def _perform_geo_selection_sql(con, wkt_geometry: str, centroid_longitude: float, centroid_latitude: float):
     """
-    Calculates the bearing between two points.
-
-    The formulae used is the following:
-        θ = atan2(sin(Δlong).cos(lat2),
-                  cos(lat1).sin(lat2) − sin(lat1).cos(lat2).cos(Δlong))
-
-    :Parameters:
-
-    :Returns:
-      The bearing in degrees from 0-360, zero is north, 90 is East, etc.
-
-    :Returns Type:
-      float
+    Perform the actual geospatial query operation using duckdb
 
     """
-    # This function is in the public domain, and available at
-    # https://gist.github.com/jeromer/2005586
-    # modified to work with numpy arrays by A Annex
-    lat1 = np.radians(deg_lat_A)
-    lat2 = np.radians(deg_lat_B)
-    diffLong = np.radians(deg_lon_B - deg_lon_A)
-    x = np.sin(diffLong) * np.cos(lat2)
-    y = np.cos(lat1) * np.sin(lat2) - (np.sin(lat1) * np.cos(lat2) * np.cos(diffLong))
-    initial_bearing = np.atan2(x, y)
-    # Now we have the initial bearing but math.atan2 return values
-    # from -180° to + 180° which is not what we want for a compass bearing
-    # The solution is to normalize the initial bearing as shown below
-    initial_bearing = np.degrees(initial_bearing)
-    compass_bearing = (initial_bearing + 360) % 360
-    return compass_bearing
+    # Step 1: Create a temp table with the query geometry.
+    con.execute(f"""
+    CREATE TEMPORARY TABLE temp_query_geom AS
+    SELECT ST_GeomFromText('{wkt_geometry}') AS geom;
+    """)
+    # Step 2: Create a temp table with rows that intersect the query geometry
+    # SUB_SOLAR_GROUND_AZIMUTH is precomputed solar_bearing but not as precise as ROI_SSGA
+    con.execute(f"""
+    CREATE TEMPORARY TABLE temp_intersection AS
+    SELECT 
+        a.*,
+        ST_Area(ST_Intersection(a.geometry, q.geom)) / ST_Area(q.geom) AS fraction_area,
+        ground_azimuth({centroid_latitude}, {centroid_longitude}, a.SUB_SOLAR_LATITUDE, a.SUB_SOLAR_LONGITUDE) AS ROI_SUB_SOLAR_GROUND_AZIMUTH
+    FROM 
+        df_src AS a
+    CROSS JOIN 
+        temp_query_geom AS q
+    WHERE 
+        ST_Intersects(a.geometry, q.geom) AND a.INCIDENCE_ANGLE < 95 AND RESOLUTION::float <= 5.0 AND EMISSION_ANGLE::float <= 20.0 AND SLEW_ANGLE <=10.0;
+    """)
+    # Final step: Query the final results sorted by ROI_SUB_SOLAR_GROUND_AZIMUTH, ST_Hilbert(geometry), INCIDENCE_ANGLE and fraction_area.
+    # TODO this doesn't go quite as far as I'd want to order the results such that more likely than not nearby rows overlap
+    # but it seems to do enough such 
+    con.execute("""
+    CREATE TEMPORARY TABLE numbered_ordered AS 
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY ROI_SUB_SOLAR_GROUND_AZIMUTH,INCIDENCE_ANGLE,ST_Hilbert(ST_Centroid(geometry)),fraction_area) AS orderid,
+    FROM temp_intersection;
+    CREATE TEMPORARY TABLE temp_final AS 
+    SELECT 
+        * EXCLUDE geometry, 
+        ST_AsText(geometry) as geometry,
+        CONCAT('https://wms.lroc.asu.edu/lroc/view_lroc/LRO-L-LROC-2-EDR-V1.0/',PRODUCT_ID) as WMS,
+        -- determine if the previous geometry intersects the current row
+        COALESCE(
+            ST_Intersects(geometry, LAG(geometry) OVER (ORDER BY orderid)),
+            false
+        ) AS intersects_prior,
+    FROM numbered_ordered
+    WHERE
+        fraction_area > .0025 -- exclude images that don't contribute enough to the coverage as they won't bundle adjust well
+    ORDER BY orderid;
+    """)
+    pass
 
-def perform_geo_selection(df_all: gp.GeoDataFrame, df_query: gp.GeoDataFrame)-> gp.GeoDataFrame:
-    # get geometry
-    geom = df_query.geometry.iloc[0]
-    # TODO ensure the geom and df are in same crs
-    indexes = df_all.sindex.query(geom, predicate='intersects')
-    df_selected = df_all.iloc[indexes]
-    # filter out high incidence angles
-    df_selected = df_selected[df_selected['INCIDENCE_ANGLE'] < 95]
-    # update center longitudes to be -180 to 180 by trusting the reprojection of the geometry
-    _gt_180 = df_selected['CENTER_LONGITUDE'] > 180.0
-    df_selected[_gt_180]['CENTER_LONGITUDE'] = df_selected[_gt_180]['CENTER_LONGITUDE'] - 360
-    # update the longitude of the sub solar point to be -180 to 180
-    _gt_180 = df_selected['SUB_SOLAR_LONGITUDE'] > 180.0
-    df_selected[_gt_180]['SUB_SOLAR_LONGITUDE'] = df_selected[_gt_180]['SUB_SOLAR_LONGITUDE'] - 360
-    # add fraction column, if df and geom are in polar CRS this should be roughly right
-    # but you can always reproject to a new stereographic projection outside of this code first
-    df_selected['fraction_area'] = df_selected.intersection(geom).area / geom.area
-    # add the solar bearing column
-    df_selected['solar_bearing'] = calculate_initial_compass_bearing(
-        df_selected['CENTER_LONGITUDE'],
-        df_selected['CENTER_LATITUDE'],
-        df_selected['SUB_SOLAR_LONGITUDE'],
-        df_selected['SUB_SOLAR_LATITUDE'],
-    )
 
-    # perform a final sort
-    df_sorted = df_selected.sort_values(by=["INCIDENCE_ANGLE", "fraction_area"])
-    return df_sorted
+def perform_geo_selection_duckdb(df_src_path: str, wkt_geometry: str, df_query: gp.GeoDataFrame)-> gp.GeoDataFrame:
+    # get the wkt geometry centroid
+    centroid = df_query.centroid.to_crs(moon_crs_ge).iloc[0]
+    # Connect to DuckDB
+    with duckdb.connect(config = {'threads': 4}) as con:
+        con.sql('SET enable_progress_bar = true;')
+        con.sql('SET memory_limit = "4GB";')
+        con.install_extension("spatial")
+        con.load_extension("spatial")
+        # register functions
+        con.create_function('ground_azimuth', ground_azimuth)
+        # load the database into duckdb
+        con.sql(f"CREATE TEMP TABLE df_src AS (SELECT * FROM '{df_src_path}');")
+        print(f'Loaded DB: {df_src_path}')
+        # create a spatial index R-tree
+        con.sql("CREATE INDEX my_idx ON df_src USING RTREE (geometry)")
+        print('Created Spatial Index')
+        # perform the actual work
+        _perform_geo_selection_sql(con, wkt_geometry, centroid.x, centroid.y)
+        # convert back to geodataframe
+        result_df = con.execute("SELECT * from temp_final").df()
+        # print summary of overlaps
+        # get info about consecutive intersections, TODO not sure how right this is but at first glance seems okay
+        streak_df= con.sql("""
+        WITH numbered AS (
+          SELECT 
+            orderid,
+            intersects_prior,
+            row_number() OVER (PARTITION BY intersects_prior ORDER BY orderid) AS rn_bool
+          FROM temp_final
+        ),
+        grouped AS (
+          SELECT 
+            intersects_prior,
+            orderid - rn_bool AS grp,       -- Constant for each streak.
+            COUNT(*) AS streak_length   -- Length of the streak.
+          FROM numbered
+          GROUP BY intersects_prior, orderid - rn_bool
+        )
+        SELECT 
+          intersects_prior,
+          streak_length,
+          COUNT(*) AS streak_count  -- Number of streaks with that length.
+        FROM grouped
+        GROUP BY intersects_prior, streak_length
+        ORDER BY intersects_prior, streak_length;
+        """).df()
+    print('Streaks for true and false to help understand bundle adjust "window" width:')
+    print(streak_df)
+    print(f'Overlap prior: {result_df['intersects_prior'].sum()}, out of {len(result_df)}')
+    return result_df
 
-def plot_footprints(df: gp.GeoDataFrame, query: gp.GeoDataFrame, title: str, provenance: str = None, use_stereographic=False):
+
+def plot_footprints(df: gp.GeoDataFrame, query: gp.GeoDataFrame, title: str, provenance: str = None, use_stereographic=False, to_crs = None):
     if use_stereographic:
         # reproject the centroid to the geographic crs then grab it's lon lat
         centroid = query.centroid.to_crs(moon_crs_ge).iloc[0]
         crs = make_stereographic_moon_projection(centroid.x, centroid.y)
     else:
-        crs = query.crs
+        crs = to_crs or query.crs
     ax=df.to_crs(crs).plot(alpha=0.2, cmap='Set1')
-    query.to_crs(crs).plot(ax=ax, edgecolor='black', facecolor='None')
+    if query is not None:
+        query.to_crs(crs).plot(ax=ax, edgecolor='black', facecolor='None')
     # Text labels
     ax.set_title(f"{title} LROC Coverage", va='bottom')
     # updated the dpi
@@ -136,6 +165,9 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
     cmap = matplotlib.colormaps['plasma_r']
     # define the bins
     bins = np.arange(np.floor(min(df_results['INCIDENCE_ANGLE'])),np.ceil(max(df_results['INCIDENCE_ANGLE'])))
+    if len(bins) == 1:
+        # we had too little data for the bins so split it
+        bins = np.linspace(np.floor(min(df_results['INCIDENCE_ANGLE'])),np.ceil(max(df_results['INCIDENCE_ANGLE'])), num=10)
     norm = matplotlib.colors.BoundaryNorm(bins, len(bins))
     # get data to bin assignments
     bin_indices = np.digitize(df_results['INCIDENCE_ANGLE'], bins)
@@ -150,7 +182,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         data_indices = bin_indices == i
         # now plot
         stem = ax.stem(
-            np.radians(df_results['solar_bearing'].iloc[data_indices]), 
+            np.radians(df_results['ROI_SUB_SOLAR_GROUND_AZIMUTH'].iloc[data_indices]), 
             df_results['fraction_area'].iloc[data_indices],
             markerfmt=" ",
             basefmt=" ",
@@ -161,7 +193,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         legend_labels.append(label)
     # apply colors
     ax.set_theta_zero_location("N")
-    ax.set_rmax(1.0)
+    ax.set_rmax(min(1.0, df_results['fraction_area'].max()))
     ax.set_rlabel_position(180)  # Move radial labels
     # ax.grid(True)
     ax.set_thetagrids(np.arange(0, 360, 45), ['N', '', 'W', '', 'S', '', 'E', ''])
@@ -175,12 +207,13 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         fontsize=10)
     ax_legend.set_title(f"{title} LROC Coverage", va='bottom')
     # more text
-    plt.figtext(
-        0.5, 0.01,
-        f"""The area analyzed is {query.geometry.iloc[0].wkt}""",
-        ha="center",
-        fontsize="xx-small"
-    )
+    if query is not None:
+        plt.figtext(
+            0.5, 0.01,
+            f"""The area analyzed is {query.geometry.iloc[0].wkt}""",
+            ha="center",
+            fontsize="xx-small"
+        )
     plt.figtext(0.01, 0.05, provenance, fontsize="small")
     plt.figtext(0.01, 0.85, tw.fill(
         f"Each line represents 1 of {df_results.shape[0]} LROC images.",
@@ -202,6 +235,7 @@ def plot_illumination_coverage(df_results: gp.GeoDataFrame, query: gp.GeoDataFra
         ),
         width=25
     ))
+    return ax
 
 def arg_parser():
     parser = argparse.ArgumentParser(
@@ -273,8 +307,6 @@ def arg_parser():
     )
     return parser
 
-
-
 def main():
     parser = arg_parser()
     args = parser.parse_args()
@@ -289,45 +321,45 @@ def main():
         polygon_crs = pyproj.CRS.from_user_input(wkt_polygon_crs)
         # construct a query geodataframe 
         df_query = gp.GeoDataFrame(crs=polygon_crs, geometry=[polygon])
+         # Load database of LROC index, assuming it's geoparquet
+        df = gp.read_parquet(args.db_path)
+        # get embedded provenance info
+        embedded_provenance = get_embedded_provenance(args.db_path)
+        # perform query for downselection and prepare output geodataframe
+        # TODO refactor below to avoid use of pandas at all, see find_stereo_pairs.py
+        df_results = perform_geo_selection_duckdb(args.db_path, wkt_polygon, df_query)
+        # convert back to geodataframe
+        df_results['geometry'] = gp.GeoSeries.from_wkt(df_results['geometry'])
+        df_results = gp.GeoDataFrame(df_results, crs=df.crs)
+        ## Begin Reports
+        print(f"Found {len(df_results)} total LROC NAC observations (L&R) for provided footprint.")
+        ## Begin output
+        # write out CSV file TODO: replace with duckdb line
+        df_results.to_csv(
+            args.output,
+            index=False,
+            columns=(
+                "PRODUCT_ID", "INCIDENCE_ANGLE", "fraction_area", "ROI_SUB_SOLAR_GROUND_AZIMUTH",
+                "RESOLUTION"
+            )
+        )
+        # write out gpkg if requested TODO: replace with duckdb line
+        if args.gpkg:
+            df_results.to_file(args.gpkg, driver="GPKG")
+        with fiona.open(args.gpkg, "a") as dst: #TODO: replace with duckdb line
+            dst.update_tag_item('PROVENANCE', embedded_provenance or "None")
+        # plot results after writing out to disk
+        plot_footprints(df_results, df_query, title, provenance=embedded_provenance or "None", use_stereographic=True)
+        plt.savefig(f'map_{title}.png', dpi=150)
+        plt.show()
+        plot_illumination_coverage(df_results, df_query, title, provenance=embedded_provenance or "None")
+        plt.savefig(f'illumination_{title}.png', dpi=150)
+        plt.show()
     except shapely.errors.WKTReadingError as err:
         parser.error(str(err))
     except argparse.ArgumentError as err:
         parser.error(str(err))
-    except Exception as err:
-        parser.error(str(err))
-    # Load database of LROC index, assuming it's geoparquet
-    df = gp.read_parquet(args.db_path)
-    # get embedded provenance info
-    embedded_provenance = get_embedded_provenance(args.db_path)
-    # perform query for downselection and prepare output geodataframe
-    df_results = perform_geo_selection(df, df_query)
-    # get provenance for results based on the database used
-    provenance = get_provenance(df)
-    ## Begin Reports
-    print(f"Found {len(df_results)} total LROC NAC observations (L&R) for provided footprint.")
-    ## Begin output
-    # write out CSV file
-    df_results.to_csv(
-        args.output,
-        index=False,
-        columns=(
-            "PRODUCT_ID", "INCIDENCE_ANGLE", "fraction_area", "solar_bearing",
-            "RESOLUTION"
-        )
-    )
-    # write out gpkg if requested
-    if args.gpkg:
-        df_results.to_file(args.gpkg, driver="GPKG")
-    with fiona.open(args.gpkg, "a") as dst:
-        dst.update_tag_item('PROVENANCE', embedded_provenance if embedded_provenance else provenance)
-    # plot results after writing out to disk
-    # TODO just output these both as pngs and call it a day
-    plot_footprints(df_results, df_query, title, provenance=provenance, use_stereographic=True)
-    plt.savefig(f'map_{title}.png', dpi=150)
-    plt.show()
-    plot_illumination_coverage(df_results, df_query, title, provenance=provenance)
-    plt.savefig(f'illumination_{title}.png', dpi=150)
-    plt.show()
+
 
 if __name__ == '__main__':
     main()

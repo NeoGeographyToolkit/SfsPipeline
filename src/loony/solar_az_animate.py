@@ -66,7 +66,7 @@ def run(db_path, wkt_roi, az_step_size: float = 10.0):
     df_query = gp.GeoDataFrame(crs=df.crs, geometry=[polygon])
     # --- 2. Prepare the patches and store each polygon's angle ---
     patches = np.array(list(to_polygon(df['geometry'])))   
-    angles = df['SUB_SOLAR_GROUND_AZIMUTH']
+    angles = df['ROI_SUB_SOLAR_GROUND_AZIMUTH']
     # --- 3. Set up the figure, axis, and collection ---
     fig, ax = plt.subplots(figsize=(8, 6))
     # Create a PatchCollection. You can adjust the color and edge color.
@@ -107,16 +107,20 @@ def run(db_path, wkt_roi, az_step_size: float = 10.0):
         # Update the collection with the new facecolors.
         #print(new_facecolors)
         collection.set_facecolor(new_facecolors)
+        # compute number of included/not images
+        _np_new_face_alpha = np.array(new_facecolors)[:,3]
+        _inc = sum(_np_new_face_alpha > 0.005)
+        _not = sum(_np_new_face_alpha <= 0.005)
         # Optionally, update a title to show the current center angle.
         title_obj = ax.title  # Get the current title Text object.
-        title_obj.set_text(f"Highlighting angles near {center_angle:.1f}° ± {az_step_size/2:.1f}°")
+        title_obj.set_text(f"{_inc}/{_not} Highlighting angles near {center_angle:.1f}° ± {az_step_size/2:.1f}°")
     
         # Return the collection (for blitting).
         return (collection, title_obj)
     # --- 6. Create and run the animation ---
     # We use a range of center angles from 0 to 360.
     # Here we generate 180 frames; you can adjust the number of frames and the interval.
-    frames = np.linspace(0, 360, 180)
+    frames = np.linspace(0, 360, 181, endpoint=True)
     ani = animation.FuncAnimation(fig, animate, frames=frames, interval=75, blit=False)
     plt.show()
 

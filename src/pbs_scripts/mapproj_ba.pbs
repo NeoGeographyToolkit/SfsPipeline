@@ -2,10 +2,9 @@
 #PBS -N pbs_mapproj_ba       
 #PBS -j oe                      
 #PBS -k oe                      
-#PBS -l select=10:ncpus=20:model=ivy,walltime=08:00:00        
-#PBS -q normal                  
+#PBS -l select=10:ncpus=128:model=rom_ait,walltime=8:00:00        
+#PBS -q normal                 
 #PBS -m abe                     
-#PBS -M andrew.m.annex@nasa.gov 
 #PBS -o pbs_mapproj_ba.log   
 #PBS -r y                       
 #PBS -S /bin/bash               
@@ -13,91 +12,270 @@
 #PBS -W group_list=e2305        
 # group list for job
 
+# for rome #PBS -l select=1:ncpus=128:model=rom_ait,walltime=24:00:00    
+# Use queue "long" for jobs up to 120 hours
+# Use queue "normal" for jobs up to 8 hours
+# Use queue "low" for jobs up to 4 hours
+# if switching to rome_ait nodes, try to run 16 jobs at a time each with 4 processes and 4 threads per for 256 threads 
+
 # Enable stepwise debugging if DEBUG is set to "true"
 if [[ "$DEBUG" == "true" ]]; then
     trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
 fi
 # define usage once
-USAGE="qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files/,BA_PREFIX=ba/run0,PROJWIN_EXTENT='0 0 100 100' $0"
+USAGE="qsub -v DEM=/path/to/dem.tif,INPUT_DIR=/path/to/CUB/files/,BA_PREFIX=ba0/ba0 $0"
 # Ensure a DEM was provided
-if [ -z "$DEM" ]; then
+if [[ -z "$DEM" || ! -e "$DEM" ]]; then
     echo "Error: DEM is not set. Use $USAGE"
     exit 1
 fi
 echo "DEM file: $DEM"
-# Ensure an input directory is provided
-if [ -z "$INPUT_DIR" ]; then
-    echo "Error: INPUT_DIR is not set. Use $USAGE"
-    exit 1
-fi
-echo "Path to CUBs: $INPUT_DIR"
-# Ensure a projwin extent was provided
-if [ -z "$PROJWIN_EXTENT" ]; then 
-    echo "Error: PROJWIN_EXTENT is not set. Use $USAGE"
-    exit 1
-fi
-echo "Projection extent: $PROJWIN_EXTENT"
 # Ensure bundle adjust prefix was provided
 if [ -z "$BA_PREFIX" ]; then
     echo "Error: BA_PREFIX is not set. Use $USAGE"
     exit 1
 fi
-echo "Projection extent: $BA_PREFIX"
+# if the SFS flag is not provided, set it to empty string
+if [ -z "$SFS_FLAG" ]; then
+    export SFS_FLAG=""
+    echo "SFS_FLAG not specified, so setting it to exmpty string" 
+fi
+echo "Bundle adjustment prefix: $BA_PREFIX, specifically creating TIFFs ending with map.${BA_PREFIX%/*}${SFS_FLAG}.tif"
+# If CAMERA_LIST and IMAGE_LIST provided, use them instead of INPUT_DIR and passing in a BA prefix
+if [[ -n "$CAMERA_LIST"  &&  -n "$IMAGE_LIST"  ]]; then
+    # ensure list files exist
+    if [[ ! -f $IMAGE_LIST ]]; then
+        echo "IMAGE_LIST not found: $IMAGE_LIST"
+        exit 1
+    fi
+    if [[ ! -f $CAMERA_LIST ]]; then
+        echo "CAMERA_LIST not found: $CAMERA_LIST"
+        exit 1
+    fi
+    # safety just in case
+    unset INPUT_DIR
+    export USE_LISTS="true"
+    echo "Using $CAMERA_LIST and $IMAGE_LIST"
+else
+    # Ensure an input directory is provided
+    if [ -z "$INPUT_DIR" ]; then
+        echo "Error: INPUT_DIR is not set. Use $USAGE"
+        exit 1
+    fi
+    # safety just in case
+    unset CAMERA_LIST
+    unset IMAGE_LIST
+    #
+    echo "Path to CUBs: $INPUT_DIR"
+fi
+# Ensure the work dir is set to something
+if [[ -z "$WORKDIR" ]]; then
+    # we will default to the current working directory wherever that is
+    export WORKDIR="$PWD"
+fi
+echo "Workdir: $WORKDIR"
 ##############################################
+# Check if the user want's this acutally submitted to PBS
+if [[ -n $SUBMIT ]]; then
+    # Tell user you requested to submit and then wait 15 seconds to allow user to exit just in case!
+    echo "User requested to submit to PBS!!!!! You have 15 seconds to abort!!!"
+    # unset SUBMIT so that this isn't recursive
+    unset SUBMIT
+    # unset DEBUG so that we don't debug inside the job
+    unset DEBUG
+    # echo SUBMIT and DEBUG as sanity check
+    echo "DEBUG is $DEBUG and SUBMIT is $SUBMIT" 
+    # submit to qsub
+    submit_name="pbs_mapproj_${BA_PREFIX%/*}"
+    echo "submitting  $submit_name"
+    # actually sleep
+    sleep 15
+    exec qsub -N "$submit_name" -o "$WORKDIR/$submit_name.log"  -V "$0"
+    # be sure to exit the script at this point
+    exit 0
+fi
+##############################################
+# IF we are actually on PBS do another unset on DEBUG 
+# just in case to avoid long waits for quick exits
+if [[ -n $PBS_O_WORKDIR ]]; then
+    # log
+    echo "Checking current DEBUG variable value: $DEBUG"
+    # unset it
+    unset DEBUG
+    # log
+    echo "If DEBUG was not unset it should now be not set: $DEBUG"
+fi
 # Change to the working directory
-echo Working directory is $PBS_O_WORKDIR
-cd $PBS_O_WORKDIR
+# TODO set the work dir to be the parent to the IMAGES directory
+echo "Working directory is $PBS_O_WORKDIR"
+if [[ -n $PBS_O_WORKDIR ]]; then
+    cd "$PBS_O_WORKDIR" || exit
+fi
 echo "machine is $(uname -a)"
 echo "machine file is $PBS_NODEFILE"
 # get the number of unique nodes 
 if [[ -z "$PBS_NODEFILE" || ! -f "$PBS_NODEFILE" ]]; then
+    DEFAULT_JOBS=10
     NUM_NODES=1
 else
+    echo "machines are: $(cat $PBS_NODEFILE | sort -u)"
     NUM_NODES=$(sort -u "$PBS_NODEFILE" | wc -l)
+    # create a new nodefile for gnu parallel
+    # Create a temp file
+    GNU_PARALLEL_NODEFILE=$(mktemp "$WORKDIR/pbs_mapproj_ba_nodes.XXXXXX")
+    # Ensure cleanup on exit or error
+    trap 'rm -f "$GNU_PARALLEL_NODEFILE"' EXIT
+    # write out the number of jobs per node 
+    DEFAULT_JOBS=16
+    LOCAL_JOBS=16
+    LOCAL_HOST=$(hostname -s)
+    # start the output file 
+    # Append the local node with LOCAL_JOBS
+    echo "${LOCAL_JOBS}/${LOCAL_HOST}" > "$GNU_PARALLEL_NODEFILE"
+    # Write all other nodes with DEFAULT_JOBS
+    sort -u "$PBS_NODEFILE" | grep -v "^$LOCAL_HOST\$" | while read NODE; do
+        echo "${DEFAULT_JOBS}/${NODE}" >> "$GNU_PARALLEL_NODEFILE"
+    done
 fi
 echo "running on $NUM_NODES nodes"
 echo
 ##############################################
-# source asap environment
-source init_asap.sh
+# source asp environment
+source init_asp.sh
 # echo out ISISDATA and ISISROOT
-echo ISIS data is $ISISDATA 
-echo ISIS root is $ISISROOT
+echo ISIS data is "$ISISDATA" 
+echo ISIS root is "$ISISROOT"
 # echo out PATH
-echo PATH is $PATH
+echo PATH is "$PATH"
 # save the path to mapproject
-MAPPROJ=`which mapproject`
+MAPPROJ=$(which mapproject)
+echo "Path to mapproject: $MAPPROJ"
 ################################################
 ##############################################
 # find the CUB files and parallel the jobs
 # Create a temp file
-TMPFILE=$(mktemp /nobackup/aannex/mapproj_ba_cmds.XXXXXX)
+TMPFILE=$(mktemp "$WORKDIR/mapproj_ba_${BA_PREFIX%/*}_cmds.XXXXXX")
 # Ensure cleanup on exit or error
 trap 'rm -f "$TMPFILE"' EXIT
 # Generate commands dynamically and store in temp file
 {
     trap '' DEBUG
-    for file in "$INPUT_DIR"*.ech.cub; do
-        echo "$MAPPROJ $DEM $file ${file%%.cub}.json --tr 1 --bundle-adjust-prefix $BA_PREFIX --t_projwin $PROJWIN_EXTENT" >> "$TMPFILE";
-    done;
+    # check if we are using input lists or no
+    images=()
+    cameras=()
+    if [[ -n "$USE_LISTS" ]]; then
+        # parse each list file and append to the array
+        while read -r IMG CAM; do
+            if [[ ! -f $IMG ]]; then
+                echo "IMAGE not found!: $IMG"
+                continue
+            elif [[ ! -f $CAM ]]; then
+                echo "CAMERA not found!: $CAM"
+                continue
+            else
+                # TODO test to ensure the camera and image correspond!
+                images+=("$IMG")
+                cameras+=("$CAM")
+            fi
+        done < <(paste "$IMAGE_LIST" "$CAMERA_LIST")
+    else
+        # grab the cubs from the input dir
+        for file in "$INPUT_DIR"*.ech.cub; do
+            images+=("$file")
+            cameras+=("${file%%.cub}.json")
+        done
+    fi
+    # now loop through the two arrays and save the jobs to run to the temp file
+    for index in "${!images[@]}"; do
+        IMG="${images[$index]}"
+        CAM="${cameras[$index]}"
+        #
+        args_mapproj=(
+            "$MAPPROJ" 
+            "$DEM" 
+            "$IMG" 
+            "$CAM"
+            "${IMG%%.cub}.map.${BA_PREFIX%/*}${SFS_FLAG}.tif"
+            --processes 6 
+            --threads 8 
+            --tr 1
+        )
+        # use BA prefix if using input_dir
+        if [[ -n "$INPUT_DIR" ]]; then
+            args_mapproj+=(--bundle-adjust-prefix "$BA_PREFIX") 
+        fi
+        # make the footprint arguments
+        args_foot=(
+            "&&" 
+            /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
+            -q 
+            -overwrite
+            -write_absolute_path 
+            -of GeoJSON 
+            "${IMG%%.cub}.map.${BA_PREFIX%/*}${SFS_FLAG}.tif" 
+            "${IMG%%.cub}.map.${BA_PREFIX%/*}${SFS_FLAG}.geojson"
+        )      
+        echo "${args_mapproj[@]}" "${args_foot[@]}" >> "$TMPFILE";
+    done
+    # sort the TMPFILE to ensure repeatability
+    sort -o "$TMPFILE"{,}
     if [[ "$DEBUG" == "true" ]]; then
         trap '(read -p "[$BASH_SOURCE:$LINENO] $BASH_COMMAND ")' DEBUG
     fi
 }
 
 # log we are about to start (TODO move below to new script)
-echo "launching jobs"
-if [[ -z "$DEBUG" ]]; then 
-    # Run GNU Parallel with the temp file if not in debug mode
+echo "launching jobs at $(date)"
+if [[ -z "$DEBUG" && -n $PBS_JOBID ]]; then 
+    # create output folders as needed
+    LOGS_FOLDER="$WORKDIR/logs"
+    JOBS_FOLDER="$WORKDIR/jobs"
+    mkdir -p "$LOGS_FOLDER"
+    mkdir -p "$JOBS_FOLDER"
+    # set log file names
+    LOG_FILE="$LOGS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}${SFS_FLAG}_$(date +"%Y-%m-%d_%H-%M-%S")_log.txt"
+    JOB_FILE="$JOBS_FOLDER/pbs_mapproj_ba_${BA_PREFIX%/*}${SFS_FLAG}_job.log"
+    # Run GNU Parallel with the temp file if not in debug mode   
+    echo "Log File: "
+    echo "$LOG_FILE"
+    echo "Job File: "
+    echo "$JOB_FILE"
+    echo "Parallel has started at $(date)"
+    parallel_opts=(
+        -u 
+        -a "$TMPFILE"
+        --workdir "$WORKDIR"
+        --memfree 14G
+        --retries 10
+        --resume-failed 
+        --keep-order
+        --joblog "$JOB_FILE"
+    )
     if [[ $NUM_NODES -gt 1 ]]; then
-        parallel --joblog pbs_mapproj_ba_job.log --sshloginfile $PBS_NODEFILE  < "$TMPFILE"
+        parallel_opts+=(
+            --controlmaster 
+            --sshdelay 0.1 
+            --sshloginfile "$GNU_PARALLEL_NODEFILE"
+        )
     else
-        parallel --joblog pbs_mapproj_ba_job.log  < "$TMPFILE"
+        parallel_opts+=(
+            --jobs "$DEFAULT_JOBS"
+        )
     fi
+    # echo out parallel opts
+    echo "Using these opts for parallel: "
+    echo "${parallel_opts[@]}"
+    # start gnu parallel
+    $ASPROOT/bin/parallel "${parallel_opts[@]}"  >> "$LOG_FILE" 2>&1
+    # The jobs have actually completed 
+    echo "Parallel has finished with all jobs at $(date)"
+    # move the joblog file to preserve its state and to avoid re-running it
+    mv "$JOB_FILE" "$JOBS_FOLDER/completed_${JOB_FILE##*/}"
 else
     # we are in debug mode so just log out the commands that would
     # have been given the parallel
     cat "$TMPFILE"
 fi
+rm -f "$GNU_PARALLEL_NODEFILE"
 # we are now done!
 echo "Job finished at $(date)"

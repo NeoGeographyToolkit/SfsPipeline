@@ -8,3 +8,5 @@ sfs_cover.csv
 __pycache__/
 *.egg-info/
 dist/
+*.ipynb
+*ba0*.txt
