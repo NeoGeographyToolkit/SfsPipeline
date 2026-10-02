@@ -1,5 +1,5 @@
 # sfstools
-A place for scripts to support the practical operation of SfS.
+A place for scripts to support the practical operation of SfS. This is workin progress as of 2026/10. 
 
 The main documentation for the Ames Stereo Pipeline SfS is available here: 
 https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html
