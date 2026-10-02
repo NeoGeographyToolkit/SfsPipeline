@@ -8,8 +8,8 @@ import argparse
 import numpy as np
 import duckdb
 
-from loony.utils import get_embedded_provenance
-from loony.graph_utils import check_connectivity
+from sfs.utils import get_embedded_provenance
+from sfs.graph_utils import check_connectivity
 
 def angular_separation_acos(deg1: float, deg2: float)-> float:
     # Convert degrees to radians

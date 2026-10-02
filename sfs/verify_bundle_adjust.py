@@ -13,7 +13,7 @@ import fire
 import networkx as nx
 import numpy as np
 
-from loony.graph_utils import check_connectivity
+from sfs.graph_utils import check_connectivity
 
 
 def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, use_match_offsets: bool = False, plot: bool = False, db: str | None = None, verbose: bool = False):
@@ -107,7 +107,7 @@ def run(ba_prefix: str, min_match_count = 1, max_residual_error: float = 1.25, u
     res['max_residual_error'] = max_residual_error
     if plot and db:
         import matplotlib.pyplot as plt
-        from loony.new_sfs_cover import plot_footprints, plot_illumination_coverage
+        from sfs.new_sfs_cover import plot_footprints, plot_illumination_coverage
         import geopandas as gp
         from pathlib import Path
         gdf = gp.read_file(db)

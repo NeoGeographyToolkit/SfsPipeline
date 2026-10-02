@@ -95,6 +95,7 @@ echo ISIS root is "$ISISROOT"
 echo PATH is "$PATH"
 # save the path to mapproject
 MAPPROJ=$(which mapproject)
+GDAL_FOOTPRINT=$(which gdal_footprint)
 ################################################
 ##############################################
 # find the CUB files and parallel the jobs
@@ -124,7 +125,7 @@ trap 'rm -f "$TMPFILE"' EXIT
         # make the footprint arguments
         args_foot=(
             "&&" 
-            /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
+            "$GDAL_FOOTPRINT" 
             -q 
             -overwrite
             -write_absolute_path 

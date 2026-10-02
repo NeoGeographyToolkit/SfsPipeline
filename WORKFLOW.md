@@ -96,7 +96,7 @@ check_files ./alpha/MAPPROJ_DATA.txt
 ```
 
 To run bundle adjustment, we will explicitly decide which images to compare and match using the
-`find-overlaps-for-bundle-adjust` script. That script requires us though to have made a new GPKG file with the map projected illumination footprints first though.
+`find-image-overlaps` script. That script requires us though to have made a new GPKG file with the map projected illumination footprints first though.
 
 ### 3.1 Generate Shadow Mask Footprints
 
@@ -110,15 +110,15 @@ shadow_mask.pbs
 When that's done, we can generate the updated gpkg file by the following two step process
 
 ```bash
-source SfsPipeline/base_scripts/sfs_utilities.sh
+source SfsPipeline/bin/sfs_utilities.sh
 # collect geojson stream is a bash utility function in sfs_utilities.sh
 collect_geojson_stream ./IMAGES 'map.noba.mask.geojson' > noba_mask_footprints.geojson
 # run the update_db_from_footprints.py file
-python SfsPipeline/src/loony/update_db_from_footprints.py roi.gpkg roi_noba_mask_footprints.gpkg  ./noba_mask_footprints.geojson
+update-db roi.gpkg roi_noba_mask_footprints.gpkg  ./noba_mask_footprints.geojson
 ```
 
 ### 3.2 Generate the overlaps list
-Now we can actually generate the list of image overlaps using `find-overlaps-for-bundle-adjust`.
+Now we can actually generate the list of image overlaps using `find-image-overlaps`.
 This script is intended to be run a few times to generate a list that is sufficiently big while not trying to compare too many pair-wise images and causing resouce waste.
 
 For reference, the largest ROI I processed created almost 100k image pairs to compare (from 4.5k individual images). That was verging on too big to bundle adjust. For smaller ROIs with a few hundred images, expect numbers on the order of 8-20k. When in doubt, go bigger though, as there is little cost to going too big versus too small.
@@ -129,16 +129,16 @@ Below I illustrate a few invocations of the script, followed by a decision to go
 
 ```bash
 
-find-overlaps-for-bundle-adjust  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=2 | wc -l # 1000, too low
+find-image-overlaps  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=2 | wc -l # 1000, too low
 
-find-overlaps-for-bundle-adjust  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=6 | wc -l # 6000, still too low
+find-image-overlaps  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=6 | wc -l # 6000, still too low
 
-find-overlaps-for-bundle-adjust  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=45 | wc -l # 32000, too high
+find-image-overlaps  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=45 | wc -l # 32000, too high
 
-find-overlaps-for-bundle-adjust  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=16 | wc -l # 10000, just right 
+find-image-overlaps  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=16 | wc -l # 10000, just right 
 
 # now save the list
-find-overlaps-for-bundle-adjust  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=16 > alpha/OVERLAP_LIST_SLRGAZ_16.txt
+find-image-overlaps  --image_dir='./IMAGES/'  -d ./roi_noba_footprints.gpkg --max_diff_slrgaz=16 > alpha/OVERLAP_LIST_SLRGAZ_16.txt
 ```
 
 ### 3.3 Bundle Adjust Setup
@@ -236,8 +236,8 @@ Aim to make tiles no larger than 5128x5128 pixels (5.128km x 5.128km), for small
 
 ```bash
 # first run the following command to generate a minimal acceptable number of tiles, and view the gpkg in QGIS to make sure it looks good
-python SfsPipeline/src/loony/to_vrt_tiles.py dem_to_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 to_gpkg roi_3k_tiles.gpkg
-python SfsPipeline/src/loony/to_vrt_tiles.py dem_to_vrt_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 # this will actually generate the vrts
+python -m sfs.to_vrt_tiles dem_to_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 to_gpkg roi_3k_tiles.gpkg
+python -m sfs.to_vrt_tiles dem_to_vrt_tiles_by_width_with_overlap roi_1m_lola.tif 3768 --overlap 256 # this will actually generate the vrts
 ```
 
 ### 6.2 Make the list files for the SFS Jobs
@@ -247,7 +247,7 @@ Next we use a script called lit_select (not the one in ASP) to select the images
 ```bash
 for i in roi_1m_lola.tile.*.vrt; do; do
     echo $i
-    python ~/projects/SfsPipeline/src/loony/lit_select.py roi_mask_ba0_ref_footprints.gpkg --dem_path $i --verify_out_json=alpha/ba0_ref_components.json  --verbose --min_v 0 --max_v 370 | sort > "./sfs/${i%.vrt}.txt"
+    lit-select roi_mask_ba0_ref_footprints.gpkg --dem_path $i --verify_out_json=alpha/ba0_ref_components.json  --verbose --min_v 0 --max_v 370 | sort > "./sfs/${i%.vrt}.txt"
 done
 
 for i in ./sfs/roi_1m_lola.tile.*.txt; do
@@ -402,7 +402,7 @@ for i in roi_1m_lola.tile.*.vrt; do
     echo $OUT_NAME
     echo $IMAGE_LIST
     echo $PROJWIN
-    run_individual_count_lit.pbs 
+    run_count_lit.pbs 
 done
 
 cd sfs
@@ -428,7 +428,7 @@ for i in roi_1m_lola.tile.*.vrt; do
     echo $OUT_NAME
     echo $IMAGE_LIST
     echo $PROJWIN
-    run_individual_max_lit.pbs
+    run_max_lit.pbs
 done
 
 gdalbuildvrt roi_sfs.max.lit.lerc.cog.vrt *.max.lit.lerc.cog.tif
@@ -453,7 +453,7 @@ for i in roi_1m_lola.tile.*.vrt; do
     echo $OUT_NAME
     echo $IMAGE_LIST
     echo $PROJWIN
-    run_individual_max_lit_indexes.pbs
+    run_max_lit_indexes.pbs
 done
 
 ```

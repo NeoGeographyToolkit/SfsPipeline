@@ -3,7 +3,7 @@ requires = ["setuptools>=62.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "loony"
+name = "sfs"
 description = "Ames Stereo Pipeline SfS tools"
 requires-python = ">=3.12"
 dynamic = ["version", "readme"]
@@ -39,11 +39,11 @@ dependencies = [
 Repository = "https://github.com/NeoGeographyToolkit/SfsPipeline.git"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
 namespaces = false
 
 [tool.setuptools.dynamic]
-version = {attr = "loony.__version__"}
+version = {attr = "sfs.__version__"}
 readme = {file = "README.md"}
 
 [tool.setuptools.package-data]
@@ -51,20 +51,20 @@ readme = {file = "README.md"}
 
 
 [project.scripts]
-get-current-provenance           = "loony.get_current_provenance:main"
-preprocess-cumulative-index      = "loony.process_lroc_cumulative_index:main"
-process-cumulative-index         = "loony.resources.process:main"
-find-overlaps-for-bundle-adjust  = "loony.find_overlaps_for_bundle_adjust:main"
-sfs-cover                        = "loony.new_sfs_cover:main"
-find-stereo-pairs                = "loony.find_stereo_pairs:main"
-wkt-to-ullr                      = "loony.wkt_to_ullr:main"
-wkt-to-projwin                   = "loony.wkt_to_projwin:main"
-wkt-round-out                    = "loony.wkt_round_out:main"
-setops                           = "loony.setops:main"
-tri-plot                         = "loony.triangulation_plot:main"
-verify-bundle-adjust             = "loony.verify_bundle_adjust:main"
-get-stereo-from-ba               = "loony.get_stereo_pairs_from_bundle_adjust:main"
-solar-az-plot                    = "loony.solar_az_animate:main"
-lit-select                       = "loony.lit_select:main"
-update-db-from-footprints        = "loony.update_db_from_footprints:main"
-filter-db-by-verify-ba           = "loony.filter_db_by_verify_ba:main"
+provenance           = "sfs.get_current_provenance:main"
+prep-index           = "sfs.process_lroc_cumulative_index:main"
+make-index           = "sfs.resources.process:main"
+find-image-overlaps  = "sfs.find_overlaps_for_bundle_adjust:main"
+sfs-cover            = "sfs.new_sfs_cover:main"
+find-stereo          = "sfs.find_stereo_pairs:main"
+wkt-to-ullr          = "sfs.wkt_to_ullr:main"
+wkt-to-projwin       = "sfs.wkt_to_projwin:main"
+wkt-round-out        = "sfs.wkt_round_out:main"
+setops               = "sfs.setops:main"
+tri-plot             = "sfs.triangulation_plot:main"
+verify-ba            = "sfs.verify_bundle_adjust:main"
+stereo-from-ba       = "sfs.get_stereo_pairs_from_bundle_adjust:main"
+solar-az-plot        = "sfs.solar_az_animate:main"
+lit-select           = "sfs.lit_select:main"
+update-db            = "sfs.update_db_from_footprints:main"
+filter-db            = "sfs.filter_db_by_verify_ba:main"

@@ -65,7 +65,7 @@ trap 'rm -f "$TMPFILE"' EXIT
                 echo "$img_id" "$cam_id"
             else 
                 # should only get here if all files exist and match correctly
-                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export IMG=$IMG; export CAM=$CAM; export WORKDIR=$WORKDIR; run_individual_mapproj.pbs" >> "$TMPFILE";
+                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export IMG=$IMG; export CAM=$CAM; export WORKDIR=$WORKDIR; run_mapproj.pbs" >> "$TMPFILE";
             fi
         fi
         # okay 

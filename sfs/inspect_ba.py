@@ -8,8 +8,8 @@ import duckdb
 import networkx as nx
 import networkx.algorithms.connectivity as nxcon
 
-from loony.utils import get_embedded_provenance
-from loony.graph_utils import check_connectivity
+from sfs.utils import get_embedded_provenance
+from sfs.graph_utils import check_connectivity
 
 
 

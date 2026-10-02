@@ -16,7 +16,7 @@ export proj='+proj=stere +lat_0=-90 +lon_0=0 +k=1 +x_0=0 +y_0=0 +R=1737400 +unit
 export projpath=mapproj0
 export cubpath=LROC_Images
 export bapref=ba0/run
-export PATH=${HOME}/Work/ASP/bin:${PATH}
+export PATH="${ASPROOT:+$ASPROOT/bin:}${PATH}"
 export nodes=nodes.list
 
 export out=${outDir}/output.txt

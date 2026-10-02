@@ -14,7 +14,7 @@ from shapely import Polygon
 import geopandas as gpd
 
 import fiona
-from loony.utils import get_embedded_provenance
+from sfs.utils import get_embedded_provenance
 
 
 def quality_ideal(value: float, ideal: float, low: float, high: float) -> float:

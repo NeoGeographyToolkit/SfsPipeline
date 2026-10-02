@@ -5,7 +5,7 @@ import pandas as pd
 import rasterio as rio
 from pathlib import Path
 
-from loony.utils import filename_to_pid
+from sfs.utils import filename_to_pid
 
 def set_coverage(df, threshold: float = 100.0, verbose: bool = False):
     candidates = df.copy().reset_index(drop=True)

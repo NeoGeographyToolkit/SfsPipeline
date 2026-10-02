@@ -90,9 +90,9 @@ cat ./test_delta/STEREO_PAIR_LIST_NOBA.txt | sed 's/IMAGES\//baD\/baD-/g' | sed 
 we will use the launch_individual_stereo_jobs.sh script to parse the image and camera pairs and launch a bunch of small low priority jobs 
 
 ```bash
-export DEM=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/m2m_mons_mouton_10k.tif
-export IMAGE_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/STEREO_PAIR_LIST_NOBA.txt
-export CAMERA_PAIR_LIST=/home7/aannex/nobackup/DATA/MONS_MOUTON_10k/test_delta/CAMERA_PAIR_LIST.txt
+export DEM=/path/to/dem.tif
+export IMAGE_PAIR_LIST=/path/to/STEREO_PAIR_LIST_NOBA.txt
+export CAMERA_PAIR_LIST=/path/to/CAMERA_PAIR_LIST.txt
 export BA_PREFIX='baD/baD'
 export SUBMIT=true
 launch_individual_stereo_jobs.sh
@@ -158,9 +158,9 @@ for i in ./*/run-good-diff.tif; do echo $i $(gim $i); done
 I needed more control over error plotting so I AI-slopped the script `triangulation_plot.py`
 ```bash
 # plot the hillshades
-python ~/projects/SfsPipeline/src/loony/triangulation_plot.py ./*/*DEM.half.tif --hillshade
+tri-plot ./*/*DEM.half.tif --hillshade
 # plot the intersection errors
-python ~/projects/SfsPipeline/src/loony/triangulation_plot.py ./*/*IntersectionErr.tif --out-prefix intersec
+tri-plot ./*/*IntersectionErr.tif --out-prefix intersec
 ```
 
 
@@ -211,7 +211,7 @@ from testing, raising the max 85% error value (column5) past 1 meter didn't add 
 
 ```bash
 # need to make this part easier
-source ~/projects/SfsPipeline/base_scripts/sfs_utilities.sh
+source ~/projects/SfsPipeline/bin/sfs_utilities.sh
 
 collect_geojson ./IMAGES 'map.baD_align_ref.geojson' > all_map_baD_align_ref_footprints.geojson
 

@@ -385,8 +385,22 @@ function match_vrt_extent() {
 }
 
 function serve_cogs() {
-    rclone_path='/vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/rclone'
-    "$rclone_path" serve http /nobackupp27/aannex/DATA --addr ":8080" --read-only --copy-links --no-modtime --disable-http-keep-alives --buffer-size 32Mi --transfers 16 --vfs-cache-mode off --include "*.tif" --include "*.json" --stats 120s --log-level INFO &
+    local serve_dir="${1:-$PWD}"
+    local rclone_path
+    rclone_path=$(which rclone)
+    "$rclone_path" serve http "$serve_dir" \
+        --addr ":8080" \
+        --read-only \
+        --copy-links \
+        --no-modtime \
+        --disable-http-keep-alives \
+        --buffer-size 32Mi \
+        --transfers 16 \
+        --vfs-cache-mode off \
+        --include "*.tif" \
+        --include "*.json" \
+        --stats 120s \
+        --log-level INFO &
 }
 
 

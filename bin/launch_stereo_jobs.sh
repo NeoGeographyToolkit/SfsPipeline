@@ -77,7 +77,7 @@ trap 'rm -f "$TMPFILE"' EXIT
                 echo "$r_img_id" "$r_cam_id"
             else 
                 # should only get here if all files exist and match correctly
-                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; export WORKDIR=$WORKDIR; run_individual_stereo.pbs" >> "$TMPFILE";
+                echo "export SUBMIT=true; export NOSLEEP=true; export BA_PREFIX=$BA_PREFIX; export DEM=$DEM; export LIMG=$LIMG; export RIMG=$RIMG; export LCAM=$LCAM; export RCAM=$RCAM; export WORKDIR=$WORKDIR; run_stereo.pbs" >> "$TMPFILE";
             fi
         fi
         # okay 

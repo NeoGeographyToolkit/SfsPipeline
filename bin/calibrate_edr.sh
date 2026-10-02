@@ -31,7 +31,10 @@ ech_cub="${in_img%.IMG}.ech.cub"
 # convert the IMG to a CUB
 lronac2isis from="$in_img" to="$raw_cub"
 # run spiceinit with smithed kernels, fallback to recon otherwise
-spiceinit from="$raw_cub" spksmithed=true spkrecon=true extra=/nobackupp27/aannex/DATA/usgs_polar_only.mk web=false
+# Optional USGS polar south-pole meta-kernel. Set POLAR_MK to its path to load it.
+extra_arg=()
+[[ -n "$POLAR_MK" ]] && extra_arg=(extra="$POLAR_MK")
+spiceinit from="$raw_cub" spksmithed=true spkrecon=true "${extra_arg[@]}" web=false
 #spiceinit from="$raw_cub" spk=/nobackupnfs1/oalexan1/projects/isis3data/lro_south/usgs_polar_spk.mk ck=/nobackupnfs1/oalexan1/projects/isis3data/lro_south/usgs_polar_ck.mk web=false
 # if [[ "$#" -eq 2 ]]; then
 #    echo "USING SP KERNELS"

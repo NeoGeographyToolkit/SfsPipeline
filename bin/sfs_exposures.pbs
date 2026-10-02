@@ -176,11 +176,12 @@ TMPFILE=$(mktemp "$WORKDIR/sfs_exposures_${TILE}_cmds.XXXXXX")
 TILE_FOLDER="${SFS_PREFIX%/*}"
 TILE="${SFS_PREFIX##*/}" # should get us to just the tile name
 
+SFS=$(which sfs)
 for file in $(find "$TILE_FOLDER/" -mindepth 2 -type f -name "$TILE-DEM-final.tif" | sort); do
     echo "$file"
     dem=$(realpath $file)
     outprefix="${file%%-DEM-final.tif}"
-    echo /vast_swbuild/swbuild3/aannex/tools/StereoPipeline-3.6.0-alpha-2025-07-02-x86_64-Linux/libexec/sfs -i "$dem" -o "$outprefix" --image-exposures-prefix "$outprefix" --image-list "$IMAGES" --camera-list "$CAMERAS" --compute-exposures-only --threads "$ASP_THREADS" --save-sparingly --allow-borderline-data --crop-input-images --cache-size-mb 2048 --shadow-threshold 0.005 --blending-dist 10 --reflectance-type 1 --min-blend-size 48 >> "$TMPFILE"
+    echo "$SFS" -i "$dem" -o "$outprefix" --image-exposures-prefix "$outprefix" --image-list "$IMAGES" --camera-list "$CAMERAS" --compute-exposures-only --threads "$ASP_THREADS" --save-sparingly --allow-borderline-data --crop-input-images --cache-size-mb 2048 --shadow-threshold 0.005 --blending-dist 10 --reflectance-type 1 --min-blend-size 48 >> "$TMPFILE"
 done
 # sort the TMPFILE to ensure repeatability
 sort -o "$TMPFILE"{,}

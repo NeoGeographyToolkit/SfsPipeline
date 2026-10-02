@@ -4,6 +4,8 @@ Scripts supporting the practical operation of Shape-from-Shading (SfS) with the 
 
 The reference documentation is the [ASP SfS guide](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html). This repository covers practical aspects of producing SfS DEMs that the guide does not.
 
+See [WORKFLOW.md](WORKFLOW.md) for an end-to-end example and [TIPS.md](TIPS.md) for handy one-liners.
+
 ## Installation
 
 SfsPipeline is installed both locally and on the NASA HECC HPC. Some steps apply only to the HPC install.
@@ -20,33 +22,33 @@ SfsPipeline is installed both locally and on the NASA HECC HPC. Some steps apply
    ```bash
    micromamba env create -n SfsPipeline -f environment.yaml
    ```
-6. Add the script directories to PATH and set the ASP, ISIS, and data paths in `.bashrc` or `.zshrc`:
+6. Add the bin directory to PATH and set the ASP, ISIS, and data paths in `.bashrc` or `.zshrc`:
    ```bash
-   export PATH="$PATH:/path/to/SfsPipeline/base_scripts/:/path/to/SfsPipeline/src/pbs_scripts/"
+   export PATH="$PATH:/path/to/SfsPipeline/bin"
    export ISISDATA=/path/to/your/ISISDATA/
    export ISISROOT=/path/to/your/conda/envs/isis
    export ASPROOT=/path/to/your/extracted/ASP/
    ```
 7. Activate the `SfsPipeline` conda environment to run the command-line tools. The bash and PBS scripts are on PATH regardless of the active environment.
-8. Run `source init_asp.sh` for ISIS and ASP commands, or `source init_sfstools.sh` for the SfsPipeline tools and GDAL.
+8. Run `source init_asp.sh` for ISIS and ASP commands, or `source init_sfs.sh` for the SfsPipeline tools and GDAL.
 
 ## Utility scripts
 
-`base_scripts/sfs_utilities.sh` holds small bash helpers (geodiff statistics, LERC COG conversion, and others). Source it after `init_asp.sh`:
+`bin/sfs_utilities.sh` holds small bash helpers (geodiff statistics, LERC COG conversion, and others). Source it after `init_asp.sh`:
 
 ```bash
-source base_scripts/sfs_utilities.sh
+source bin/sfs_utilities.sh
 ```
 
 ## QGIS helpers
 
-`base_scripts/startup.py` adds QGIS enhancements. Symlink it into the QGIS startup location for the platform, per the [QGIS documentation](https://docs.qgis.org/testing/en/docs/pyqgis_developer_cookbook/intro.html#the-startup-py-file).
+`bin/startup.py` adds QGIS enhancements. Symlink it into the QGIS startup location for the platform, per the [QGIS documentation](https://docs.qgis.org/testing/en/docs/pyqgis_developer_cookbook/intro.html#the-startup-py-file).
 
 ## Script types
 
 - Python: preprocessing and analysis, installed as PATH entry points, run locally or on a PFE node.
 - PBS (`.pbs`): run only on the HPC under the PBS job manager.
-- Bash: utilities in `base_scripts` and `pbs_scripts` used by the other scripts.
+- Bash: utilities in `bin` used by the other scripts.
 
 ## PBS scripts
 
@@ -69,41 +71,43 @@ Create a work directory per SfS terrain area. Keep a log file (for example a mar
 
 High-level order of operations:
 
-1. `process-cumulative-index` builds geoparquet cumulative index files.
+1. `make-index` builds geoparquet cumulative index files.
 2. `sfs-cover` selects images for an ROI from the index.
-3. `find-stereo-pairs` (optional) surveys stereo availability.
+3. `find-stereo` (optional) surveys stereo availability.
 4. `solar-az-plot` (optional) animates footprint coverage by solar azimuth.
-5. `find-overlaps-for-bundle-adjust` builds the bundle-adjust pairs list.
-6. `verify-bundle-adjust` inspects graph connectivity and the largest connected camera group.
-7. `get-stereo-from-ba` lists runnable stereo pairs from that group.
+5. `find-image-overlaps` builds the bundle-adjust pairs list.
+6. `verify-ba` inspects graph connectivity and the largest connected camera group.
+7. `stereo-from-ba` lists runnable stereo pairs from that group.
 8. `tri-plot` plots triangulation-error images.
 9. `lit-select` filters by illumination.
 
 ## Script reference
 
-### Base scripts
+All scripts live in `bin`.
 
-- `stereo.sh`: stereo processing.
-- `random_sample.sh`: take a random sample from a list file.
-- `ds_by_attr.sh`: subset a GPKG file by an attribute value range.
-- `rescale_raster.sh`: scale a floating-point image to 8 bit (deprecated).
-- `raster_matcher.py`: QGIS plugin to locate TIF files from a vector layer.
-- `startup.py`: QGIS plugin main file.
-- `add_rat_to_vrt.py`: add a Raster Attribute Table to max-lit index files so QGIS maps DN values to source LROC NAC product IDs.
-- `sfs_utilities.sh`: bash helper functions for SfS processing. Source to load.
-- `db_to_urls.sh`: produce NAC IMG download URLs from a GPKG source file.
+### Shell scripts
 
-### Bash scripts
-
-- `calibrate_edr.sh`: ISIS calibration and CSM camera generation.
 - `init_asp.sh`: initialize the ASP and SfsPipeline environment.
 - `init_isis.sh`: initialize the ISIS conda environment.
-- `init_sfstools.sh`: initialize the SfsPipeline environment (ASP bin not on PATH).
-- `launch_individual_mapproj_jobs.sh`: launch many mapproject jobs (deprecated).
-- `launch_individual_stereo_jobs.sh`: launch many stereo jobs (deprecated).
-- `make_lerc_cog.sh`: make LERC COGs (deprecated).
-- `prepare_ba0_lists.sh`: prepare lists for bundle adjust (deprecated).
+- `init_sfs.sh`: initialize the SfsPipeline environment (ASP bin not on PATH).
+- `sfs_utilities.sh`: bash helper functions for SfS processing. Source to load.
+- `calibrate_edr.sh`: ISIS calibration and CSM camera generation.
+- `db_to_urls.sh`: produce NAC IMG download URLs from a GPKG source file.
+- `stereo.sh`: stereo processing.
 - `shadow_mask.sh`: compute shadow masks.
+- `random_sample.sh`: take a random sample from a list file.
+- `ds_by_attr.sh`: subset a GPKG file by an attribute value range.
+- `prepare_ba0_lists.sh`: prepare lists for bundle adjust (deprecated).
+- `rescale_raster.sh`: scale a floating-point image to 8 bit (deprecated).
+- `make_lerc_cog.sh`: make LERC COGs (deprecated).
+- `launch_mapproj_jobs.sh`: launch many mapproject jobs (deprecated).
+- `launch_stereo_jobs.sh`: launch many stereo jobs (deprecated).
+
+### QGIS helper scripts
+
+- `startup.py`: QGIS plugin main file.
+- `raster_matcher.py`: QGIS plugin to locate TIF files from a vector layer.
+- `add_rat_to_vrt.py`: add a Raster Attribute Table to max-lit index files so QGIS maps DN values to source LROC NAC product IDs.
 
 ### PBS scripts
 
@@ -120,14 +124,14 @@ High-level order of operations:
 - `run_command_list.pbs`: run arbitrary command lists, many nodes.
 - `run_geodiffs.pbs`: run many geodiff calls, many nodes.
 - `run_hillshade_align.pbs`: hillshade-align two DEMs, one node.
-- `run_individual_count_lit.pbs`: SfS count map for one tile, one node.
-- `run_individual_dem_mosaic.pbs`: merge DEM tiles with dem_mosaic, one node.
-- `run_individual_image_correlation.pbs`: image correlation (deprecated).
-- `run_individual_mapproj.pbs`: mapproject one image, one node (deprecated).
-- `run_individual_max_lit_indexes.pbs`: SfS max-lit index map for one tile, one node.
-- `run_individual_max_lit.pbs`: SfS max-lit map for one tile, one node.
-- `run_individual_point2dem.pbs`: run point2dem for a stereo job.
-- `run_individual_stereo.pbs`: run one stereo pair as a job.
+- `run_count_lit.pbs`: SfS count map for one tile, one node.
+- `run_dem_mosaic.pbs`: merge DEM tiles with dem_mosaic, one node.
+- `run_image_correlation.pbs`: image correlation (deprecated).
+- `run_mapproj.pbs`: mapproject one image, one node (deprecated).
+- `run_max_lit_indexes.pbs`: SfS max-lit index map for one tile, one node.
+- `run_max_lit.pbs`: SfS max-lit map for one tile, one node.
+- `run_point2dem.pbs`: run point2dem for a stereo job.
+- `run_stereo.pbs`: run one stereo pair as a job.
 - `run_sfs_blend.pbs`: SfS blend step, one node.
 - `serve_folder.pbs`: serve a folder from NAS over HTTP for viewing COGs.
 - `sfs_exposures.pbs`: precompute SfS exposure lists (deprecated).
@@ -136,12 +140,12 @@ High-level order of operations:
 
 ## Command-line tools
 
-### Process cumulative index
+### Make index
 
-`process-cumulative-index` processes CUMINDEX.LBL and CUMINDEX.TAB from the home directory (they must be present there, or symlinked) into parquet files in /tmp. It takes about two minutes. Each parquet file embeds provenance metadata: UTC timestamp, user, hostname, and the md5sum of CUMINDEX.TAB.
+`make-index` processes CUMINDEX.LBL and CUMINDEX.TAB from the home directory (they must be present there, or symlinked) into parquet files in /tmp. It takes about two minutes. Each parquet file embeds provenance metadata: UTC timestamp, user, hostname, and the md5sum of CUMINDEX.TAB.
 
 ```bash
-process-cumulative-index
+make-index
 ```
 
 ### SFS cover
@@ -151,7 +155,7 @@ process-cumulative-index
 ```bash
 sfs-cover \
   --db_path /tmp/lroc_cumulative_south_polar.parquet \
-  -p "POLYGON((72471.2817000002 158818.3489,128308.508199999 158818.3489,128308.508199999 119030.173,72471.2817000002 119030.173,72471.2817000002 158818.3489))" \
+  -p "POLYGON((72471 158818,128309 158818,128309 119030,72471 119030,72471 158818))" \
   -t mons_mouton_regional \
   --gpkg /tmp/mons_mouton_regional.gpkg
 ```
@@ -163,15 +167,15 @@ Provenance metadata propagates from the source parquet file into the output.
 Footprints in the geodatabase can be refreshed to reflect mapprojected footprints, with or without bundle-adjusted cameras, and illuminated-versus-shadowed areas from shadow masks. The process:
 
 1. Generate footprint geojsons via mapproject, or shadow_mask.pbs for shadow masks.
-2. Collect them with `collect_geojson` from `base_scripts/sfs_utilities.sh`.
-3. Run `update-db-from-footprints` to write a new GPKG combining the geodatabase metadata with the new footprints.
+2. Collect them with `collect_geojson` from `bin/sfs_utilities.sh`.
+3. Run `update-db` to write a new GPKG combining the geodatabase metadata with the new footprints.
 
 Example after mapprojection:
 
 ```bash
-source base_scripts/sfs_utilities.sh
+source bin/sfs_utilities.sh
 collect_geojson_stream IMAGES 'map.noba.geojson' > noba_footprints.geojson
-update-db-from-footprints SOURCE.gpkg TARGET_noba_footprints.gpkg noba_footprints.geojson
+update-db SOURCE.gpkg TARGET_noba_footprints.gpkg noba_footprints.geojson
 ```
 
 With shadow masks:
@@ -181,21 +185,21 @@ export INPUT_DIR="IMAGES"
 export TIF_POSTFIX='map.noba.tif'
 shadow_mask.pbs
 # after the PBS job completes:
-source base_scripts/sfs_utilities.sh
+source bin/sfs_utilities.sh
 collect_geojson_stream IMAGES 'map.noba.mask.geojson' > mask_noba_footprints.geojson
-update-db-from-footprints SOURCE.gpkg TARGET_mask_noba_footprints.gpkg mask_noba_footprints.geojson
+update-db SOURCE.gpkg TARGET_mask_noba_footprints.gpkg mask_noba_footprints.geojson
 ```
 
 ### Determining pairs for bundle adjust
 
-Bundle adjust benefits from an overlap list that pairs only images that overlap spatially and share similar illumination geometry. `find-overlaps-for-bundle-adjust` builds a connectivity graph from the sfs-cover geodatabase, optionally updated with mapprojected or shadow-mask footprints, and reports its structure.
+Bundle adjust benefits from an overlap list that pairs only images that overlap spatially and share similar illumination geometry. `find-image-overlaps` builds a connectivity graph from the sfs-cover geodatabase, optionally updated with mapprojected or shadow-mask footprints, and reports its structure.
 
 The tool is resource intensive. Run it on a debug or devel PBS node with 4 to 8 cores; it takes about two minutes.
 
 Run with `--check_connectivity` to evaluate connectivity for a maximum sub-solar ground azimuth difference set by `--max_diff_slrgaz`:
 
 ```bash
-find-overlaps-for-bundle-adjust \
+find-image-overlaps \
   --check_connectivity \
   -d ./mask_noba_footprints.gpkg \
   --max_diff_slrgaz=12
@@ -220,7 +224,7 @@ Re-run with different `--max_diff_slrgaz` values to reach a single connected com
 Once satisfied, re-run without `--check_connectivity` to write the overlap list:
 
 ```bash
-find-overlaps-for-bundle-adjust \
+find-image-overlaps \
   --image_dir='IMAGES/' \
   -d ./mask_noba_footprints.gpkg \
   --max_diff_slrgaz=8 \
@@ -230,7 +234,7 @@ find-overlaps-for-bundle-adjust \
 Build the image, camera, and mapprojected lists from the overlap list:
 
 ```bash
-source base_scripts/sfs_utilities.sh
+source bin/sfs_utilities.sh
 unique_from_pairs OVERLAP_LIST_SLRGAZ_8.txt > IMAGES.txt
 sed 's/.cub/.json/g' IMAGES.txt > CAMERAS.txt
 sed 's/.cub/.map.noba.tif/g' IMAGES.txt > MAPPROJ_DATA.txt
@@ -239,7 +243,7 @@ echo "path_to_dem.tif" >> MAPPROJ_DATA.txt
 
 ### Downloading EDRs fast
 
-`db_to_urls.sh` (in base_scripts) converts a GeoPackage from sfs-cover into NAC IMG download URLs. By default it uses the USGS AWS mirror of the LROC NAC PDS data. Prefer the IM server (the `im` argument) to avoid a large bill to USGS.
+`db_to_urls.sh` (in bin) converts a GeoPackage from sfs-cover into NAC IMG download URLs. By default it uses the USGS AWS mirror of the LROC NAC PDS data. Prefer the IM server (the `im` argument) to avoid a large bill to USGS.
 
 ```bash
 db_to_urls.sh lrocedrlist.gpkg im \
@@ -261,10 +265,10 @@ echo "path/to/dem.tif" >> MAPPROJ_DATA.txt
 
 ### Verify the bundle adjustment
 
-Inspect graph connectivity after bundle adjustment with `verify-bundle-adjust`:
+Inspect graph connectivity after bundle adjustment with `verify-ba`:
 
 ```bash
-verify-bundle-adjust 'baB/baB' \
+verify-ba 'baB/baB' \
   --min_match_count=10 \
   --max_residual_error=2.0 \
   | jq '.component_sizes'
@@ -273,7 +277,7 @@ verify-bundle-adjust 'baB/baB' \
 Select stereo pairs only from the largest connected component; images outside it form disconnected islands and are dropped from later stereo, bundle adjust, and SfS. Iterate over `--min_match_count` (for example 4, 5, 6) to see how the largest component changes. Export the result for later use:
 
 ```bash
-verify-bundle-adjust 'baB/baB' \
+verify-ba 'baB/baB' \
   --min_match_count=10 \
   --max_residual_error=2.0 \
   > baB_comps.json

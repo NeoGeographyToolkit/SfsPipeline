@@ -97,7 +97,7 @@ echo
 ##############################################
 # make sure the CWD is the INPUT_DIR
 # source asap environment
-source init_sfstools.sh
+source init_sfs.sh
 # echo out PATH
 echo PATH is "$PATH"
 cd "$INPUT_DIR" || exit

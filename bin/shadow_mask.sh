@@ -3,7 +3,7 @@
 # source bashrc
 [ -f ~/.bashrc ] && source ~/.bashrc
 # source asap environment
-source init_sfstools.sh
+source init_sfs.sh
 micromamba activate SfsPipeline
 export PYTHONHOME=$CONDA_PREFIX
 ################################################

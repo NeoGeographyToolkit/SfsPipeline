@@ -187,7 +187,7 @@ def run(
         print(val_pairs)
         if plot and (db is not None):
             import matplotlib.pyplot as plt
-            from loony.new_sfs_cover import plot_footprints, plot_illumination_coverage
+            from sfs.new_sfs_cover import plot_footprints, plot_illumination_coverage
             import geopandas as gp
             # todo plot the anticipate stereo coverage by intersecting the footprints of the pairs and 
             # now join

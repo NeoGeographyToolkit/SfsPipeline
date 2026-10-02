@@ -101,6 +101,7 @@ echo ISIS root is "$ISISROOT"
 echo PATH is "$PATH"
 # save the path to mapproject
 MAPPROJ=$(which mapproject)
+GDAL_FOOTPRINT=$(which gdal_footprint)
 ##############################################
 # create output folders as needed
 LOGS_FOLDER="$WORKDIR/logs"
@@ -122,7 +123,7 @@ args_mapproj=(
         )
 # next set the footprint computation args 
 args_foot=(
-            /vast_swbuild/swbuild3/aannex/micromamba/envs/sfstools/bin/gdal_footprint 
+            "$GDAL_FOOTPRINT" 
             -q 
             -write_absolute_path 
             -of GeoJSON 
