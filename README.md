@@ -136,6 +136,8 @@ Each worker prints its own argument list if run with no arguments. See [WORKFLOW
 - `sfs_exposures.sh`: precompute SfS exposures.
 - `dem_mosaic_list.sh`: merge DEMs or mapprojected images with dem_mosaic (blend, max, mean, count via pass-through flags).
 - `max_lit.sh`, `batch_max_mosaic.sh`, `batch_max_mosaic_lowres.sh`: max-lit mosaics.
+- `max_lit_index.sh`: max-lit mosaic with a per-pixel source-image index map (pairs with `add_rat_to_vrt.py`).
+- `sfs_blend.sh`: blend the SfS DEM toward the reference where there is little illumination.
 - `blend_img_mosaic.sh`, `avg_mosaic.sh`: weighted-mean image mosaics with shadow suppression.
 - `sfs_sim_align.sh` / `batch_sfs_sim.sh`: post-SfS per-image registration by rendering an SfS-simulated view, image_align, and gcp_gen.
 - `jitter_solve.sh`, `jitter_gcp.sh`: refine per-line linescan poses to remove jitter.
@@ -146,9 +148,16 @@ Each worker prints its own argument list if run with no arguments. See [WORKFLOW
 - `raster_matcher.py`: QGIS plugin to locate TIF files from a vector layer.
 - `add_rat_to_vrt.py`: add a Raster Attribute Table to max-lit index files so QGIS maps DN values to source LROC NAC product IDs.
 
-### Legacy PBS scripts
+### Batch and QA utilities
 
-The earlier self-submitting `*.pbs` job scripts are superseded by the bash workers above, submitted with an explicit `qsub` (see WORKFLOW.md). They are retained for reference while the migration settles and will be removed. A few still-unique ones (`run_sfs_blend.pbs` for `sfs_blend`, `run_max_lit_indexes.pbs` for index maps, `shadow_mask.pbs`, `serve_folder.pbs`, `run_command_list.pbs`) are slated to be rewritten as `.sh` workers before removal.
+- `run_command_list.sh`: fan an arbitrary command list out across the nodes of a PBS job with GNU parallel.
+- `run_geodiffs.sh`: geodiff every matching DEM in a directory against a reference, fanned out.
+- `batch_shadow_mask.sh`: run `shadow_mask.sh` over a directory of mapprojected images, fanned out.
+- `serve_folder.sh`: serve a folder of COGs over HTTP (read-only) with rclone for remote QA.
+
+### Stereo branch (optional, under review)
+
+- `run_stereo.sh`, `run_point2dem.sh`: run one stereo pair and its point2dem. These are carried over from the earlier PBS scripts and have not yet been reworked to the worker conventions; use with care.
 
 ## Command-line tools
 
