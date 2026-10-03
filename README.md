@@ -65,6 +65,8 @@ See [WORKFLOW.md](WORKFLOW.md) for the full end-to-end sequence with a ready `qs
 
 Create a work directory per SfS terrain area. Keep a log file (for example a markdown file) documenting each step and command.
 
+When a project is finished, fill in a copy of `inventory.yaml` (at the repo root) in the work directory. It is a delivery and provenance manifest that records the base terrain, the final bundle-adjust prefix, the stereo and SfS terrains, logs, and the orthoimage directory, so the project is self-describing when handed off. See the comments in the file for each field.
+
 ## Workflow
 
 The pipeline has two layers: lightweight command-line tools (installed as PATH entry points) that handle discovery, verification, and selection, and bash worker scripts submitted with `qsub` that run the heavy compute. [WORKFLOW.md](WORKFLOW.md) is the runnable end-to-end sequence with a `qsub` command and suggested walltime for every step.
