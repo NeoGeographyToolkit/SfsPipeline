@@ -47,21 +47,21 @@ source bin/sfs_utilities.sh
 ## Script types
 
 - Python: preprocessing and analysis, installed as PATH entry points, run locally or on a PFE node.
-- PBS (`.pbs`): run only on the HPC under the PBS job manager.
-- Bash: utilities in `bin` used by the other scripts.
+- Bash workers (`.sh`): do the actual processing (mapproject, bundle adjust, SfS, mosaicking, and so on). They take the project work directory as their last argument and are submitted to the HPC with an explicit `qsub` (see below). A few lightweight ones run locally.
 
-## PBS scripts
+## Running jobs on the HPC
 
-PBS scripts are self-submitting workflows configured through environment variables. They perform no real work unless `SUBMIT=true` is set; otherwise they only locate files and prepare output folders, which is useful for inspection. Setting `DEBUG=true` steps through the script command by command. On submission a 15-second pause allows cancellation, and `qdel` cancels a job afterward.
-
-Typical sequence:
+Heavy work runs on a compute node through `qsub`; the head node is used only for trivial list-building and inspection. There are no self-submitting `.pbs` scripts: you submit a worker `.sh` yourself, passing `$(pwd)` as its last argument and your PBS allocation through an environment variable so nothing is hardcoded:
 
 ```bash
-unset SUBMIT
-export DEBUG=true   # dry run, inspect
-unset DEBUG
-export SUBMIT=true  # submit to PBS
+export groupName=your_allocation
+qsub -m n -r n -N <name> -q normal \
+  -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=<N>:ncpus=<C>:model=<model> -l walltime=<HH:MM:SS> \
+  -- <script>.sh <args...> $(pwd)
 ```
+
+See [WORKFLOW.md](WORKFLOW.md) for the full end-to-end sequence with a ready `qsub` command and a suggested walltime for each step.
 
 ## Recommended practice
 
@@ -69,17 +69,18 @@ Create a work directory per SfS terrain area. Keep a log file (for example a mar
 
 ## Workflow
 
-The pipeline has two layers: lightweight command-line tools (installed as PATH entry points) that handle discovery, verification, and selection, and PBS scripts that run the heavy compute (mapproject, bundle adjust, SfS) on the HPC. See [WORKFLOW.md](WORKFLOW.md) for the full end-to-end example with the PBS steps.
+The pipeline has two layers: lightweight command-line tools (installed as PATH entry points) that handle discovery, verification, and selection, and bash worker scripts submitted with `qsub` that run the heavy compute. [WORKFLOW.md](WORKFLOW.md) is the runnable end-to-end sequence with a `qsub` command and suggested walltime for every step.
 
 Main SfS path, high-level order of operations:
 
-1. `make-index` builds the geoparquet cumulative index files.
-2. `sfs-cover` selects candidate images for an ROI from the index.
-3. `find-image-overlaps` builds the bundle-adjust pairs list from overlapping, similarly-illuminated footprints.
-4. Bundle adjust the images (PBS), the single most important step for SfS quality.
-5. `verify-ba` inspects graph connectivity and reports the largest connected camera group; images outside it are dropped.
-6. `lit-select` picks a well-illuminated image subset per SfS tile.
-7. Run SfS (PBS), optionally with a preview pass hillshade-aligned to LOLA before a final pass.
+1. Prepare the reference terrain: `make_ref_dem.sh` regrids the LOLA DEM to the target grid and half-integer bounds.
+2. Fetch and calibrate the NAC images: discover with `sfs-cover` (or `query_lro.sh`), download, then `batch_prepare_lro.sh`.
+3. Sort images by Sun azimuth and cull shadowed frames (`sfs_query.sh`, `filter_by_max.sh`).
+4. Mapproject onto the reference DEM (`batch_mapproject.sh`).
+5. Bundle adjust: harvest matches (`bundle_adjust.sh`, `NUM_ITERATIONS=0`) then the refine chain (`bundle_adjust_refine.sh`). This is the single most important step for SfS quality.
+6. Validate the camera graph with `verify-ba` and drop disconnected images.
+7. Run SfS per tile (`tile_dem.py`, `launch_sfs_tiles.sh`), merge (`dem_mosaic_list.sh`), optionally after a preview pass hillshade-aligned to LOLA.
+8. Post-SfS registration, height-uncertainty, and jitter as needed.
 
 `solar-az-plot` is an optional illumination check that animates footprint coverage by solar azimuth.
 
@@ -89,23 +90,57 @@ Optional stereo survey: where stereo coverage exists, `find-stereo` surveys ster
 
 All scripts live in `bin`.
 
-### Shell scripts
+Each worker prints its own argument list if run with no arguments. See [WORKFLOW.md](WORKFLOW.md) for how they fit together and the `qsub` command for each.
 
-- `init_asp.sh`: initialize the ASP and SfsPipeline environment.
-- `init_isis.sh`: initialize the ISIS conda environment.
-- `init_sfs.sh`: initialize the SfsPipeline environment (ASP bin not on PATH).
+### Environment and helpers
+
+- `init_asp.sh`: activate the environment with ASP and ISIS on PATH (micromamba, mamba, or conda).
+- `init_isis.sh`: activate the ISIS conda environment.
+- `init_sfs.sh`: activate the SfsPipeline environment (ASP bin not on PATH).
 - `sfs_utilities.sh`: bash helper functions for SfS processing. Source to load.
-- `calibrate_edr.sh`: ISIS calibration and CSM camera generation.
 - `db_to_urls.sh`: produce NAC IMG download URLs from a GPKG source file.
-- `stereo.sh`: stereo processing.
-- `shadow_mask.sh`: compute shadow masks.
 - `random_sample.sh`: take a random sample from a list file.
 - `ds_by_attr.sh`: subset a GPKG file by an attribute value range.
-- `prepare_ba0_lists.sh`: prepare lists for bundle adjust (deprecated).
-- `rescale_raster.sh`: scale a floating-point image to 8 bit (deprecated).
-- `make_lerc_cog.sh`: make LERC COGs (deprecated).
-- `launch_mapproj_jobs.sh`: launch many mapproject jobs (deprecated).
-- `launch_stereo_jobs.sh`: launch many stereo jobs (deprecated).
+
+### Terrain, fetch, and calibration
+
+- `make_ref_dem.sh`: regrid a source DEM (gdalwarp) to the target grid, resolution, and half-integer bounds, with optional spike blur.
+- `query_lro.py` / `query_lro.sh`: query the PDS ODE REST API for NAC images by lat/lon box or DEM extent, emitting product IDs and IMG URLs.
+- `download_all.sh`: resumable multi-URL downloader.
+- `fetch_lro_nac.sh`, `prepare_lro_nac.py`, `batch_prepare_lro.sh`: fetch and calibrate EDRs to `.cal.echo.cub` plus CSM cameras (lronac2isis, spiceinit, lronaccal, lronacecho, isd_generate with linear reduction).
+- `isd_generate.sh`: generate CSM camera JSON for a list of cubes.
+- `regrid_to_grid.sh`: gdalwarp a raster onto a fixed target grid.
+
+### Selection and illumination
+
+- `sfs_query.sh`, `query_azimuth.sh`: per-camera Sun azimuth/elevation via `sfs --query`.
+- `query_gsd.sh`: per-image ground sample distance via `mapproject --query-projection`.
+- `filter_by_max.sh`: order-preserving cull of shadowed/non-intersecting frames by max value.
+- `split_quadrants.py`, `prepare_lowres.sh`, `image_subset_2x.sh`, `sfs_select_full_site.sh`: minimal-but-covering image subset selection per quadrant.
+- `plot_sfs_azimuth.py`: Sun-azimuth rose plot.
+- `sfs_flag_bad_cameras.py`, `sfs_prune_and_remosaic.sh`: flag and drop whacky cameras, rebuild max-lit mosaics.
+
+### Mapprojection, bundle adjustment, alignment
+
+- `batch_mapproject.sh` / `mapproject_chunk.sh`: chunked multi-node mapprojection and its per-node worker.
+- `mapproject_sub10.sh`: low-resolution mapprojection for quick looks.
+- `bundle_adjust.sh`: parallel_bundle_adjust wrapper (matches-only with `NUM_ITERATIONS=0`, or a solve).
+- `bundle_adjust_refine.sh`: the fixed-anchors -> free -> heights-from-dem refine chain.
+- `bundle_adjust_dem_gcp.sh`: bundle adjust constrained by a DEM-derived GCP file.
+- `correlator.sh`, `dense_correlator.sh`: image-to-image correlation (correlator mode).
+- `hillshade_correlator.sh`: DEM-to-DEM hillshade correlation for a horizontal shift (dh/dv).
+- `dem2gcp.sh`, `trans_gcp.sh`, `filter_gcp.py`: turn a DEM-to-DEM disparity into GCPs for a re-solve.
+
+### SfS, mosaics, registration, jitter
+
+- `tile_dem.py`: cut the reference DEM into ~4k x 4k padded tiles.
+- `parallel_sfs.sh` / `launch_sfs_tiles.sh`: per-tile parallel_sfs worker and the batch submitter over all tiles.
+- `sfs_exposures.sh`: precompute SfS exposures.
+- `dem_mosaic_list.sh`: merge DEMs or mapprojected images with dem_mosaic (blend, max, mean, count via pass-through flags).
+- `max_lit.sh`, `batch_max_mosaic.sh`, `batch_max_mosaic_lowres.sh`: max-lit mosaics.
+- `blend_img_mosaic.sh`, `avg_mosaic.sh`: weighted-mean image mosaics with shadow suppression.
+- `sfs_sim_align.sh` / `batch_sfs_sim.sh`: post-SfS per-image registration by rendering an SfS-simulated view, image_align, and gcp_gen.
+- `jitter_solve.sh`, `jitter_gcp.sh`: refine per-line linescan poses to remove jitter.
 
 ### QGIS helper scripts
 
@@ -113,34 +148,9 @@ All scripts live in `bin`.
 - `raster_matcher.py`: QGIS plugin to locate TIF files from a vector layer.
 - `add_rat_to_vrt.py`: add a Raster Attribute Table to max-lit index files so QGIS maps DN values to source LROC NAC product IDs.
 
-### PBS scripts
+### Legacy PBS scripts
 
-- `bundle_adjust_pairwise_pt1.pbs`: IP matching prior to bundle adjustment, many nodes.
-- `bundle_adjust_pt0.pbs`: bundle adjust step 0, many nodes (deprecated).
-- `bundle_adjust_pt1.pbs`: bundle adjust step 1, many nodes (deprecated).
-- `bundle_adjust_pt2.pbs`: optimize cameras and refine to topography, one node.
-- `calibrate_edr.pbs`: calibrate IMG to CUB and generate CSM cameras, many nodes.
-- `gdal_footprints.pbs`: create footprint geojson files, many nodes (deprecated).
-- `launch_stereo.pbs`: run stereo, many nodes (deprecated).
-- `make_lerc_cogs.pbs`: convert TIF files to LERC COGs, many nodes (deprecated).
-- `mapproj_ba.pbs`: mapproject with bundle-adjusted cameras and topography, many nodes; also computes footprints.
-- `mapproj_noba.pbs`: mapproject with topography and no bundle-adjusted cameras, many nodes; also computes footprints.
-- `run_command_list.pbs`: run arbitrary command lists, many nodes.
-- `run_geodiffs.pbs`: run many geodiff calls, many nodes.
-- `run_hillshade_align.pbs`: hillshade-align two DEMs, one node.
-- `run_count_lit.pbs`: SfS count map for one tile, one node.
-- `run_dem_mosaic.pbs`: merge DEM tiles with dem_mosaic, one node.
-- `run_image_correlation.pbs`: image correlation (deprecated).
-- `run_mapproj.pbs`: mapproject one image, one node (deprecated).
-- `run_max_lit_indexes.pbs`: SfS max-lit index map for one tile, one node.
-- `run_max_lit.pbs`: SfS max-lit map for one tile, one node.
-- `run_point2dem.pbs`: run point2dem for a stereo job.
-- `run_stereo.pbs`: run one stereo pair as a job.
-- `run_sfs_blend.pbs`: SfS blend step, one node.
-- `serve_folder.pbs`: serve a folder from NAS over HTTP for viewing COGs.
-- `sfs_exposures.pbs`: precompute SfS exposure lists (deprecated).
-- `sfs.pbs`: run SfS, or height-uncertainty jobs, on one or many nodes.
-- `shadow_mask.pbs`: generate shadow-mask TIF files and footprint geojsons, many nodes.
+The earlier self-submitting `*.pbs` job scripts are superseded by the bash workers above, submitted with an explicit `qsub` (see WORKFLOW.md). They are retained for reference while the migration settles and will be removed. A few still-unique ones (`run_sfs_blend.pbs` for `sfs_blend`, `run_max_lit_indexes.pbs` for index maps, `shadow_mask.pbs`, `serve_folder.pbs`, `run_command_list.pbs`) are slated to be rewritten as `.sh` workers before removal.
 
 ## Command-line tools
 
