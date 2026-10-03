@@ -157,7 +157,10 @@ Each worker prints its own argument list if run with no arguments. See [WORKFLOW
 
 ### Stereo branch (optional, under review)
 
-- `run_stereo.sh`, `run_point2dem.sh`: run one stereo pair and its point2dem. These are carried over from the earlier PBS scripts and have not yet been reworked to the worker conventions; use with care.
+- `run_stereo.sh`: run one stereo pair (parallel_stereo asp_mgm) with point2dem and a half-res DEM.
+- `run_point2dem.sh`: point2dem on a stereo point cloud.
+
+These are reworked to the worker conventions; their stereo parameters are carried over from the original and kept under review (the stereo branch is usually skipped for polar SfS).
 
 ## Command-line tools
 
