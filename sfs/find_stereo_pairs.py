@@ -7,7 +7,6 @@ import argparse
 import numpy as np
 import numpy.core.multiarray
 import duckdb
-from duckdb.typing import DOUBLE
 import math
 from shapely import wkt
 from shapely import Polygon

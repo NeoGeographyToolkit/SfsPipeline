@@ -69,17 +69,21 @@ Create a work directory per SfS terrain area. Keep a log file (for example a mar
 
 ## Workflow
 
-High-level order of operations:
+The pipeline has two layers: lightweight command-line tools (installed as PATH entry points) that handle discovery, verification, and selection, and PBS scripts that run the heavy compute (mapproject, bundle adjust, SfS) on the HPC. See [WORKFLOW.md](WORKFLOW.md) for the full end-to-end example with the PBS steps.
 
-1. `make-index` builds geoparquet cumulative index files.
-2. `sfs-cover` selects images for an ROI from the index.
-3. `find-stereo` (optional) surveys stereo availability.
-4. `solar-az-plot` (optional) animates footprint coverage by solar azimuth.
-5. `find-image-overlaps` builds the bundle-adjust pairs list.
-6. `verify-ba` inspects graph connectivity and the largest connected camera group.
-7. `stereo-from-ba` lists runnable stereo pairs from that group.
-8. `tri-plot` plots triangulation-error images.
-9. `lit-select` filters by illumination.
+Main SfS path, high-level order of operations:
+
+1. `make-index` builds the geoparquet cumulative index files.
+2. `sfs-cover` selects candidate images for an ROI from the index.
+3. `find-image-overlaps` builds the bundle-adjust pairs list from overlapping, similarly-illuminated footprints.
+4. Bundle adjust the images (PBS), the single most important step for SfS quality.
+5. `verify-ba` inspects graph connectivity and reports the largest connected camera group; images outside it are dropped.
+6. `lit-select` picks a well-illuminated image subset per SfS tile.
+7. Run SfS (PBS), optionally with a preview pass hillshade-aligned to LOLA before a final pass.
+
+`solar-az-plot` is an optional illumination check that animates footprint coverage by solar azimuth.
+
+Optional stereo survey: where stereo coverage exists, `find-stereo` surveys stereo availability, `stereo-from-ba` lists runnable stereo pairs from the largest connected group, and `tri-plot` plots triangulation-error images. For sparse polar coverage this branch is usually skipped in favor of more complete bundle adjustment (see WORKFLOW.md).
 
 ## Script reference
 
@@ -142,7 +146,7 @@ All scripts live in `bin`.
 
 ### Make index
 
-`make-index` processes CUMINDEX.LBL and CUMINDEX.TAB from the home directory (they must be present there, or symlinked) into parquet files in /tmp. It takes about two minutes. Each parquet file embeds provenance metadata: UTC timestamp, user, hostname, and the md5sum of CUMINDEX.TAB.
+`make-index` processes CUMINDEX.LBL and CUMINDEX.TAB from `~/LRO_EDR_CUMINDEX/` (they must be present there, or symlinked) into parquet files in /tmp. It takes about two minutes. Each parquet file embeds provenance metadata: UTC timestamp, user, hostname, and the md5sum of CUMINDEX.TAB.
 
 ```bash
 make-index
@@ -231,6 +235,8 @@ find-image-overlaps \
   > OVERLAP_LIST_SLRGAZ_8.txt
 ```
 
+The emitted paths are `<image_dir>/<product_id><postfix>`. The postfix defaults to `.ech.cub` (`--image_filename_postfix`), and `--image_dir` defaults to `<cwd>/IMAGES/`. Override the postfix if your cubes use a different stem.
+
 Build the image, camera, and mapprojected lists from the overlap list:
 
 ```bash
@@ -254,7 +260,9 @@ Downloads parallelize well; roughly 600 GB completes in 10 to 15 minutes.
 
 ### First round ba0 bundle adjust
 
-Build the image, camera, and mapprojected lists:
+Build the image, camera, and mapprojected lists from the overlap list as shown in "Determining pairs for bundle adjust" above (`unique_from_pairs` plus `sed`).
+
+The older `prepare_ba0_lists.sh` wrapper, which builds the three lists from a plain sub-solar-ground-azimuth-ordered product-id list, is deprecated and kept only for reference:
 
 ```bash
 cd folder/with/cubsandtifsandjsons
