@@ -46,8 +46,9 @@ def arg_parser():
     )
     parser.add_argument(
         "--image_filename_postfix",
-        type=str, default='.ech.cub',
-        help='file extensions for image ids to append'
+        type=str, default='.cal.echo.cub',
+        help='file extension for image ids to append (default matches the '
+             'pipeline .cal.echo.cub naming)'
     )
     parser.add_argument(
         "--image_dir",

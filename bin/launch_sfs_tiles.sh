@@ -44,8 +44,8 @@ binDir="$(cd "$(dirname "$0")" && pwd)"
 #
 # Env var pass-through (forwarded to parallel_sfs.sh workers via -v):
 #   IMAGE_DIR / IMAGE_SUFFIX - default img / .cal.echo.cub. Set
-#     IMAGE_DIR=IMAGES IMAGE_SUFFIX=.ech.cub for the LRO NAC sites
-#     where cubs live at IMAGES/<id>.ech.cub.
+#     IMAGE_DIR=img IMAGE_SUFFIX=.cal.echo.cub (the default), where cubs live
+#     at img/<id>.cal.echo.cub.
 #
 # Example (regular run):
 #   cd /path/to/your/project

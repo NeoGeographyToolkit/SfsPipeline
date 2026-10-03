@@ -17,7 +17,7 @@ def run(db_path: str, verify_out_json: str, out_db_path: str = None, component_i
     with open(verify_out_json) as src:
         components = json.load(verify_out_json)
     # now make a table with the IDs in the largest component
-    component_pids = components['components'][component_index].apply(lambda x: x.replace('.ech.cub', ''))
+    component_pids = components['components'][component_index].apply(lambda x: x.split('/')[-1].split('.')[0])
     # now update the df to only include those 
     df = df[df['PRODUCT_ID'].isin(component_pids)]
     # determine output name

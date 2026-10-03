@@ -99,6 +99,7 @@ parallel_bundle_adjust                     \
     --camera-weight 0.00                   \
     --datum D_MOON                         \
     --ip-per-image 50000                   \
+    --ip-detect-method 0                   \
     --max-pairwise-matches 5000            \
     --match-first-to-last                  \
     --min-matches 1                        \

@@ -27,7 +27,7 @@ SfsPipeline is installed both locally and on the NASA HECC HPC. Some steps apply
    export ISISROOT=/path/to/your/conda/envs/isis
    export ASPROOT=/path/to/your/extracted/ASP/
    ```
-7. Activate the `SfsPipeline` conda environment to run the command-line tools. The bash and PBS scripts are on PATH regardless of the active environment.
+7. Activate the `SfsPipeline` conda environment to run the command-line tools. The bash worker scripts in bin/ are on PATH regardless of the active environment.
 8. Run `source init_asp.sh` for ISIS and ASP commands, or `source init_sfs.sh` for the SfsPipeline tools and GDAL.
 
 ## Utility scripts
@@ -152,149 +152,25 @@ The earlier self-submitting `*.pbs` job scripts are superseded by the bash worke
 
 ## Command-line tools
 
-### Make index
+These Python entry points (installed on PATH by the conda environment) handle
+discovery, selection, and validation. [WORKFLOW.md](WORKFLOW.md) shows each one
+in the order you actually run it, with the surrounding commands; this is just a
+reference.
 
-`make-index` processes CUMINDEX.LBL and CUMINDEX.TAB from `~/LRO_EDR_CUMINDEX/` (they must be present there, or symlinked) into parquet files in /tmp. It takes about two minutes. Each parquet file embeds provenance metadata: UTC timestamp, user, hostname, and the md5sum of CUMINDEX.TAB.
-
-```bash
-make-index
-```
-
-### SFS cover
-
-`sfs-cover` selects observations for an ROI. GeoPackage output suits the few thousand observations a typical ROI yields.
-
-```bash
-sfs-cover \
-  --db_path /tmp/lroc_cumulative_south_polar.parquet \
-  -p "POLYGON((72471 158818,128309 158818,128309 119030,72471 119030,72471 158818))" \
-  -t mons_mouton_regional \
-  --gpkg /tmp/mons_mouton_regional.gpkg
-```
-
-Provenance metadata propagates from the source parquet file into the output.
-
-### Getting updated footprints
-
-Footprints in the geodatabase can be refreshed to reflect mapprojected footprints, with or without bundle-adjusted cameras, and illuminated-versus-shadowed areas from shadow masks. The process:
-
-1. Generate footprint geojsons via mapproject, or shadow_mask.pbs for shadow masks.
-2. Collect them with `collect_geojson` from `bin/sfs_utilities.sh`.
-3. Run `update-db` to write a new GPKG combining the geodatabase metadata with the new footprints.
-
-Example after mapprojection:
-
-```bash
-source bin/sfs_utilities.sh
-collect_geojson_stream IMAGES 'map.noba.geojson' > noba_footprints.geojson
-update-db SOURCE.gpkg TARGET_noba_footprints.gpkg noba_footprints.geojson
-```
-
-With shadow masks:
-
-```bash
-export INPUT_DIR="IMAGES"
-export TIF_POSTFIX='map.noba.tif'
-shadow_mask.pbs
-# after the PBS job completes:
-source bin/sfs_utilities.sh
-collect_geojson_stream IMAGES 'map.noba.mask.geojson' > mask_noba_footprints.geojson
-update-db SOURCE.gpkg TARGET_mask_noba_footprints.gpkg mask_noba_footprints.geojson
-```
-
-### Determining pairs for bundle adjust
-
-Bundle adjust benefits from an overlap list that pairs only images that overlap spatially and share similar illumination geometry. `find-image-overlaps` builds a connectivity graph from the sfs-cover geodatabase, optionally updated with mapprojected or shadow-mask footprints, and reports its structure.
-
-The tool is resource intensive. Run it on a debug or devel PBS node with 4 to 8 cores; it takes about two minutes.
-
-Run with `--check_connectivity` to evaluate connectivity for a maximum sub-solar ground azimuth difference set by `--max_diff_slrgaz`:
-
-```bash
-find-image-overlaps \
-  --check_connectivity \
-  -d ./mask_noba_footprints.gpkg \
-  --max_diff_slrgaz=12
-```
-
-The output is a JSON summary:
-
-```json
-{
-  "is_connected": true,
-  "num_pairs": 36574,
-  "num_components": 1,
-  "component_sizes": [1514],
-  "num_pairs_per_component": [36574]
-}
-```
-
-Key fields: `is_connected` reports whether every image is used (rarely true), `num_components` is the number of fully connected subgraphs, `component_sizes` lists the image count per subgraph (largest first), and `num_pairs` is the pair count of the largest subgraph, written to the overlap list.
-
-Re-run with different `--max_diff_slrgaz` values to reach a single connected component without generating too many pairs. Values above 10 degrees produce unnecessarily many pairs; 6 to 8 degrees give large but manageable lists. A useful target is fewer pairs than the image count times a typical bundle-adjust window of 25 to 50.
-
-Once satisfied, re-run without `--check_connectivity` to write the overlap list:
-
-```bash
-find-image-overlaps \
-  --image_dir='IMAGES/' \
-  -d ./mask_noba_footprints.gpkg \
-  --max_diff_slrgaz=8 \
-  > OVERLAP_LIST_SLRGAZ_8.txt
-```
-
-The emitted paths are `<image_dir>/<product_id><postfix>`. The postfix defaults to `.ech.cub` (`--image_filename_postfix`), and `--image_dir` defaults to `<cwd>/IMAGES/`. Override the postfix if your cubes use a different stem.
-
-Build the image, camera, and mapprojected lists from the overlap list:
-
-```bash
-source bin/sfs_utilities.sh
-unique_from_pairs OVERLAP_LIST_SLRGAZ_8.txt > IMAGES.txt
-sed 's/.cub/.json/g' IMAGES.txt > CAMERAS.txt
-sed 's/.cub/.map.noba.tif/g' IMAGES.txt > MAPPROJ_DATA.txt
-echo "path_to_dem.tif" >> MAPPROJ_DATA.txt
-```
-
-### Downloading EDRs fast
-
-`db_to_urls.sh` (in bin) converts a GeoPackage from sfs-cover into NAC IMG download URLs. By default it uses the USGS AWS mirror of the LROC NAC PDS data. Prefer the IM server (the `im` argument) to avoid a large bill to USGS.
-
-```bash
-db_to_urls.sh lrocedrlist.gpkg im \
-  | xargs -n 1 -P 8 -I {} wget {} -P ~/nobackup/LROCNACEDR/
-```
-
-Downloads parallelize well; roughly 600 GB completes in 10 to 15 minutes.
-
-### First round ba0 bundle adjust
-
-Build the image, camera, and mapprojected lists from the overlap list as shown in "Determining pairs for bundle adjust" above (`unique_from_pairs` plus `sed`).
-
-The older `prepare_ba0_lists.sh` wrapper, which builds the three lists from a plain sub-solar-ground-azimuth-ordered product-id list, is deprecated and kept only for reference:
-
-```bash
-cd folder/with/cubsandtifsandjsons
-# images.txt is the sub-solar ground azimuth ordered list of product ids
-cat ../images.txt | prepare_ba0_lists.sh
-echo "path/to/dem.tif" >> MAPPROJ_DATA.txt
-```
-
-### Verify the bundle adjustment
-
-Inspect graph connectivity after bundle adjustment with `verify-ba`:
-
-```bash
-verify-ba 'baB/baB' \
-  --min_match_count=10 \
-  --max_residual_error=2.0 \
-  | jq '.component_sizes'
-```
-
-Select stereo pairs only from the largest connected component; images outside it form disconnected islands and are dropped from later stereo, bundle adjust, and SfS. Iterate over `--min_match_count` (for example 4, 5, 6) to see how the largest component changes. Export the result for later use:
-
-```bash
-verify-ba 'baB/baB' \
-  --min_match_count=10 \
-  --max_residual_error=2.0 \
-  > baB_comps.json
-```
+- `make-index`, `prep-index`, `provenance`: build the geoparquet LROC cumulative
+  index (from CUMINDEX.LBL/TAB in `~/LRO_EDR_CUMINDEX/`) with embedded provenance.
+- `sfs-cover`: select the observations crossing an ROI polygon into a GeoPackage.
+- `find-image-overlaps`: build a spatial/illumination connectivity graph from the
+  cover GeoPackage; `--check_connectivity` reports component sizes, otherwise it
+  writes the overlap list. Used here for validation and downselect.
+- `verify-ba`: after bundle adjustment, report the largest connected camera
+  component from the match-offset and residual stats so islands can be dropped.
+- `lit-select`: pick a well-illuminated image subset for an SfS tile.
+- `update-db`: write a new GeoPackage combining the metadata with refreshed
+  (mapprojected or shadow-masked) footprints.
+- `filter-db`: downselect a GeoPackage to the product ids in a verify-ba result.
+- `find-stereo`, `stereo-from-ba`, `tri-plot`: optional stereo-survey branch
+  (stereo availability, runnable pairs, triangulation-error plots).
+- `solar-az-plot`: animate footprint coverage by solar azimuth.
+- `wkt-to-ullr`, `wkt-to-projwin`, `wkt-round-out`, `setops`: small geometry and
+  list helpers (see TIPS.md).

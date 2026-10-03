@@ -82,7 +82,7 @@ def run(
         # now make a table with the IDs in the largest component
         component_pids = components['components'][component_index]
         # now adjust the pids
-        component_pids = [Path(_).name.replace('.ech.cub', '') for _ in component_pids]
+        component_pids = [Path(_).name.split('.')[0] for _ in component_pids]
         # now update the df to only include those 
         df = df[df['PRODUCT_ID'].isin(component_pids)]
     if productid_non_grata_file:

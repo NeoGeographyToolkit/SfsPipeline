@@ -65,14 +65,36 @@ Confirm 100% valid and a half-integer origin with `gdalinfo -stats`.
 Query candidate NAC observations for the ROI, download the EDRs, and calibrate
 each to a `.cal.echo.cub` plus a CSM `.json` camera.
 
-Discovery (local, fast) uses either our ODE query or Andrew's cumulative-index
-front end (`make-index` then `sfs-cover`, see the README):
+Discovery is local and fast. Two front ends are available; use either.
+
+Cumulative-index front end: `make-index` builds geoparquet index files from
+CUMINDEX.LBL/TAB in `~/LRO_EDR_CUMINDEX/` (about two minutes, embeds provenance),
+then `sfs-cover` selects the observations for an ROI polygon into a GeoPackage:
+
+```bash
+make-index
+sfs-cover \
+  --db_path /tmp/lroc_cumulative_south_polar.parquet \
+  -p "POLYGON((72471 158818,128309 158818,128309 119030,72471 119030,72471 158818))" \
+  -t my_roi --gpkg /tmp/my_roi.gpkg
+```
+
+ODE front end (standalone, no index needed):
 
 ```bash
 query_lro.sh --dem ref/lola_1mpp.tif --margin-km 1.0 \
   --min-incidence 70 --max-incidence 90 \
   --output-urls lists/urls.txt --output-products lists/products.txt
-download_all.sh lists/urls.txt       # resumable; run on a front end (has network)
+```
+
+Download the EDRs. From a GeoPackage, `db_to_urls.sh` emits the IMG URLs (pass
+`im` to use the IM server and avoid billing the USGS mirror); or feed
+`download_all.sh` the ODE URL list. Run on a front end (it has network); roughly
+600 GB completes in 10 to 15 minutes.
+
+```bash
+db_to_urls.sh /tmp/my_roi.gpkg im | xargs -n 1 -P 8 -I {} wget {} -P img/
+# or: download_all.sh lists/urls.txt
 ```
 
 Batch ingest (fetch + lronac2isis + spiceinit + lronaccal + lronacecho +
@@ -101,9 +123,24 @@ filter_by_max.sh lists/azimuth_map.txt lists/filtered_map.txt $(pwd) 0.005
 For very large sites, thin to a minimal-but-covering subset per quadrant with
 `split_quadrants.py`, `prepare_lowres.sh`, and `image_subset_2x.sh`.
 
-Andrew's `find-image-overlaps` and `verify-ba` (README) remain useful as a
-graph-connectivity check: they report the largest connected camera component so
-disconnected islands can be dropped before stereo/BA/SfS.
+Optionally refresh the GeoPackage footprints to reflect the actual mapprojected
+(and shadow-masked, hence lit) extents, then check camera-graph connectivity
+with `find-image-overlaps`. This is a validation and downselect step: the matcher
+in bundle adjustment is our azimuth-sort plus `--overlap-limit`, not the
+azimuth-restricted overlap graph. After mapprojection (step 4):
+
+```bash
+source sfs_utilities.sh
+collect_geojson_stream img 'map.mask.geojson' > mask_footprints.geojson
+update-db SOURCE.gpkg my_roi_mask.gpkg mask_footprints.geojson
+# report connectivity for a range of sub-solar ground-azimuth differences
+find-image-overlaps --check_connectivity -d ./my_roi_mask.gpkg --max_diff_slrgaz=8
+```
+
+`find-image-overlaps` reports `is_connected`, `num_components`, and
+`component_sizes` (largest first). Raise `--max_diff_slrgaz` until the graph is a
+single connected component without producing too many pairs (6 to 8 degrees is
+usually a good range). Images outside the largest component are dropped.
 
 ## 4. Mapprojection
 
@@ -168,8 +205,15 @@ qsub -m n -r n -N ba_htdem -W group_list=$groupName -j oe -S /bin/bash \
 ```
 
 Validate each stage: the median reprojection error per camera in
-`<outDir>/run-final_residuals_stats.txt` should fall to about 1-2 px. Re-run
-`verify-ba` on the final prefix to confirm the camera graph stays connected.
+`<outDir>/run-final_residuals_stats.txt` should fall to about 1-2 px. Then check
+the camera graph with `verify-ba`, which uses the match-offset and residual
+stats to report the largest connected component; images outside it are dropped
+from SfS. Iterate `--min_match_count` to see how the component changes:
+
+```bash
+verify-ba ba_htdem/run --min_match_count=10 --max_residual_error=2.0 | jq '.component_sizes'
+verify-ba ba_htdem/run --min_match_count=10 --max_residual_error=2.0 > ba_htdem_comps.json
+```
 
 ## 6. Alignment to the ground and registration refinement
 
