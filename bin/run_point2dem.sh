@@ -9,7 +9,7 @@
 # Env:
 #   SRS       target CRS (default IAU_2015:30135)
 #   MPP       output resolution in meters (default 1.0)
-#   THREADS   point2dem threads (default 40)
+#   THREADS   point2dem threads (default: all cores, nproc)
 
 if [ "$#" -lt 2 ]; then echo "Usage: $0 src currDir"; exit 1; fi
 src=$1; currDir=$2
@@ -25,7 +25,7 @@ ulimit -c 0
 
 srs=${SRS:-IAU_2015:30135}
 mpp=${MPP:-1.0}
-threads=${THREADS:-40}
+threads=${THREADS:-$(nproc)}
 
 out=output_$(basename "${src%.tif}").point2dem.txt
 echo "point2dem --t_srs $srs --tr $mpp $src (log $out)"

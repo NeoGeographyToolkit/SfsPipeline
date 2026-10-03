@@ -35,7 +35,7 @@ list=$1
 output=$2
 threshold=$3
 currDir=$4
-threads=${5:-20}
+threads=${5:-$(nproc)}
 buildPyramids=${6:-1}
 cd $currDir
 

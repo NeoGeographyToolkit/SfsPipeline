@@ -90,6 +90,10 @@ if [ "${MAX_ANCHOR_TO_TRI_RATIO:-}" != "" ]; then
   ratioOpts="$ratioOpts --max-anchor-points-to-tri-points-ratio ${MAX_ANCHOR_TO_TRI_RATIO}"
 fi
 
+# Threads: default to ALL cores of the node (nproc). The ASP/VW default (~8 via
+# .vwrc) badly under-uses a full node. Override with NUM_THREADS.
+numThreads=${NUM_THREADS:-$(nproc)}
+
 # Set up the paths
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
 export ISISROOT=${ISISROOT:-$HOME/miniconda3/envs/asp_deps}
@@ -114,10 +118,12 @@ echo numLinesPos=$numLinesPos numLinesOrient=$numLinesOrient camPosUnc=$camPosUn
 echo demUnc=$demUnc anchorDem=$anchorDem anchorUnc=$anchorUnc                     >> $out
 echo numAnchor=$numAnchor anchorExtra=$anchorExtra maxPairwise=$maxPairwise       >> $out
 echo "ratioOpts=$ratioOpts"    >> $out
+echo "numThreads=$numThreads"  >> $out
 
 /usr/bin/time -f                                 \
     "Elapsed=%E memory=%M (kb)"                  \
     jitter_solve                                 \
+    --threads $numThreads                        \
     --image-list $imageList                      \
     --camera-list $cameraList                    \
     $gcpFile                                     \

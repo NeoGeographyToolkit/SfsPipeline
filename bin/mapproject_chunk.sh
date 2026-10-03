@@ -204,7 +204,7 @@ if [ -s "$mosaic" ]; then
   exit 0
 fi
 
-dem_mosaic --threads 20 --max --dem-list "$mapList" -o "$mosaic" >> "$out" 2>&1
+dem_mosaic --threads $(nproc) --max --dem-list "$mapList" -o "$mosaic" >> "$out" 2>&1
 stereo_gui --create-image-pyramids-only "$mosaic" >> "$out" 2>&1
 
 

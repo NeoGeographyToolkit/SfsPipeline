@@ -96,6 +96,7 @@ parallel_bundle_adjust                     \
     --image-list $ilist                    \
     --camera-list $clist                   \
     --mapprojected-data-list $mlist        \
+    --accept-provided-mapproj-dem          \
     --camera-weight 0.00                   \
     --datum D_MOON                         \
     --ip-per-image 50000                   \

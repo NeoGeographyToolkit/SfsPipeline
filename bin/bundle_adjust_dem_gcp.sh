@@ -83,6 +83,10 @@ if [ "${CAM_POS_UNC:-}" != "" ]; then
   camPosOpt="--camera-position-uncertainty ${CAM_POS_UNC}"
 fi
 
+# Threads: default to ALL cores of the node (nproc). The ASP/VW default (~8 via
+# .vwrc) badly under-uses a full node. Override with NUM_THREADS.
+numThreads=${NUM_THREADS:-$(nproc)}
+
 echo imageList=$imageList
 echo cameraList=$cameraList
 echo dem=$dem
@@ -95,6 +99,7 @@ echo maxPairwise=$maxPairwise
 echo maxGcpErr=$maxGcpErr
 echo ratioOpt=$ratioOpt
 echo camPosOpt=$camPosOpt
+echo numThreads=$numThreads
 
 # Set up the paths
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
@@ -119,6 +124,7 @@ echo "Machines:  $(cat ${PBS_NODEFILE})" >> $out
 /usr/bin/time -f                            \
     "Elapsed=%E memory=%M (kb)"             \
     bundle_adjust                           \
+    --threads $numThreads                   \
     --image-list $imageList                 \
     --camera-list $cameraList               \
     $gcpFile                                \

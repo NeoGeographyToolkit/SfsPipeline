@@ -11,7 +11,7 @@
 #   currDir     work dir, pass as $(pwd)
 # Env:
 #   PROJWIN   optional "xmin ymin xmax ymax" to limit the output extent
-#   THREADS   dem_mosaic threads (default 16)
+#   THREADS   dem_mosaic threads (default: all cores, nproc)
 
 if [ "$#" -lt 3 ]; then echo "Usage: $0 imageList outName currDir"; exit 1; fi
 imageList=$1; outName=$2; currDir=$3
@@ -25,7 +25,7 @@ export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
 umask 022
 ulimit -c 0
 
-threads=${THREADS:-16}
+threads=${THREADS:-$(nproc)}
 args=(--max --save-index-map --threads "$threads")
 [ -n "$PROJWIN" ] && args+=(--t_projwin $PROJWIN)
 args+=(-l "$imageList" -o "$outName")

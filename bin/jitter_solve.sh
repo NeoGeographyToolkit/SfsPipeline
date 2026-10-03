@@ -34,6 +34,7 @@ echo Machines: $(cat ${PBS_NODEFILE}) >> $out
 /usr/bin/time -f                                   \
    "Elapsed=%E memory=%M (kb)"                     \
    jitter_solve                                    \
+   --threads $(nproc)                              \
    --image-list ${inDir}/run-image_list.txt        \
    --camera-list ${inDir}/run-camera_list.txt      \
    --clean-match-files-prefix ${cleanMatchDir}/run \

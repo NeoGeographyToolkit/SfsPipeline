@@ -19,7 +19,7 @@
 #   OUT_BLEND         output blended DEM (default <sfsDem stem>.blend.tif)
 #   OUT_WEIGHT        output blend weight (default <sfsDem stem>.weight.tif)
 #   SHADOW_THRESHOLD  image threshold for lit vs shadow (default 0.005)
-#   THREADS           sfs_blend threads (default 16)
+#   THREADS           sfs_blend threads (default: all cores, nproc)
 
 if [ "$#" -lt 4 ]; then
   echo "Usage: $0 refDem sfsDem maxLit currDir"
@@ -38,7 +38,7 @@ export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
 umask 022
 ulimit -c 0
 
-threads=${THREADS:-16}
+threads=${THREADS:-$(nproc)}
 shadowThresh=${SHADOW_THRESHOLD:-0.005}
 stem=${sfsDem%.tif}
 outBlend=${OUT_BLEND:-${stem}.blend.tif}

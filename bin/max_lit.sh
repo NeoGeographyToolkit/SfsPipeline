@@ -25,7 +25,7 @@ if [ "$#" -lt 2 ]; then
 fi
 list=$1
 output=$2
-threads=${3:-28}
+threads=${3:-$(nproc)}
 
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
 export ISISROOT=${ISISROOT:-$HOME/miniconda3/envs/asp_deps}

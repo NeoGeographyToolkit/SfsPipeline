@@ -28,7 +28,7 @@ s=StereoPipeline
 export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
 umask 022 # make files readable by others
 
-dem_mosaic --threads 20 --max --dem-list $mosaicList \
+dem_mosaic --threads $(nproc) --max --dem-list $mosaicList \
     -o $mosaicName >> $out 2>&1
 
 stereo_gui --create-image-pyramids-only $mosaicName >> $out 2>&1

@@ -24,7 +24,7 @@
 #   [extra dem_mosaic options ...]   passed through verbatim
 #
 # Env:
-#   THREADS   dem_mosaic threads (default 16)
+#   THREADS   dem_mosaic threads (default: all cores, nproc)
 
 if [ "$#" -lt 3 ]; then
     echo "Usage: $0 <demList> <output> <currDir> [extra dem_mosaic options ...]"
@@ -35,7 +35,7 @@ output=$1; shift
 currDir=$1; shift
 cd $currDir
 
-threads=${THREADS:-16}
+threads=${THREADS:-$(nproc)}
 prefix=${output%.tif}
 
 # Set up the paths
