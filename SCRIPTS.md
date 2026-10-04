@@ -42,8 +42,8 @@ the conda environment.
 - `bundle_adjust.sh`: parallel_bundle_adjust wrapper (matches-only with `NUM_ITERATIONS=0`, or a solve).
 - `bundle_adjust_refine.sh`: the fixed-anchors -> free -> heights-from-dem refine chain.
 - `bundle_adjust_dem_gcp.sh`: bundle adjust constrained by a DEM-derived GCP file.
-- `correlator.sh`, `dense_correlator.sh`: image-to-image correlation (correlator mode).
-- `hillshade_correlator.sh`: DEM-to-DEM hillshade correlation for a horizontal shift (the dh/dv step).
+- `hillshade_corr.sh`: standalone DEM-to-DEM hillshade correlation for a horizontal shift (dh/dv step, no pc_align).
+- `hillshade_correlator.sh`: DEM-to-DEM hillshade correlation and alignment (runs pc_align to emit aligned DEM).
 - `dem2gcp.sh`, `trans_gcp.sh`, `filter_gcp.py`: turn a DEM-to-DEM disparity into GCPs for a re-solve (used to pull a DEM into the LOLA frame).
 
 ### SfS, mosaics, registration, jitter

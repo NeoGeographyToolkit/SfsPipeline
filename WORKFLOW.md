@@ -218,19 +218,21 @@ verify-ba ba_htdem/run --min_match_count=10 --max_residual_error=2.0 > ba_htdem_
 ## 6. Alignment to the ground and registration refinement
 
 Where a horizontal shift against LOLA remains, measure it by correlating
-hillshades and turn it into ground control. `hillshade_correlator.sh` produces
-the DEM-to-DEM disparity; `dem2gcp.sh` turns that disparity into a GCP file;
-then a short `bundle_adjust` (or `trans_gcp.sh`) pulls the cameras into the LOLA
-frame. Suggested walltime 1:00:00 (correlation) + 2:00:00 (solve).
+hillshades and turn it into ground control. `hillshade_corr.sh` provides the
+standalone DEM-to-DEM dh/dv disparity without running pc_align; `hillshade_correlator.sh`
+produces the disparity and runs pc_align. `dem2gcp.sh` turns that disparity into
+a GCP file; then a short `bundle_adjust` (or `trans_gcp.sh`) pulls the cameras into
+the LOLA frame. Suggested walltime 1:00:00 (correlation) + 2:00:00 (solve).
 
 ```bash
 qsub -m n -r n -N hcorr -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=20:model=bro_ele -l walltime=1:00:00 \
-  -- hillshade_correlator.sh sfs_dem.tif ref/lola_1mpp.tif $(pwd) hcorr 25
+  -- hillshade_corr.sh sfs_dem.tif ref/lola_1mpp.tif hcorr $(pwd) 25
 ```
 
 Alternatively align the produced DEM directly with `pc_align` (see the pc-align
 guidance in the ASP manual).
+
 
 ## 7. Shape-from-Shading
 
@@ -269,14 +271,21 @@ should be no tile seams and no large bias.
 ## 8. Blending and mosaics
 
 Blend the SfS result back toward the reference where there is little
-illumination signal (`sfs_blend`, keep Andrew's recipe), and build the max-lit
-and count mosaics for QA.
+illumination signal (`sfs_blend.sh`, keeping the tuned parameters from the ASP
+manual), and build the max-lit and count mosaics for QA (`dem_mosaic_list.sh`).
 
 ```bash
+# Build max-lit mosaic
 qsub -m n -r n -N maxlit -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- dem_mosaic_list.sh lists/sfs_maps.txt max_lit.tif $(pwd) --max
+
+# Blend SfS DEM with reference DEM in permanently shadowed areas
+qsub -m n -r n -N sfs_blend -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
+  -- sfs_blend.sh ref/lola_1mpp.tif sfs_dem.tif max_lit.tif $(pwd)
 ```
+
 
 ## 9. Post-SfS registration (optional)
 
