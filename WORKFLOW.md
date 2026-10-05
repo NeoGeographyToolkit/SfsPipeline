@@ -270,15 +270,28 @@ should be no tile seams and no large bias.
 
 ## 8. Blending and mosaics
 
-Blend the SfS result back toward the reference where there is little
-illumination signal (`sfs_blend.sh`, keeping the tuned parameters from the ASP
-manual), and build the max-lit and count mosaics for QA (`dem_mosaic_list.sh`).
+Build two ortho mosaics from the mapprojected images and blend the SfS DEM back
+toward the reference where there is little illumination signal (`sfs_blend.sh`,
+keeping the tuned parameters from the ASP manual).
+
+The two ortho mosaics serve different purposes:
+- The **max-lit** mosaic (`dem_mosaic --max`) keeps the brightest pixel per
+  location, so every spot shows its most-lit view. It is a QA aid (reveals
+  shadow coverage and camera-registration smears), not the delivered product.
+- The **average (blend)** mosaic (`blend_img_mosaic.sh`, a seamless grassfire
+  blend with shadow pixels masked) is the delivered orthoimage. Use this, not
+  the max-lit, when handing off per the delivery spec.
 
 ```bash
-# Build max-lit mosaic
+# Build the max-lit mosaic (QA)
 qsub -m n -r n -N maxlit -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- dem_mosaic_list.sh lists/sfs_maps.txt max_lit.tif $(pwd) --max
+
+# Build the average (blend) ortho mosaic - the DELIVERED orthoimage
+qsub -m n -r n -N blendmos -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
+  -- blend_img_mosaic.sh lists/sfs_maps.txt ortho_blend.tif 0.005 $(pwd)
 
 # Blend SfS DEM with reference DEM in permanently shadowed areas
 qsub -m n -r n -N sfs_blend -W group_list=$groupName -j oe -S /bin/bash \
@@ -327,6 +340,9 @@ qsub -m n -r n -N jitter -W group_list=$groupName -j oe -S /bin/bash \
 
 ## 12. Delivery
 
-Fill in `inventory.yaml` in the project directory with the base terrain, final
-bundle-adjust prefix, SfS and blended terrains, logs, and the orthoimage
-directory, so the project is self-describing when handed off.
+Fill in `inventory.yaml` in the project directory so the project is
+self-describing when handed off: the base terrain, the final bundle-adjust (or
+jitter) prefix whose adjusted CSM .json cameras are delivered, the SfS and
+blended terrains with their logs, the height-error map, both ortho mosaics (the
+max-lit for QA and the delivered average/blend mosaic), and the two orthoimage
+directories (1 m/pixel and native-GSD, the latter with a per-image GSD CSV).

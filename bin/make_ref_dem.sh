@@ -20,6 +20,14 @@
 #             its own bias, so use the honest <out> as the height constraint, and a
 #             blurred DEM (if any) only as a mapprojection drape surface.
 #
+# Anchor-DEM pad (jitter_solve): to build the padded --anchor-dem that pins
+# borderline/edge frames, run this with the SAME src (genuine source LOLA, e.g.
+# the Barker LDEM), same tr and proj as the domain DEM, but a 'te' extended by the
+# pad beyond the domain (e.g. +4000 m = +4 km each side at 1 m/px; 10-40 km for
+# long tracks). Feed the result to jitter_gcp.sh / jitter_solve.sh via ANCHOR_DEM;
+# keep heights-from-dem and mapproj-dem on the domain DEM. The pad must be real
+# source terrain, never fabricated fill.
+#
 # No PBS logic here; the caller (project notes) sets any qsub. Build on a compute
 # node (devel), not the head node.
 

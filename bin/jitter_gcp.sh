@@ -35,8 +35,16 @@
 #   CAM_POS_UNC        (20,20)  --camera-position-uncertainty (meters; gentle,
 #                               loose enough to let cameras follow the GCP pull)
 #   DEM_UNC            (20)     --heights-from-dem-uncertainty
-#   ANCHOR_DEM         ($dem)   --anchor-dem (keep = the ref DEM; it is already
-#                               padded _extra, so no bigger pad by default)
+#   ANCHOR_DEM         ($dem)   --anchor-dem. The ref DEM is enough ONLY if no
+#                               frame footprint (or loose orientation knot) reaches
+#                               past the domain edge. With borderline/edge frames
+#                               AND finer orientation knots, override with a genuine
+#                               DEM padded well beyond the domain (+4 km/side here,
+#                               10-40 km for long tracks). Anchor coverage is bounded
+#                               by this DEM's extent, so an out-of-domain knot gets no
+#                               anchors and smears; more anchors inside do not help.
+#                               Grow only this DEM; keep heights/mapproj on the domain
+#                               DEM.
 #   ANCHOR_DEM_UNC     (50)     --anchor-dem-uncertainty (LARGE = light anchors,
 #                               so many of them stabilize without freezing)
 #   NUM_ANCHOR         (5000)   --num-anchor-points (PER IMAGE)

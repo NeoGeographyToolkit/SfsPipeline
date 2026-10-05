@@ -19,6 +19,9 @@
 # ground scale distance of the desired final product.
 base_terrain_path: path/to/lola_improved.tif
 
+# Final bundle-adjust (or jitter) prefix. The adjusted CSM camera .json files
+# under this prefix (one per image, the linear-reduced set) are delivered
+# alongside the DEM and orthoimages.
 final_bundle_adjust_prefix: path/to/ba_dir
 
 # Any stereo models made (individual or merged) that we want to share:
@@ -51,11 +54,21 @@ sfs_blend_weight_path: path/to/weight.tif
 
 sfs_height_error_path: path/to/height_error.tif
 
+# Max-lit ortho mosaic (brightest pixel per location). A QA aid for spotting
+# shadow coverage and camera-registration smears, NOT the delivered ortho.
 max_lit_path: path/to/maxlit.tif
 
-# Path to where the final orthoimages are (with the assumption that 
-# all *.tif files in the directory are the ortho images.)
-orthophoto_dir: path/to/lroc
+# Average (blend) ortho mosaic: a seamless grassfire blend of the mapprojected
+# images with shadow pixels masked. This is the delivered ortho mosaic, shipped
+# as well as the max-lit one (customer request).
+avg_mosaic_path: path/to/average_mosaic.tif
+
+# Orthoimages are delivered as TWO directories (every *.tif in each is an ortho):
+# the 1 m/pixel set, and the native-GSD ("natural") set with each image at its
+# own best resolution plus a CSV listing the per-image GSD.
+orthophoto_dir_1mpp: path/to/LROC-NAC-maps-1mpp
+orthophoto_dir_natural: path/to/LROC-NAC-maps-natural
+orthophoto_natural_gsd_csv: path/to/LROC-NAC-maps-natural/gsd.csv
 
 # If you use this, provide some comment here about how you used it.
 orthophoto_postfix: optional string

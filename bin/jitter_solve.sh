@@ -11,6 +11,12 @@ dem=$1; shift
 currDir=$1; shift
 cd $currDir
 
+# Anchor DEM: default = the ref DEM. For borderline/edge frames with finer
+# orientation knots, override with a DEM padded well beyond the domain (anchor
+# coverage is bounded by this DEM's extent; keep heights/mapproj on the domain
+# DEM, grow only this one).
+anchorDem=${ANCHOR_DEM:-$dem}
+
 out=output_${outDir}.txt
 rm -fv $out
 echo Writing: $out
@@ -50,7 +56,7 @@ echo Machines: $(cat ${PBS_NODEFILE}) >> $out
    --parameter-tolerance 1e-12                     \
    --heights-from-dem ${dem}                       \
    --heights-from-dem-uncertainty 10               \
-   --anchor-dem ${dem}                             \
+   --anchor-dem ${anchorDem}                       \
    --num-anchor-points-per-tile 50                 \
    --num-anchor-points-extra-lines 2000            \
    --anchor-weight 0.03                            \
