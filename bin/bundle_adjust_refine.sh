@@ -5,7 +5,8 @@
 # refinement chain; the two optional constraints are turned on via env vars:
 #
 #   FIXED_LIST       file: subset of imageList whose cameras are held fixed
-#                    (the registered anchors). Unset -> nothing fixed.
+#                    (the well-registered USGS-controlled cameras). Unset ->
+#                    nothing fixed.
 #   REF_DEM          reference DEM: adds --heights-from-dem and --mapproj-dem.
 #                    Unset -> no terrain constraint.
 #   DEM_UNCERTAINTY  --heights-from-dem-uncertainty in meters (default 20,
@@ -31,7 +32,7 @@
 # runtime and nearly blew the walltime; only the final cameras are needed.
 #
 # So the three refinement stages are the same script with different env:
-#   1. fixed : FIXED_LIST=<anchors>   anchor cameras hold the frame
+#   1. fixed : FIXED_LIST=<fixed>     fixed USGS-controlled cameras hold the frame
 #   2. free  : (no env)               refine all cameras, no constraint
 #   3. dem   : REF_DEM=<dem>          tie the result to the terrain
 #

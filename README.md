@@ -77,10 +77,12 @@ Main SfS path, high-level order of operations:
 2. Fetch and calibrate the NAC images: discover with `sfs-cover` (or `query_lro.sh`), download, then `batch_prepare_lro.sh`.
 3. Sort images by Sun azimuth and cull shadowed frames (`sfs_query.sh`, `filter_by_max.sh`).
 4. Mapproject onto the reference DEM (`batch_mapproject.sh`).
-5. Bundle adjust: harvest matches (`bundle_adjust.sh`, `NUM_ITERATIONS=0`) then the refine chain (`bundle_adjust_refine.sh`). This is the single most important step for SfS quality.
-6. Validate the camera graph with `verify-ba` and drop disconnected images.
-7. Run SfS per tile (`tile_dem.py`, `launch_sfs_tiles.sh`), merge (`dem_mosaic_list.sh`), optionally after a preview pass hillshade-aligned to LOLA.
-8. Post-SfS registration, height-uncertainty, and jitter as needed.
+5. Bundle adjust: harvest matches (`bundle_adjust.sh`, `NUM_ITERATIONS=0`) then the fixed (USGS-controlled) -> free -> heights-from-dem refine chain (`bundle_adjust_refine.sh`). This is the single most important step for SfS quality.
+6. Evaluate and prune: check the camera graph with `verify-ba`, then flag and drop whacky cameras (`sfs_flag_bad_cameras.py`, `sfs_prune_and_remosaic.sh`).
+7. Pick a minimal-but-covering SfS image subset (`sfs_select_full_site.sh`).
+8. Run SfS per tile (`sfs_exposures.sh`, `tile_dem.py`, `launch_sfs_tiles.sh`) and merge (`dem_mosaic_list.sh`).
+9. Re-register the SfS DEM to LOLA where it shifted: measure (`batch_sfs_sim.sh`, `hillshade_correlator.sh`), build a GCP and refine (`dem2gcp.sh`, `jitter_gcp.sh`), then redo SfS.
+10. Blend toward LOLA in shadow (`sfs_blend.sh`), build the max-lit and average mosaics, an optional height-uncertainty map, then fill `inventory.yaml` for delivery.
 
 `solar-az-plot` is an optional illumination check that animates footprint coverage by solar azimuth.
 

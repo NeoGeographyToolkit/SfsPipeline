@@ -40,7 +40,7 @@ the conda environment.
 - `batch_mapproject.sh` / `mapproject_chunk.sh`: chunked multi-node mapprojection and its per-node worker.
 - `mapproject_sub10.sh`: low-resolution mapprojection for quick looks.
 - `bundle_adjust.sh`: parallel_bundle_adjust wrapper (matches-only with `NUM_ITERATIONS=0`, or a solve).
-- `bundle_adjust_refine.sh`: the fixed-anchors -> free -> heights-from-dem refine chain.
+- `bundle_adjust_refine.sh`: the fixed (USGS-controlled) -> free -> heights-from-dem refine chain.
 - `bundle_adjust_dem_gcp.sh`: bundle adjust constrained by a DEM-derived GCP file.
 - `hillshade_corr.sh`: standalone DEM-to-DEM hillshade correlation for a horizontal shift (dh/dv step, no pc_align).
 - `hillshade_correlator.sh`: DEM-to-DEM hillshade correlation and alignment (runs pc_align to emit aligned DEM).
@@ -57,7 +57,8 @@ the conda environment.
 - `sfs_blend.sh`: blend the SfS DEM toward the reference where there is little illumination.
 - `blend_img_mosaic.sh`, `avg_mosaic.sh`: weighted-mean image mosaics with shadow suppression.
 - `sfs_sim_align.sh` / `batch_sfs_sim.sh`: post-SfS per-image registration by rendering an SfS-simulated view, image_align, and gcp_gen.
-- `jitter_solve.sh`, `jitter_gcp.sh`: refine per-line linescan poses to remove jitter.
+- `jitter_gcp.sh`: GCP-driven per-line refine that re-registers the SfS terrain to LOLA (the committed final refine).
+- `jitter_solve.sh`: per-line refine with no GCP, for removing intrinsic jitter when there is no re-registration target.
 
 ### Batch and QA utilities
 
