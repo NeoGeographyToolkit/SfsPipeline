@@ -54,13 +54,14 @@ sfs_blend_weight_path: path/to/weight.tif
 
 sfs_height_error_path: path/to/height_error.tif
 
-# Max-lit ortho mosaic (brightest pixel per location). A QA aid for spotting
-# shadow coverage and camera-registration smears, NOT the delivered ortho.
+# Max-lit ortho mosaic (brightest pixel per location). The matching orthoimage
+# shipped with the DEM, the sfs_blend input, and the best view for spotting
+# shadow coverage and camera-registration smears.
 max_lit_path: path/to/maxlit.tif
 
 # Average (blend) ortho mosaic: a seamless grassfire blend of the mapprojected
-# images with shadow pixels masked. This is the delivered ortho mosaic, shipped
-# as well as the max-lit one (customer request).
+# images with shadow pixels masked. An additional product shipped as well as the
+# max-lit one (customer request).
 avg_mosaic_path: path/to/average_mosaic.tif
 
 # Orthoimages are delivered as TWO directories (every *.tif in each is an ortho):
