@@ -10,6 +10,13 @@ maxSearch=$1; shift   # optional 5th arg: corr search half-window in px (default
 [ -z "$maxSearch" ] && maxSearch=25
 cd $currDir
 
+# Correlation algorithm is overridable for sensitivity checks (env). Default asp_mgm
+# with subpixel-mode 9 (blend). For asp_bm pass STEREO_ALGO=asp_bm SUBPIX=2 (bm has no
+# mode 9). The DEM hillshades and everything else are identical, so this isolates the
+# algorithm's effect on the dh/dv pattern.
+algo=${STEREO_ALGO:-asp_mgm}
+subpix=${SUBPIX:-9}
+
 # Setup stereoDir name if not provided
 if [ "$stereoDir" = "" ]; then
   stereoDir=$(basename $leftDem)_$(basename $rightDem)
@@ -75,13 +82,14 @@ stereo_gui                     \
 # Run asp_mgm with a large kernel size to overcome noise. It is assumed that
 # both input DEMs have the same extent, size, and resolution. Use a corr search
 # window somewhat bigger than the expected shift.
+s=$maxSearch
 parallel_stereo                      \
   --correlator-mode                  \
-  --stereo-algorithm asp_mgm         \
+  --stereo-algorithm $algo           \
   --corr-kernel 9 9                  \
   --ip-per-image 40000               \
-  --subpixel-mode 9                  \
-  --corr-search -$maxSearch -$maxSearch $maxSearch $maxSearch \
+  --subpixel-mode $subpix            \
+  --corr-search -$s -$s $s $s        \
   --processes 8                      \
   --nodes-list $PBS_NODEFILE         \
   $leftHill $rightHill               \
@@ -122,7 +130,11 @@ stereo_gui                         \
 # # View colorized disparity with masked no-data
 echo sgm -10 10 --grid-cols 1 ${stereoDir}/run-F_b1_nodata.tif ${stereoDir}/run-F_b2_nodata.tif 
 
-# Align with zero iterations to just use the matches from asp_mgm
+# OPTIONAL pc_align - OFF by default. For a dh/dv sensitivity readout we only need the
+# correlator disparity (run-F_b1/b2_nodata.tif); pc_align is unnecessary and, on a sparse
+# disparity, fails noisily (missing align-trans_source.tif). Set DO_PC_ALIGN=1 to also
+# align and emit an aligned DEM.
+if [ "${DO_PC_ALIGN:-0}" = "1" ]; then
 matchFile=$(ls $stereoDir/run-disp*.match) # there should be only one
 echo matchFile=$matchFile
 pc_align                                     \
@@ -151,3 +163,4 @@ hillshade -e 10 $f -o $g >> $out 2>&1
 stereo_gui --create-image-pyramids-only \
   $leftHill $rightHill $g               \
   >> $out 2>&1
+fi

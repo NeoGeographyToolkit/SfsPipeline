@@ -98,9 +98,11 @@ if [ "${MAX_ANCHOR_TO_TRI_RATIO:-}" != "" ]; then
   ratioOpts="$ratioOpts --max-anchor-points-to-tri-points-ratio ${MAX_ANCHOR_TO_TRI_RATIO}"
 fi
 
-# Threads: default to ALL cores of the node (nproc). The ASP/VW default (~8 via
-# .vwrc) badly under-uses a full node. Override with NUM_THREADS.
-numThreads=${NUM_THREADS:-$(nproc)}
+# Threads: default to the PBS-allocated core count ($NCPUS); the ASP/VW default
+# (~8 via .vwrc) badly under-uses a full node. Fall back to all physical cores
+# (nproc --all) off PBS. Bare nproc is avoided: under a PBS cpuset it honors the
+# affinity mask and can return 1. Override with NUM_THREADS.
+numThreads=${NUM_THREADS:-${NCPUS:-$(nproc --all)}}
 
 # Set up the paths
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}

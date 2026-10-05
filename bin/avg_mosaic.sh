@@ -43,7 +43,7 @@ s=StereoPipeline
 export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
 umask 022
 
-dem_mosaic --threads $(nproc) --nodata-threshold $threshold \
+dem_mosaic --threads ${NCPUS:-$(nproc --all)} --nodata-threshold $threshold \
     --output-nodata-value -1e+6 \
     --dem-list $mosaicList \
     -o $mosaicName >> $out 2>&1

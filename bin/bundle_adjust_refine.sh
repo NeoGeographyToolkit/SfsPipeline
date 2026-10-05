@@ -17,7 +17,8 @@
 #                    difference, so 20 is the hardcoded default. It is worth
 #                    reconsidering when moving to a wildly different reference
 #                    DEM, where how much to trust the terrain matters more.
-#   THREADS          bundle_adjust threads (default: all cores, nproc).
+#   THREADS          bundle_adjust threads (default: the PBS core count $NCPUS,
+#                    else all physical cores; bare nproc can return 1 under PBS).
 #   USE_CLEAN        if set, reuse matchPrefix's CLEAN matches
 #                    (--clean-match-files-prefix) instead of the raw ones. Set it
 #                    for stages 2 and 3 pointing matchPrefix at stage 1's output
@@ -73,7 +74,7 @@ cd $currDir
 fixedList=${FIXED_LIST:-}
 refDem=${REF_DEM:-}
 demUnc=${DEM_UNCERTAINTY:-20}
-numThreads=${THREADS:-$(nproc)}
+numThreads=${THREADS:-${NCPUS:-$(nproc --all)}}
 useClean=${USE_CLEAN:-}
 
 echo imageList=$imageList

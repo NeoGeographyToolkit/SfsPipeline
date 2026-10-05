@@ -25,7 +25,7 @@ export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
 umask 022
 ulimit -c 0
 
-threads=${THREADS:-$(nproc)}
+threads=${THREADS:-${NCPUS:-$(nproc --all)}}
 args=(--max --save-index-map --threads "$threads")
 [ -n "$PROJWIN" ] && args+=(--t_projwin $PROJWIN)
 args+=(-l "$imageList" -o "$outName")

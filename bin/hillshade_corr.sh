@@ -46,13 +46,15 @@ rightHill=${rightDem%.tif}_gdhill.tif
 [ -f "$leftHill" ]  || gdaldem hillshade $hsOpts "$leftDem"  "$leftHill"
 [ -f "$rightHill" ] || gdaldem hillshade $hsOpts "$rightDem" "$rightHill"
 
+# Short alias for the corr-search half-window, to keep the option below compact.
+s=$maxSearch
 parallel_stereo \
   --correlator-mode \
   --stereo-algorithm $algo \
   --cost-mode $costMode \
   --corr-kernel 9 9 \
   --subpixel-mode 9 \
-  --corr-search -$maxSearch -$maxSearch $maxSearch $maxSearch \
+  --corr-search -$s -$s $s $s \
   --nodata-value 0 \
   --ip-per-image 40000 \
   --processes 8 \

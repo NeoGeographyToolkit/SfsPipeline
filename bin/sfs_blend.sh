@@ -44,7 +44,7 @@ export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
 umask 022
 ulimit -c 0
 
-threads=${THREADS:-$(nproc)}
+threads=${THREADS:-${NCPUS:-$(nproc --all)}}
 shadowThresh=${SHADOW_THRESHOLD:-0.005}
 litBlend=${LIT_BLEND_LENGTH:-25}
 shadowBlend=${SHADOW_BLEND_LENGTH:-5}

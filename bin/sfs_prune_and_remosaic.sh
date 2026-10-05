@@ -21,7 +21,7 @@ map_dir="$1"
 rm_ids="$2"
 curr_dir="$3"
 split_idx="${4:-500}"
-th="${5:-$(nproc)}"
+th="${5:-${NCPUS:-$(nproc --all)}}"
 
 cd "$curr_dir"
 

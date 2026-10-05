@@ -25,7 +25,7 @@ ulimit -c 0
 
 srs=${SRS:-IAU_2015:30135}
 mpp=${MPP:-1.0}
-threads=${THREADS:-$(nproc)}
+threads=${THREADS:-${NCPUS:-$(nproc --all)}}
 
 out=output_$(basename "${src%.tif}").point2dem.txt
 echo "point2dem --t_srs $srs --tr $mpp $src (log $out)"

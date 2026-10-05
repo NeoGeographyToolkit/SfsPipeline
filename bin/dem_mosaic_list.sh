@@ -35,7 +35,7 @@ output=$1; shift
 currDir=$1; shift
 cd $currDir
 
-threads=${THREADS:-$(nproc)}
+threads=${THREADS:-${NCPUS:-$(nproc --all)}}
 prefix=${output%.tif}
 
 # Set up the paths

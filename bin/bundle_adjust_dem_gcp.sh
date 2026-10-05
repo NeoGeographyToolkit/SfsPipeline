@@ -85,7 +85,7 @@ fi
 
 # Threads: default to ALL cores of the node (nproc). The ASP/VW default (~8 via
 # .vwrc) badly under-uses a full node. Override with NUM_THREADS.
-numThreads=${NUM_THREADS:-$(nproc)}
+numThreads=${NUM_THREADS:-${NCPUS:-$(nproc --all)}}
 
 echo imageList=$imageList
 echo cameraList=$cameraList
