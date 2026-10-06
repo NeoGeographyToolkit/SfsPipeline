@@ -39,6 +39,7 @@ the conda environment.
 
 - `batch_mapproject.sh` / `mapproject_chunk.sh`: chunked multi-node mapprojection and its per-node worker.
 - `mapproject_sub10.sh`: low-resolution mapprojection for quick looks.
+- `mapproject_native_res.sh`: mapproject a list of images at their own native GSD (no fixed `--tr`) with paired cameras onto a reference DEM, building the native-resolution delivery ortho set plus a `gsd.csv` of the actual output pixel sizes.
 - `bundle_adjust.sh`: parallel_bundle_adjust wrapper (matches-only with `NUM_ITERATIONS=0`, or a solve).
 - `bundle_adjust_refine.sh`: the fixed (USGS-controlled) -> free -> heights-from-dem refine chain.
 - `bundle_adjust_dem_gcp.sh`: bundle adjust constrained by a DEM-derived GCP file.

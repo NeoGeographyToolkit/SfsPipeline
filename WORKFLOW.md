@@ -444,10 +444,15 @@ qsub -m n -r n -N maxlit -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- dem_mosaic_list.sh lists/sfs_maps.txt max_lit.tif $(pwd) --max
 
-# Build the average (blend) ortho mosaic - an additional delivered product
+# Build the average (blend) ortho mosaic - an additional delivered product.
+# Build it over the SAME images as the max-lit mosaic (the SfS set), then snap
+# it onto the delivered LOLA grid with regrid_to_grid.sh so it matches the
+# max-lit mosaic pixel for pixel.
 qsub -m n -r n -N blendmos -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
-  -- blend_img_mosaic.sh lists/sfs_maps.txt ortho_blend.tif 0.005 $(pwd)
+  -- blend_img_mosaic.sh lists/sfs_maps.txt average_mosaic_raw.tif 0.005 $(pwd)
+regrid_to_grid.sh average_mosaic_raw.tif average_mosaic.tif \
+  "<xmin ymin xmax ymax>" 1 $(pwd)
 
 # Blend SfS DEM with reference DEM in permanently shadowed areas
 qsub -m n -r n -N sfs_blend -W group_list=$groupName -j oe -S /bin/bash \
@@ -457,21 +462,80 @@ qsub -m n -r n -N sfs_blend -W group_list=$groupName -j oe -S /bin/bash \
 
 ## 11. Height-uncertainty map (optional)
 
-Re-run the SfS worker with `estimError=1` on the produced SfS DEM to write a
-`-height-error.tif`. This pass is single-core per tile and slower; budget it
-separately.
+Re-run the SfS worker with `estimError=1` to write a `-height-error.tif` per tile.
+This pass evaluates height perturbations on the FINAL produced SfS DEM (the blend),
+not on LOLA, so run it only after the blend is settled: tile the final blended DEM
+into the same tile grid, then launch with `estimError=1`. It is single-core per tile
+and slower; budget it separately. Finally mosaic the per-tile error maps into the
+delivered `height_uncertainty.tif`.
 
 ```bash
-launch_sfs_tiles.sh tiles lists/secondary_images.txt ba_htdem/run \
-  exposures_sec/run-exposures.txt sfs 1 $(pwd)
+# tile the final blended SfS DEM onto the same tile grid
+tile_dem.py sfs_dem_blend.tif 4000 4000 tiles_blend 200
+
+# uncertainty pass (estimError=1; tiles are from the blend, not LOLA)
+export QUEUE=long
+launch_sfs_tiles.sh tiles_blend lists/secondary_images.txt ba_htdem/run \
+  exposures_sec/run-exposures.txt sfs_err 1 $(pwd)
+
+# mosaic the per-tile error maps into the delivered product
+ls sfs_err/clip*/run-height-error.tif > lists/height_error_tiles.txt
+dem_mosaic_list.sh lists/height_error_tiles.txt height_uncertainty.tif $(pwd)
 ```
 
 ## 12. Delivery
 
-Fill in `inventory.yaml` in the project directory so the project is
-self-describing when handed off: the base terrain; the final bundle-adjust (or
-jitter) prefix whose linear-reduced adjusted CSM `.json` cameras are delivered;
-the SfS and blended terrains with their logs; the height-error map; both ortho
-mosaics (the max-lit matching ortho and the additional average/blend mosaic); and
-the two orthoimage directories (1 m/pixel and native-GSD, the latter with a
-per-image GSD CSV).
+Assemble a self-describing results directory and fill in `inventory.yaml` so the
+project is self-describing when handed off.
+
+Results directory (`<site>_results/`) holds the rasters, lists, the cameras, the
+disparity illustration, and the two manifest files; the large per-image ortho sets
+go in peer directories alongside it:
+
+- Terrains: `sfs_dem.tif` (raw SfS), `sfs_dem_blend.tif` (blended with LOLA) and its
+  hillshade `sfs_dem_blend_hill.tif`, `sfs_dem_weight.tif`, `lola_1mpp.tif`, and the
+  `sfs_dem_blend_lola-diff.tif` geodiff. An optional `height_uncertainty.tif`.
+- Ortho mosaics: `max_lit_mosaic.tif` and `average_mosaic.tif`, on the same grid.
+- Image-id lists: `bundle_adjust_image_ids.txt` (the full bundle-adjust input) and
+  `sfs_image_ids.txt` (the SfS subset). Ship both as text. Deliver as images and
+  cameras ONLY the SfS subset; document the larger bundle-adjust set in the list but
+  do not ship its images or cameras (no dead weight).
+- Cameras (when requested): `cameras/` with the final jitter (or bundle-adjust)
+  linear-reduced adjusted CSM `.json`, one per shipped image.
+- Ortho directories (peers): `map_images/` (every shipped SfS ortho at 1 m/pixel)
+  and `map_images_native_res/` (the sub-1 m frames at their own native GSD, with
+  `gsd.csv`). The native-res orthos are mapprojected with the same registered
+  cameras; record the real output pixel size in `gsd.csv`, read back from each ortho.
+- Disparity to LOLA: `sfs_to_lola_corr/` with the after-registration SfS-to-LOLA
+  horizontal disparity as colorized GeoTIFFs (`colormap` on a fixed symmetric scale),
+  one band east-west and one north-south.
+
+Region of interest and cropping: SfS is run on a domain padded beyond the product
+ROI. Either crop every product to the ROI (snap the ROI box to the domain pixel
+grid, `gdal_translate -projwin`, lossless) or deliver the full domain as insurance
+against boundary artifacts and include the ROI polygon (`product_roi.gpkg`) so the
+recipient can crop. Record the choice; registration degrades toward the domain edges.
+
+The 1 m/pixel ortho set is the SfS mapprojected images already produced (the
+`map.tr1.tif`), gathered and renamed. The native-GSD set is built with
+`mapproject_native_res.sh` over the sub-1 m frames of the SfS set (paired with their
+registered cameras), which mapprojects each at its own native resolution and writes
+`gsd.csv`:
+
+```bash
+qsub -m n -r n -N natres -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
+  -- mapproject_native_res.sh lists/native_res_images.txt lists/native_res_cameras.txt \
+     ref/lola_1mpp.tif map_images_native_res $(pwd)
+```
+
+Build pyramids (`stereo_gui --create-image-pyramids-only`) on the DEMs, mosaics, and
+colorized bands for fast viewing. Keep the `readme.md` terse (mirror a prior delivery
+readme) and git-track it and `inventory.yaml` with the project notes; the heavy
+rasters, orthos, and cameras are data and are not version-controlled.
+
+`inventory.yaml` fields: the base terrain; the final bundle-adjust (or jitter) prefix
+whose linear-reduced adjusted CSM `.json` cameras are delivered; the SfS and blended
+terrains with their logs; the height-error map; both ortho mosaics; the two image-id
+lists (`ba_image_ids_path`, `sfs_image_ids_path`); and the two orthoimage directories
+(1 m/pixel and native-GSD, the latter with a per-image GSD CSV).
