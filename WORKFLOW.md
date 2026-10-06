@@ -427,7 +427,10 @@ showing the corrective move.
 On the final (re-registered) SfS DEM, build the ortho mosaics and blend the DEM
 back toward the reference where there is little illumination signal
 (`sfs_blend.sh`, keeping the tuned parameters from the ASP manual). The blended
-DEM's hillshade is the delivery hillshade.
+DEM's hillshade is the delivery hillshade; build it with
+`gdaldem hillshade -multidirectional -compute_edges -alt 10 sfs_dem_blend.tif sfs_dem_blend_hill.tif`
+(crisper and with more shadow detail than ASP `hillshade -e 10`; the grazing-light
+ASP hillshade is kept only for the DEM-to-DEM correlation step, not for delivery).
 
 Both ortho mosaics are delivered, with distinct roles:
 - The **max-lit** mosaic (`dem_mosaic --max`) keeps the brightest pixel per
