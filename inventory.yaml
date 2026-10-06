@@ -64,6 +64,14 @@ max_lit_path: path/to/maxlit.tif
 # max-lit one (customer request).
 avg_mosaic_path: path/to/average_mosaic.tif
 
+# Image-id lists. Two lists ship as text, even when only the SfS subset is
+# delivered as images and cameras: the bundle-adjust list documents the larger
+# input set, the SfS list is the subset actually used (and shipped).
+# ba_image_ids: every image that went into the final bundle adjust / jitter solve.
+# sfs_image_ids: the subset used for Shape-from-Shading (a subset of ba_image_ids).
+ba_image_ids_path: path/to/bundle_adjust_image_ids.txt
+sfs_image_ids_path: path/to/sfs_image_ids.txt
+
 # Orthoimages are delivered as TWO directories (every *.tif in each is an ortho):
 # the 1 m/pixel set, and the native-GSD ("natural") set with each image at its
 # own best resolution plus a CSV listing the per-image GSD.
