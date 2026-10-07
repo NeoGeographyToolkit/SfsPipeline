@@ -145,6 +145,11 @@ filter_by_max.sh lists/azimuth_map.txt lists/filtered_map.txt $(pwd) 0.005
 
 Keep every `lists/*.txt` in azimuth order and 1-to-1 between images and cameras.
 
+Visualize the azimuth distribution as a polar rose with `plot_sfs_azimuth.py` (it
+reads the `sfs_query.sh` table) to judge how the illumination clusters and whether
+coverage is representative. At the poles the low Sun is usually strongly clustered,
+often bimodal with near-empty gaps, which matters later when forming subset groups.
+
 Camera-graph connectivity (optional, a useful downselect): refresh the
 GeoPackage footprints to the actual mapprojected, shadow-masked extents, then
 check connectivity with `find-image-overlaps`. The matcher in bundle adjustment
@@ -283,24 +288,36 @@ confirm the streaks are gone and the terrain did not move.
 ## 7. SfS image subset
 
 The full image set is too expensive for the SfS solve, so pick a minimal-but-
-covering subset. Split the site by Sun azimuth into balanced groups (merge sparse
-bins, split dense ones at their median. Do not blind-cut into four 90-degree
-quadrants), then run `image_subset` per group for a primary cover plus an extra
-(2x) cover on the remainder, driven by `sfs_select_full_site.sh` over low-
-resolution sub images (`prepare_lowres.sh`). Validate with a max-lit of the
-selection against the full-set max-lit.
+covering subset. The grouping axis is the Sun azimuth ANGLE, not equal counts:
+plot the rose first (`plot_sfs_azimuth.py`), then cut the site into fixed angle
+slices of roughly 45 degrees, respecting the natural gaps. Keep a rare illumination
+direction as its own whole group, drop empty slices, and lump a lone stray frame
+into the adjacent slice. Do not blind-cut into four 90-degree quadrants. Each slice
+is then thinned by `image_subset` (a crowded angle gets sparsed hardest, since it
+only has to fill the same ground), for a primary cover plus an extra (2x) cover on
+the remainder, driven by `sfs_select_full_site.sh` over low-resolution sub images
+(`prepare_lowres.sh`). Validate with a max-lit of the selection against the
+full-set max-lit.
 
 ```bash
 sfs_select_full_site.sh lists/filtered_map.txt lists/azimuth.txt selection $(pwd) 0.05 28
 ```
 
-Note on GSD (worth more thought): coarse frames hurt SfS and the max-lit mosaic.
-`query_gsd.sh` reports each image's native ground sample distance. Large-GSD
-frames (roughly 3 to 4 m/pixel) tend to be grief and, in practice, correlate with
-high `mapproj_match_offset` values anyway, so they often get caught by the prune
-in step 6. Consider down-weighting or dropping the coarsest frames from the SfS
-subset (never from the bundle solve, where their large footprints are tie-point
-coverage assets), but gate that on coverage holes first.
+Note on GSD: coarse frames hurt SfS and the max-lit mosaic. Ground area per pixel
+scales as GSD squared, so a 2 m/pixel frame covers about 4x the real estate of a
+1 m/pixel one, which is exactly why `image_subset`'s coverage-greedy ranking tends
+to prefer the coarse frame when a finer one would be better. `query_gsd.sh` reports
+each image's native ground sample distance; it also correlates with high
+`mapproj_match_offset` (partly a coarseness proxy), so the coarsest tend to be
+caught by the prune in step 6. Treat GSD over about 1.75 m as suspect and over 2 m
+as a drop from the SfS subset, preferring a finer frame and keeping a coarse one
+only as a last resort where it is the sole cover (gate on coverage holes first).
+Drop only from the SfS subset, never from the bundle solve, where the large
+footprints are tie-point coverage assets.
+
+The `image_subset` coverage threshold (last arg above) starts at a low value; if it
+barely thins, raising it to roughly 0.05 to 0.1 is usually wise, but that changes
+which images SfS sees, so decide it deliberately rather than bumping it silently.
 
 ```bash
 query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt ref/lola_1mpp.tif \
