@@ -50,7 +50,8 @@ qsub -m n -r n -N <name> -q normal \
 
 Regrid a LOLA source DEM (e.g. the Barker et al. 2023 `LDEM_83S_10MPP_ADJ.TIF`)
 to the target projection, resolution, and a half-integer extent. See the
-[reference documentation](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html),
+[terrain preparation section](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-initial-terrain)
+in the [reference documentation](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html),
 including [ensuring extents are offset by 0.5 pixels](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#terrain-bounds)
 so pixel centers are integer multiples of the grid (required by `sfs_blend`).
 `make_ref_dem.sh` wraps `gdalwarp` (cubic spline, 256-block tiling). Build it on
@@ -92,9 +93,9 @@ then `sfs-cover` selects the observations for an ROI polygon into a GeoPackage:
 ```bash
 make-index
 sfs-cover \
-  --db_path /tmp/lroc_cumulative_south_polar.parquet \
+  --db_path lroc_cumulative_south_polar.parquet \
   -p "POLYGON((72471 158818,128309 158818,128309 119030,72471 119030,72471 158818))" \
-  -t my_roi --gpkg /tmp/my_roi.gpkg
+  -t my_roi --gpkg my_roi.gpkg
 ```
 
 ODE front end (standalone, no index needed):
@@ -111,7 +112,7 @@ Download the EDRs. From a GeoPackage, `db_to_urls.sh` emits the IMG URLs (pass
 600 GB completes in 10 to 15 minutes.
 
 ```bash
-db_to_urls.sh /tmp/my_roi.gpkg im | xargs -n 1 -P 8 -I {} wget {} -P img/
+db_to_urls.sh my_roi.gpkg im | xargs -n 1 -P 8 -I {} wget {} -P img/
 # or: download_all.sh lists/urls.txt
 ```
 
