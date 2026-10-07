@@ -49,11 +49,12 @@ qsub -m n -r n -N <name> -q normal \
 ## 1. Reference terrain preparation
 
 Regrid a LOLA source DEM (e.g. the Barker et al. 2023 `LDEM_83S_10MPP_ADJ.TIF`)
-to the target projection, resolution, and a half-integer extent (so 1 m pixel
-centers land on integers, required by `sfs_blend`. See the terrain-bounds
-section of the SfS guide). `make_ref_dem.sh` wraps `gdalwarp` (cubic spline,
-256-block tiling). Build it on a compute node, not the head node. Suggested
-walltime 1:00:00.
+to the target projection, resolution, and a half-integer extent. See the
+[reference documentation](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html),
+including [ensuring extents are offset by 0.5 pixels](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#terrain-bounds)
+so pixel centers are integer multiples of the grid (required by `sfs_blend`).
+`make_ref_dem.sh` wraps `gdalwarp` (cubic spline, 256-block tiling). Build it on
+a compute node, not the head node. Suggested walltime 1:00:00.
 
 Two conventions matter here:
 - **Pad the extent beyond the delivery box** (footprints spill past the ROI).
