@@ -7,9 +7,7 @@ blending. It follows the large-scale section of the
 [ASP SfS guide](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html)
 and drives the scripts in `bin/`.
 
-The original Mons Mouton / 1414a framework was developed by Dr. Andrew M. Annex.
-This version keeps that framework and its batch-execution conventions, and
-encodes the procedure as refined over many South-Pole sites.
+The original framework was developed by Andrew Annex.
 
 ## Conventions
 

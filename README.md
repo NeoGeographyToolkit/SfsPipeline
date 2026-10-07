@@ -49,17 +49,7 @@ source bin/sfs_utilities.sh
 
 ## Running jobs on the HPC
 
-Heavy work runs on a compute node through `qsub`. The head node is used only for trivial list-building and inspection. There are no self-submitting `.pbs` scripts: you submit a worker `.sh` yourself, passing `$(pwd)` as its last argument and your PBS allocation through an environment variable so nothing is hardcoded:
-
-```bash
-export groupName=your_allocation
-qsub -m n -r n -N <name> -q normal \
-  -W group_list=$groupName -j oe -S /bin/bash \
-  -l select=<N>:ncpus=<C>:model=<model> -l walltime=<HH:MM:SS> \
-  -- <script>.sh <args...> $(pwd)
-```
-
-See [WORKFLOW.md](WORKFLOW.md) for the full end-to-end sequence with a ready `qsub` command and a suggested walltime for each step.
+Heavy work runs on a compute node through `qsub`, never on the head node (used only for trivial list-building and inspection). The canonical `qsub` submission form, node models, and suggested per-step walltimes live in the Conventions section of [WORKFLOW.md](WORKFLOW.md).
 
 ## Recommended practice
 
@@ -69,24 +59,9 @@ When a project is finished, fill in a copy of `inventory.yaml` (at the repo root
 
 ## Workflow
 
-The pipeline has two layers: lightweight command-line tools (installed as PATH entry points) that handle discovery, verification, and selection, and bash worker scripts submitted with `qsub` that run the heavy compute. [WORKFLOW.md](WORKFLOW.md) is the runnable end-to-end sequence with a `qsub` command and suggested walltime for every step.
+The pipeline has two layers: lightweight command-line tools (installed as PATH entry points) that handle discovery, verification, and selection, and bash worker scripts submitted with `qsub` that run the heavy compute.
 
-Main SfS path, high-level order of operations:
-
-1. Prepare the reference terrain: `make_ref_dem.sh` regrids the LOLA DEM to the target grid and half-integer bounds.
-2. Fetch and calibrate the NAC images: discover with `sfs-cover` (or `query_lro.sh`), download, then `batch_prepare_lro.sh`.
-3. Sort images by Sun azimuth and cull shadowed frames (`sfs_query.sh`, `filter_by_max.sh`).
-4. Mapproject onto the reference DEM (`batch_mapproject.sh`).
-5. Bundle adjust: harvest matches (`bundle_adjust.sh`, `NUM_ITERATIONS=0`) then the fixed (USGS-controlled) -> free -> heights-from-dem refine chain (`bundle_adjust_refine.sh`). This is the single most important step for SfS quality.
-6. Evaluate and prune: check the camera graph with `verify-ba`, then flag and drop whacky cameras (`sfs_flag_bad_cameras.py`, `sfs_prune_and_remosaic.sh`).
-7. Pick a minimal-but-covering SfS image subset (`sfs_select_full_site.sh`).
-8. Run SfS per tile (`sfs_exposures.sh`, `tile_dem.py`, `launch_sfs_tiles.sh`) and merge (`dem_mosaic_list.sh`).
-9. Re-register the SfS DEM to LOLA where it shifted: measure (`batch_sfs_sim.sh`, `hillshade_correlator.sh`), build a GCP and refine (`dem2gcp.sh`, `jitter_gcp.sh`), then redo SfS.
-10. Blend toward LOLA in shadow (`sfs_blend.sh`), build the max-lit and average mosaics, an optional height-uncertainty map, then fill `inventory.yaml` for delivery.
-
-`solar-az-plot` is an optional illumination check that animates footprint coverage by solar azimuth.
-
-Optional stereo survey: where stereo coverage exists, `find-stereo` surveys stereo availability, `stereo-from-ba` lists runnable stereo pairs from the largest connected group, and `tri-plot` plots triangulation-error images. For sparse polar coverage this branch is usually skipped in favor of more complete bundle adjustment (see WORKFLOW.md).
+[WORKFLOW.md](WORKFLOW.md) is the single source for the runnable end-to-end sequence, with a `qsub` command and suggested walltime for every step, from reference-terrain preparation through bundle adjustment, SfS, re-registration to LOLA, and blending. An optional stereo-survey branch and the `solar-az-plot` illumination check are described in [SCRIPTS.md](SCRIPTS.md).
 
 ## Scripts and tools
 
@@ -94,3 +69,7 @@ See [SCRIPTS.md](SCRIPTS.md) for the full reference: the bash workers in `bin`
 (grouped by pipeline stage) and the Python command-line tools. Each bash worker
 also prints its own argument list if run with no arguments, and [WORKFLOW.md](WORKFLOW.md)
 shows every step with its `qsub` command. See [TIPS.md](TIPS.md) for handy one-liners.
+
+## Credits
+
+The original framework for this pipeline is the work of Andrew Annex.
