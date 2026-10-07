@@ -491,9 +491,11 @@ dem_mosaic_list.sh lists/height_error_tiles.txt height_uncertainty.tif $(pwd)
 Assemble a self-describing results directory and fill in `inventory.yaml` so the
 project is self-describing when handed off.
 
-Results directory (`<site>_results/`) holds the rasters, lists, the cameras, the
-disparity illustration, and the two manifest files. The large per-image ortho sets
-go in peer directories alongside it:
+Make the results directory (`<site>_results/`) self-contained: it holds everything,
+the rasters, lists, manifest files, and as subdirectories the cameras, the two
+per-image ortho sets, and the disparity illustration. Do not scatter the ortho sets
+into peer directories that refer back to the parent, so the whole delivery tars and
+ships as one unit:
 
 - Terrains: `sfs_dem.tif` (raw SfS), `sfs_dem_blend.tif` (blended with LOLA) and its
   hillshade `sfs_dem_blend_hill.tif`, `sfs_dem_weight.tif`, `lola_1mpp.tif`, and the
@@ -505,10 +507,11 @@ go in peer directories alongside it:
   do not ship its images or cameras (no dead weight).
 - Cameras (when requested): `cameras/` with the final jitter (or bundle-adjust)
   linear-reduced adjusted CSM `.json`, one per shipped image.
-- Ortho directories (peers): `map_images/` (every shipped SfS ortho at 1 m/pixel)
-  and `map_images_native_res/` (the sub-1 m frames at their own native GSD, with
-  `gsd.csv`). The native-res orthos are mapprojected with the same registered
-  cameras. Record the real output pixel size in `gsd.csv`, read back from each ortho.
+- Ortho directories (subdirectories of the results dir): `map_images/` (every
+  shipped SfS ortho at 1 m/pixel) and `map_images_native_res/` (the sub-1 m frames at
+  their own native GSD, with `gsd.csv`). The native-res orthos are mapprojected with
+  the same registered cameras. Record the real output pixel size in `gsd.csv`, read
+  back from each ortho.
 - Disparity to LOLA: `sfs_to_lola_corr/` with the after-registration SfS-to-LOLA
   horizontal disparity as colorized GeoTIFFs (`colormap` on a fixed symmetric scale),
   one band east-west and one north-south.
