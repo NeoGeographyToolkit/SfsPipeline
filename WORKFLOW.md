@@ -37,8 +37,9 @@ qsub -m n -r n -N <name> -q normal \
 
   Node models and core counts (`bro_ele` 28, `cas_ait` 40, `rom_ait` 128) and the
   suggested walltimes below are starting points. Tune them to your site size.
-  On a non-interactive ssh, `qsub` may not be on PATH. Use `/PBS/bin/qsub`
-  (Pleiades) or `/opt/pbs/bin/qsub` (Athena front end).
+  The `rom_ait` and Athena nodes are much more expensive per node-hour and are
+  best avoided. On a non-interactive ssh, `qsub` may not be on PATH. Use
+  `/PBS/bin/qsub` (Pleiades) or `/opt/pbs/bin/qsub` (Athena front end).
 
 - Activate the environment first (`source init_asp.sh`), which puts `bin/` plus
   the ASP and ISIS tools on PATH and sets `ASPROOT`, `ISISROOT`, `ISISDATA`.
