@@ -16,13 +16,13 @@ encodes the procedure as refined over many South-Pole sites.
 - Every heavy step runs on a compute node through `qsub`. The head node is used
   only for trivial list-building and inspection. Do not run multi-thread work on
   a front-end node.
-- Worker scripts are plain `.sh` (or `.py`); they do the work and take the
+- Worker scripts are plain `.sh` (or `.py`). They do the work and take the
   project work directory as their last positional argument, always passed as
   `$(pwd)`. There are no self-submitting `.pbs` scripts.
 - Workers thread to the PBS-provided core count (`$NCPUS`), not `nproc` (which
   can report 1 inside a PBS job). Set `NCPUS`/`MODEL` where a step takes them.
 - Set the PBS allocation once as an environment variable and pass it to every
-  `qsub`; nothing hardcodes an allocation:
+  `qsub`. Nothing hardcodes an allocation:
 
 ```bash
 export groupName=your_allocation   # e.g. the group_list for your project
@@ -38,8 +38,8 @@ qsub -m n -r n -N <name> -q normal \
 ```
 
   Node models and core counts (`bro_ele` 28, `cas_ait` 40, `rom_ait` 128) and the
-  suggested walltimes below are starting points; tune them to your site size.
-  On a non-interactive ssh, `qsub` may not be on PATH; use `/PBS/bin/qsub`
+  suggested walltimes below are starting points. Tune them to your site size.
+  On a non-interactive ssh, `qsub` may not be on PATH. Use `/PBS/bin/qsub`
   (Pleiades) or `/opt/pbs/bin/qsub` (Athena front end).
 
 - Activate the environment first (`source init_asp.sh`), which puts `bin/` plus
@@ -52,7 +52,7 @@ qsub -m n -r n -N <name> -q normal \
 
 Regrid a LOLA source DEM (e.g. the Barker et al. 2023 `LDEM_83S_10MPP_ADJ.TIF`)
 to the target projection, resolution, and a half-integer extent (so 1 m pixel
-centers land on integers, required by `sfs_blend`; see the terrain-bounds
+centers land on integers, required by `sfs_blend`. See the terrain-bounds
 section of the SfS guide). `make_ref_dem.sh` wraps `gdalwarp` (cubic spline,
 256-block tiling). Build it on a compute node, not the head node. Suggested
 walltime 1:00:00.
@@ -65,7 +65,7 @@ Two conventions matter here:
 - **Do not blur.** A small-sigma blur is a no-op on km-scale relief and only adds
   bias, so the height constraint is the honest, unblurred DEM. If you ever do
   blur (pass a non-zero last argument), `make_ref_dem.sh` writes a separate
-  `_blur.tif`; use that only as a mapprojection drape, never as the height
+  `_blur.tif`. Use that only as a mapprojection drape, never as the height
   constraint, and let the name say so.
 
 ```bash
@@ -84,7 +84,7 @@ Confirm 100% valid and a half-integer origin with `gdalinfo -stats`.
 Query candidate NAC observations for the ROI, download the EDRs, and calibrate
 each to a `.cal.echo.cub` plus a CSM `.json` camera.
 
-Discovery is local and fast. Two front ends are available; use either.
+Discovery is local and fast. Two front ends are available. Use either.
 
 Cumulative-index front end: `make-index` builds geoparquet index files from
 CUMINDEX.LBL/TAB in `~/LRO_EDR_CUMINDEX/` (about two minutes, embeds provenance),
@@ -107,8 +107,8 @@ query_lro.sh --dem ref/lola_1mpp.tif --margin-km 1.0 \
 ```
 
 Download the EDRs. From a GeoPackage, `db_to_urls.sh` emits the IMG URLs (pass
-`im` to use the IM server and avoid billing the USGS mirror); or feed
-`download_all.sh` the ODE URL list. Run on a front end (it has network); roughly
+`im` to use the IM server and avoid billing the USGS mirror). Or feed
+`download_all.sh` the ODE URL list. Run on a front end (it has network). Roughly
 600 GB completes in 10 to 15 minutes.
 
 ```bash
@@ -133,7 +133,7 @@ qsub -m n -r n -N calib -q normal \
 Get each camera's Sun azimuth and sort the list by it, so that the later
 `--overlap-limit` in bundle adjustment pairs images of similar illumination
 (matched shadows). Low-signal / shadowed frames are culled by their max value
-(0.005 is the LRO NAC lit-vs-shadow cutoff); inspect the max-value distribution
+(0.005 is the LRO NAC lit-vs-shadow cutoff). Inspect the max-value distribution
 first and drop all-shadow and non-intersecting frames.
 
 ```bash
@@ -168,10 +168,10 @@ usually a good range). Images outside the largest component are dropped.
 ## 4. Mapprojection
 
 Mapproject every image onto the reference DEM. `batch_mapproject.sh` slices the
-list into chunks and submits one node per chunk; `mapproject_chunk.sh` is the
+list into chunks and submits one node per chunk. `mapproject_chunk.sh` is the
 per-node worker it `qsub`s (so you run `batch_mapproject.sh` on the head node and
 it submits the chunks). Control the grid and extent through environment
-variables; chunks finish in a few hours at most.
+variables. Chunks finish in a few hours at most.
 
 Leave `TR` unset so mapproject uses `--tr 1` and names outputs
 `<id>.cal.echo.map.tr1.tif`, which is what `bundle_adjust.sh` expects (setting
@@ -191,10 +191,10 @@ batch_mapproject.sh ref/lola_1mpp.tif \
 
 Harvest interest-point matches with `NUM_ITERATIONS=0` (no drift-prone free
 solve yet). We use our own IP detection (`--ip-detect-method 0`, OBALoG, which
-beats SIFT on these shadowed cross-illumination scenes; `--match-first-to-last`)
+beats SIFT on these shadowed cross-illumination scenes, `--match-first-to-last`)
 and `--overlap-limit` over the azimuth-sorted list. The raw `.match` files are
 the reusable deliverable of this step. Suggested walltime up to a day on 8-16
-nodes (matching parallelizes well; often finishes in a few hours).
+nodes (matching parallelizes well, often finishes in a few hours).
 
 ```bash
 qsub -m n -r n -N ba_match -q normal \
@@ -208,7 +208,7 @@ qsub -m n -r n -N ba_match -q normal \
 
 `bundle_adjust_refine.sh` reuses the harvested matches and runs one stage per
 call, from most-constrained to least and back to the ground. Run each as its own
-single-node job; each waits for the previous. Suggested walltime 8:00:00 each
+single-node job. Each waits for the previous. Suggested walltime 8:00:00 each
 (`bro_ele` rejects more than 8 hours).
 
 ```bash
@@ -238,14 +238,14 @@ qsub -m n -r n -N ba_htdem -W group_list=$groupName -j oe -S /bin/bash \
 ```
 
 Stage 1 uses the raw harvested matches (the `NUM_ITERATIONS=0` clean matches are
-over-culled against un-optimized cameras); stages 2 and 3 reuse stage 1's clean
+over-culled against un-optimized cameras). Stages 2 and 3 reuse stage 1's clean
 matches, which were filtered against a real registered solve. The final cameras
 are `ba_htdem/run-...-adjusted_state.json`.
 
 Validate each stage: the median reprojection error per camera in
 `<outDir>/run-final_residuals_stats.txt` should fall to about 1-2 px. Then check
 the camera graph with `verify-ba`, which uses the match-offset and residual
-stats to report the largest connected component; iterate `--min_match_count` to
+stats to report the largest connected component. Iterate `--min_match_count` to
 see how it changes:
 
 ```bash
@@ -260,14 +260,14 @@ ones, whose stretched drape smears the mosaic. This is the go/no-go gate.
 
 Mapproject the survivors with the final `ba_htdem` cameras, then build a max-lit
 mosaic of each azimuth half and overlay them red/green: coincident terrain means
-the cameras co-register; red/green only on opposite crater walls is an
-illumination difference (fine); a uniform offset of whole crater outlines is a
+the cameras co-register. Red/green only on opposite crater walls is an
+illumination difference (fine). A uniform offset of whole crater outlines is a
 real misregistration. Then rank the per-camera bundle-adjust stats and prune:
 
 ```bash
 # Flag whacky cameras from the ba_htdem per-camera stats. run-mapproj_match_offset_stats.txt
-# (meters off consensus) is the best smear detector; run-camera_offsets.txt plus a low
-# match count catches drifted dropouts; run-final_residuals_stats.txt (reproj px) is blind
+# (meters off consensus) is the best smear detector, run-camera_offsets.txt plus a low
+# match count catches drifted dropouts, run-final_residuals_stats.txt (reproj px) is blind
 # to a self-consistent-but-wrong pose. Defaults: offset-p95 > 5 m, reproj-med > 0.75 px,
 # camera move > 1000 m, or matches < 50.
 sfs_flag_bad_cameras.py ba_htdem/run -o lists/removed_ids.txt
@@ -284,7 +284,7 @@ confirm the streaks are gone and the terrain did not move.
 
 The full image set is too expensive for the SfS solve, so pick a minimal-but-
 covering subset. Split the site by Sun azimuth into balanced groups (merge sparse
-bins, split dense ones at their median; do not blind-cut into four 90-degree
+bins, split dense ones at their median. Do not blind-cut into four 90-degree
 quadrants), then run `image_subset` per group for a primary cover plus an extra
 (2x) cover on the remainder, driven by `sfs_select_full_site.sh` over low-
 resolution sub images (`prepare_lowres.sh`). Validate with a max-lit of the
@@ -295,7 +295,7 @@ sfs_select_full_site.sh lists/filtered_map.txt lists/azimuth.txt selection $(pwd
 ```
 
 Note on GSD (worth more thought): coarse frames hurt SfS and the max-lit mosaic.
-`query_gsd.sh` reports each image's native ground sample distance; large-GSD
+`query_gsd.sh` reports each image's native ground sample distance. Large-GSD
 frames (roughly 3 to 4 m/pixel) tend to be grief and, in practice, correlate with
 high `mapproj_match_offset` values anyway, so they often get caught by the prune
 in step 6. Consider down-weighting or dropping the coarsest frames from the SfS
@@ -335,7 +335,7 @@ tile_dem.py ref/lola_1mpp.tif 4000 4000 tiles 200
 `launch_sfs_tiles.sh` submits one SfS job per tile (`parallel_sfs.sh` is the
 per-tile worker, which bakes in the Lunar-Lambert reflectance, smoothness, and
 initial-DEM-constraint weights). Pass the exposures from 8a. A 4k tile is roughly
-6-10 h on 2 `bro_ele` nodes; use the `long` queue. The trailing `0` is
+6-10 h on 2 `bro_ele` nodes. Use the `long` queue. The trailing `0` is
 `estimError=0` (the SfS pass, no error map).
 
 ```bash
@@ -354,14 +354,14 @@ qsub -m n -r n -N sfs_merge -W group_list=$groupName -j oe -S /bin/bash \
   -- dem_mosaic_list.sh lists/sfs_tiles.txt sfs_dem.tif $(pwd)
 ```
 
-Inspect: `geodiff` the SfS DEM against the reference and hillshade both; expect
+Inspect: `geodiff` the SfS DEM against the reference and hillshade both. Expect
 mean dz near zero, sub-meter std, and no tile seams.
 
 ## 9. Re-register the SfS terrain to LOLA
 
 The SfS DEM can carry a residual, spatially-varying shift against LOLA. Measure
 it, and if it is real, re-register the cameras and redo SfS. This per-line GCP
-re-registration is the committed final refine; `jitter_solve.sh` (no GCP) is only
+re-registration is the committed final refine. `jitter_solve.sh` (no GCP) is only
 for removing intrinsic jitter when there is no re-registration target.
 
 Measure the shift two ways. Per image, render an SfS-simulated view, `image_align`
@@ -382,7 +382,7 @@ qsub -m n -r n -N sim_align -W group_list=$groupName -j oe -S /bin/bash \
 Globally, correlate the SfS and LOLA hillshades (ASP `hillshade -e 10`, grazing,
 which gives more valid disparity than a washed-out multidirectional hillshade),
 and read the robust median of the dx/dy disparity (ignore the pc_align matrix, an
-origin-vs-centroid artifact); add `geodiff` for dz:
+origin-vs-centroid artifact). Add `geodiff` for dz:
 
 ```bash
 qsub -m n -r n -N hcorr -W group_list=$groupName -j oe -S /bin/bash \
@@ -393,7 +393,7 @@ qsub -m n -r n -N hcorr -W group_list=$groupName -j oe -S /bin/bash \
 If the shift is real (a roughly uniform few meters beyond LOLA's own slop), turn
 the disparity into a GCP with `dem2gcp.sh` and run the GCP-driven per-line refine
 `jitter_gcp.sh`. A rigid `bundle_adjust` under-corrects a spatially-structured
-shift because the dense match network pins the relative geometry; the per-line
+shift because the dense match network pins the relative geometry. The per-line
 flex of jitter reproduces the structure a rigid shift cannot.
 
 ```bash
@@ -401,11 +401,11 @@ dem2gcp.sh sfs_dem.tif ref/lola_1mpp.tif hcorr_sfs_lola/run-F.tif \
   ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt ba_htdem/run 20 \
   sfs_ref_corr/run.gcp $(pwd)
 
-# jitter re-registration. Finer orientation knots track the shift better; keep
+# jitter re-registration. Finer orientation knots track the shift better, keep
 # anchor strength through --anchor-dem-uncertainty (large = light), over-provision
 # anchors and let the ratio caps prune. For a set with borderline/edge frames, set
 # ANCHOR_DEM to a genuine DEM padded well beyond the domain (+4 km/side here) so the
-# out-of-domain orientation knots still get anchors; keep heights/mapproj on the
+# out-of-domain orientation knots still get anchors, keep heights/mapproj on the
 # domain DEM.
 qsub -m n -r n -N jitter -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
@@ -427,9 +427,9 @@ showing the corrective move.
 On the final (re-registered) SfS DEM, build the ortho mosaics and blend the DEM
 back toward the reference where there is little illumination signal
 (`sfs_blend.sh`, keeping the tuned parameters from the ASP manual). The blended
-DEM's hillshade is the delivery hillshade; build it with
+DEM's hillshade is the delivery hillshade. Build it with
 `gdaldem hillshade -multidirectional -compute_edges -alt 10 sfs_dem_blend.tif sfs_dem_blend_hill.tif`
-(crisper and with more shadow detail than ASP `hillshade -e 10`; the grazing-light
+(crisper and with more shadow detail than ASP `hillshade -e 10`. The grazing-light
 ASP hillshade is kept only for the DEM-to-DEM correlation step, not for delivery).
 
 Both ortho mosaics are delivered, with distinct roles:
@@ -469,14 +469,14 @@ Re-run the SfS worker with `estimError=1` to write a `-height-error.tif` per til
 This pass evaluates height perturbations on the FINAL produced SfS DEM (the blend),
 not on LOLA, so run it only after the blend is settled: tile the final blended DEM
 into the same tile grid, then launch with `estimError=1`. It is single-core per tile
-and slower; budget it separately. Finally mosaic the per-tile error maps into the
+and slower. Budget it separately. Finally mosaic the per-tile error maps into the
 delivered `height_uncertainty.tif`.
 
 ```bash
 # tile the final blended SfS DEM onto the same tile grid
 tile_dem.py sfs_dem_blend.tif 4000 4000 tiles_blend 200
 
-# uncertainty pass (estimError=1; tiles are from the blend, not LOLA)
+# uncertainty pass (estimError=1, tiles are from the blend, not LOLA)
 export QUEUE=long
 launch_sfs_tiles.sh tiles_blend lists/secondary_images.txt ba_htdem/run \
   exposures_sec/run-exposures.txt sfs_err 1 $(pwd)
@@ -492,7 +492,7 @@ Assemble a self-describing results directory and fill in `inventory.yaml` so the
 project is self-describing when handed off.
 
 Results directory (`<site>_results/`) holds the rasters, lists, the cameras, the
-disparity illustration, and the two manifest files; the large per-image ortho sets
+disparity illustration, and the two manifest files. The large per-image ortho sets
 go in peer directories alongside it:
 
 - Terrains: `sfs_dem.tif` (raw SfS), `sfs_dem_blend.tif` (blended with LOLA) and its
@@ -501,14 +501,14 @@ go in peer directories alongside it:
 - Ortho mosaics: `max_lit_mosaic.tif` and `average_mosaic.tif`, on the same grid.
 - Image-id lists: `bundle_adjust_image_ids.txt` (the full bundle-adjust input) and
   `sfs_image_ids.txt` (the SfS subset). Ship both as text. Deliver as images and
-  cameras ONLY the SfS subset; document the larger bundle-adjust set in the list but
+  cameras ONLY the SfS subset. Document the larger bundle-adjust set in the list but
   do not ship its images or cameras (no dead weight).
 - Cameras (when requested): `cameras/` with the final jitter (or bundle-adjust)
   linear-reduced adjusted CSM `.json`, one per shipped image.
 - Ortho directories (peers): `map_images/` (every shipped SfS ortho at 1 m/pixel)
   and `map_images_native_res/` (the sub-1 m frames at their own native GSD, with
   `gsd.csv`). The native-res orthos are mapprojected with the same registered
-  cameras; record the real output pixel size in `gsd.csv`, read back from each ortho.
+  cameras. Record the real output pixel size in `gsd.csv`, read back from each ortho.
 - Disparity to LOLA: `sfs_to_lola_corr/` with the after-registration SfS-to-LOLA
   horizontal disparity as colorized GeoTIFFs (`colormap` on a fixed symmetric scale),
   one band east-west and one north-south.
@@ -517,7 +517,7 @@ Region of interest and cropping: SfS is run on a domain padded beyond the produc
 ROI. Either crop every product to the ROI (snap the ROI box to the domain pixel
 grid, `gdal_translate -projwin`, lossless) or deliver the full domain as insurance
 against boundary artifacts and include the ROI polygon (`product_roi.gpkg`) so the
-recipient can crop. Record the choice; registration degrades toward the domain edges.
+recipient can crop. Record the choice. Registration degrades toward the domain edges.
 
 The 1 m/pixel ortho set is the SfS mapprojected images already produced (the
 `map.tr1.tif`), gathered and renamed. The native-GSD set is built with
@@ -534,11 +534,15 @@ qsub -m n -r n -N natres -W group_list=$groupName -j oe -S /bin/bash \
 
 Build pyramids (`stereo_gui --create-image-pyramids-only`) on the DEMs, mosaics, and
 colorized bands for fast viewing. Keep the `readme.md` terse (mirror a prior delivery
-readme) and git-track it and `inventory.yaml` with the project notes; the heavy
+readme) and git-track it and `inventory.yaml` with the project notes. The heavy
 rasters, orthos, and cameras are data and are not version-controlled.
 
-`inventory.yaml` fields: the base terrain; the final bundle-adjust (or jitter) prefix
-whose linear-reduced adjusted CSM `.json` cameras are delivered; the SfS and blended
-terrains with their logs; the height-error map; both ortho mosaics; the two image-id
-lists (`ba_image_ids_path`, `sfs_image_ids_path`); and the two orthoimage directories
-(1 m/pixel and native-GSD, the latter with a per-image GSD CSV).
+`inventory.yaml` fields:
+
+- the base terrain
+- the final bundle-adjust (or jitter) prefix whose linear-reduced adjusted CSM `.json` cameras are delivered
+- the SfS and blended terrains with their logs
+- the height-error map
+- both ortho mosaics
+- the two image-id lists (`ba_image_ids_path`, `sfs_image_ids_path`)
+- the two orthoimage directories (1 m/pixel and native-GSD, the latter with a per-image GSD CSV)

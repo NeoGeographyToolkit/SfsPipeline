@@ -1,7 +1,7 @@
 # Scripts and tools reference
 
 All scripts live in `bin`. Each bash worker prints its own argument list if run
-with no arguments; [WORKFLOW.md](WORKFLOW.md) shows how they fit together and the
+with no arguments. [WORKFLOW.md](WORKFLOW.md) shows how they fit together and the
 `qsub` command for each. The Python command-line tools are installed on PATH by
 the conda environment.
 
@@ -73,7 +73,7 @@ the conda environment.
 - `run_stereo.sh`: run one stereo pair (parallel_stereo asp_mgm) with point2dem and a half-res DEM.
 - `run_point2dem.sh`: point2dem on a stereo point cloud.
 
-These are reworked to the worker conventions; their stereo parameters are carried over from the original and kept under review (the stereo branch is usually skipped for polar SfS).
+These are reworked to the worker conventions. Their stereo parameters are carried over from the original and kept under review (the stereo branch is usually skipped for polar SfS).
 
 ### QGIS helper scripts
 
@@ -85,11 +85,11 @@ These are reworked to the worker conventions; their stereo parameters are carrie
 
 These entry points handle discovery, selection, and validation.
 [WORKFLOW.md](WORKFLOW.md) shows each one in the order you actually run it, with
-the surrounding commands; this is just a reference.
+the surrounding commands. This is just a reference.
 
 - `make-index`, `prep-index`, `provenance`: build the geoparquet LROC cumulative index (from CUMINDEX.LBL/TAB in `~/LRO_EDR_CUMINDEX/`) with embedded provenance.
 - `sfs-cover`: select the observations crossing an ROI polygon into a GeoPackage.
-- `find-image-overlaps`: build a spatial/illumination connectivity graph from the cover GeoPackage; `--check_connectivity` reports component sizes, otherwise it writes the overlap list. Used for validation and downselect.
+- `find-image-overlaps`: build a spatial/illumination connectivity graph from the cover GeoPackage. `--check_connectivity` reports component sizes, otherwise it writes the overlap list. Used for validation and downselect.
 - `verify-ba`: after bundle adjustment, report the largest connected camera component from the match-offset and residual stats so islands can be dropped.
 - `lit-select`: pick a well-illuminated image subset for an SfS tile.
 - `update-db`: write a new GeoPackage combining the metadata with refreshed (mapprojected or shadow-masked) footprints.
