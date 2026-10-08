@@ -45,7 +45,7 @@ echo Machines: $(cat ${PBS_NODEFILE}) >> $out
    --camera-list ${inDir}/run-camera_list.txt      \
    --clean-match-files-prefix ${cleanMatchDir}/run \
    --num-lines-per-position 500                    \
-   --num-lines-per-orientation 250                 \
+   --num-lines-per-orientation 2000                \
    --max-pairwise-matches 20000                    \
    --min-matches 1                                 \
    --min-triangulation-angle 1e-10                 \
@@ -53,7 +53,7 @@ echo Machines: $(cat ${PBS_NODEFILE}) >> $out
    --num-passes 2                                  \
    --max-initial-reprojection-error 50             \
    --overlap-limit 5000                            \
-   --parameter-tolerance 1e-12                     \
+   --parameter-tolerance 1e-20                     \
    --heights-from-dem ${dem}                       \
    --heights-from-dem-uncertainty 10               \
    --anchor-dem ${anchorDem}                       \
