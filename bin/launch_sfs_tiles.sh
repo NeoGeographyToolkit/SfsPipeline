@@ -131,7 +131,7 @@ for tile in "${tiles[@]}"; do
         -l walltime=$walltime -W group_list=${groupName:?set groupName (PBS allocation) before submitting}                \
         -j oe -S /bin/bash                                       \
         -o $currDir/                                             \
-        -v IMAGE_DIR,IMAGE_SUFFIX                                \
+        -v IMAGE_DIR,IMAGE_SUFFIX,ASPROOT,ISISROOT,ISISDATA,ALESPICEROOT \
         -l select=${numNodes}:ncpus=${ncpus}:model=${model} --   \
         $binDir/parallel_sfs.sh                           \
           $tile $numCpu $baPrefix $imageList $estimError         \

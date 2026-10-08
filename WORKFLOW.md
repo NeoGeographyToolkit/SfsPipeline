@@ -370,6 +370,10 @@ Merge with a blended `dem_mosaic` (no `--max`, so tile seams stay smooth):
 qsub -m n -r n -N sfs_merge -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=4:00:00 \
   -- dem_mosaic_list.sh lists/sfs_tiles.txt sfs_dem.tif $(pwd)
+# dem_mosaic writes to the -o value as a PREFIX and always appends a tile suffix, so the
+# product lands at sfs_dem-tile-0.tif, not sfs_dem.tif. Rename it to the intended name:
+#   mv sfs_dem-tile-0.tif sfs_dem.tif
+# This applies to every dem_mosaic_list.sh call (the max-lit mosaics later too).
 ```
 
 Inspect: `geodiff` the SfS DEM against the reference and hillshade both. Expect
@@ -419,19 +423,45 @@ dem2gcp.sh sfs_dem.tif ref/lola_1mpp.tif hcorr_sfs_lola/run-F.tif \
   ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt ba_htdem/run 20 \
   sfs_ref_corr/run.gcp $(pwd)
 
-# jitter re-registration. Finer orientation knots track the shift better, keep
-# anchor strength through --anchor-dem-uncertainty (large = light), over-provision
+# jitter re-registration, over the FULL image set (same list as bundle adjust),
+# never the thinned SfS subset: the dense tie-point network is what the per-line
+# solve needs, so feed every image. Finer orientation knots track the shift better,
+# keep anchor strength through --anchor-dem-uncertainty (large = light), over-provision
 # anchors and let the ratio caps prune. For a set with borderline/edge frames, set
 # ANCHOR_DEM to a genuine DEM padded well beyond the domain (+4 km/side here) so the
 # out-of-domain orientation knots still get anchors, keep heights/mapproj on the
-# domain DEM.
+# domain DEM. Build that padded anchor DEM with make_ref_dem.sh (same src/tr/proj as
+# the domain DEM, a 'te' extended by the pad) ON THE HEAD NODE, or as a short devel
+# job. It is a single-thread cubicspline gdalwarp (GDAL_NUM_THREADS=1, no -multi), so
+# it is head-node-compliant and finishes in ~1-2 minutes even for a ~25k x 18k output.
+# A normal-queue qsub for this trivial regrid is wasteful and can land on a wedged
+# node (a stuck job that even qdel -W force will not reap) while the head-node run
+# would have finished in under two minutes.
 qsub -m n -r n -N jitter -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
-  -v "NUM_LINES_ORIENT=2000,MAX_NUM_TRI=80000,MAX_GCP_TO_TRI_RATIO=2.0,\
-MAX_ANCHOR_TO_TRI_RATIO=1.0,ANCHOR_DEM_UNC=20,NUM_ANCHOR=1000" \
+  -v "NUM_LINES_ORIENT=2000,MAX_NUM_TRI=120000,MAX_GCP_TO_TRI_RATIO=2.0,\
+MAX_ANCHOR_TO_TRI_RATIO=2.0,ANCHOR_DEM_UNC=20,NUM_ANCHOR=2000,\
+ANCHOR_DEM=ref/lola_1mpp_pad4k.tif" \
   -- jitter_gcp.sh ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt \
      ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run jitter $(pwd)
 ```
+
+`MAX_NUM_TRI` is the master knob: at `--max-gcp-to-tri-points-ratio 2.0` and
+`--max-anchor-points-to-tri-points-ratio 2.0` it also sets the GCP cap and the
+anchor cap at twice its value. `dem2gcp` emits up to 5M GCP, so GCP availability
+never binds, the ratio does. Size it by the number of orientation knots, which
+scales with the IMAGE COUNT (knots per image is the image line count divided by
+`NUM_LINES_ORIENT`), not by domain area. A roughly 14 by 10 km lunar-polar site
+with 300 to 1000 full-resolution NAC images runs well around 120k to 150k tri,
+which keeps a few tri per knot and lifts the GCP cap to 240k to 300k, dense enough
+(tens of meters spacing) to resolve a smooth few-meter shift. Fewer or smaller
+images need less, a long track with many frames needs more. Read the actual tri,
+GCP, and anchor counts that `jitter_solve` prints at startup on the first run and
+retune rather than guessing. Runtime scales with image count times residual-block
+count: a validated reference point is about 1000 images at 80k tri finishing in
+roughly 3.5 h on one 28-core node, so 1200 images at 120k tri is about 5 to 6 h,
+within an 8 h wall. Record the elapsed time and peak memory of each solve so the
+next estimate has a basis.
 
 Then redo SfS (repeat step 8, reusing the exposures since the pose change is
 sub-pixel) with the `jitter/run-...-adjusted_state.json` cameras. De-risk with a
