@@ -439,24 +439,34 @@ dem2gcp.sh sfs_dem.tif ref/lola_1mpp.tif hcorr_sfs_lola/run-F.tif \
 # would have finished in under two minutes.
 qsub -m n -r n -N jitter -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
-  -v "NUM_LINES_ORIENT=2000,MAX_NUM_TRI=120000,MAX_GCP_TO_TRI_RATIO=2.0,\
-MAX_ANCHOR_TO_TRI_RATIO=2.0,ANCHOR_DEM_UNC=20,NUM_ANCHOR=2000,\
+  -v "NUM_ITER=75,NUM_PASSES=2,NUM_LINES_POS=15000,NUM_LINES_ORIENT=2000,DEM_UNC=20,\
+ANCHOR_DEM_UNC=20,NUM_ANCHOR=5000,MAX_PAIRWISE=5000,MAX_NUM_TRI=120000,\
+MAX_GCP_TO_TRI_RATIO=2.0,MAX_ANCHOR_TO_TRI_RATIO=1.0,\
 ANCHOR_DEM=ref/lola_1mpp_pad4k.tif" \
   -- jitter_gcp.sh ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt \
      ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run jitter $(pwd)
 ```
 
+`CAM_POS_UNC` is 20,20. A reasonably tight camera position uncertainty such as
+20,20 is suggested, because the dominant effect of this refinement is a change in
+camera orientation, not position, so clamping the position hard while the
+orientations do the work prevents wild oscillations of the camera centers. It is
+applied through the script default rather than `-v`, because its comma would
+break the `qsub` comma-delimited variable list (the job would then run with a
+single wrong value).
+
 `MAX_NUM_TRI` is the master knob: at `--max-gcp-to-tri-points-ratio 2.0` and
-`--max-anchor-points-to-tri-points-ratio 2.0` it also sets the GCP cap and the
-anchor cap at twice its value. `dem2gcp` emits up to 5M GCP, so GCP availability
-never binds, the ratio does. Size it by the number of orientation knots, which
+`--max-anchor-points-to-tri-points-ratio 1.0` it sets the GCP cap at twice its
+value and the anchor cap equal to it. `dem2gcp` emits up to 5M GCP, so GCP
+availability never binds, the ratio does. Size it by the number of orientation knots, which
 scales with the IMAGE COUNT (knots per image is the image line count divided by
 `NUM_LINES_ORIENT`), not by domain area. A roughly 14 by 10 km lunar-polar site
 with 300 to 1000 full-resolution NAC images runs well around 120k to 150k tri,
 which keeps a few tri per knot and lifts the GCP cap to 240k to 300k, dense enough
 (tens of meters spacing) to resolve a smooth few-meter shift. Fewer or smaller
-images need less, a long track with many frames needs more. Read the actual tri,
-GCP, and anchor counts that `jitter_solve` prints at startup on the first run and
+images need less, a site larger than about 15 by 15 km, or a longer track with
+more frames, needs more. Read the actual tri, GCP, and anchor counts that
+`jitter_solve` prints at startup on the first run and
 retune rather than guessing. Runtime scales with image count times residual-block
 count: a validated reference point is about 1000 images at 80k tri finishing in
 roughly 3.5 h on one 28-core node, so 1200 images at 120k tri is about 5 to 6 h,
