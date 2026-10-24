@@ -20,8 +20,8 @@ import shutil
 import subprocess
 import sys
 
-# Default paths on pfe (can be overridden by environment variables)
-ISISROOT = os.environ.get("ISISROOT", os.path.expanduser("~/miniconda3/envs/asp_deps"))
+# Default paths (can be overridden by environment variables)
+ISISROOT = os.environ.get("ISISROOT", os.environ.get("CONDA_PREFIX", os.path.expanduser("~/miniconda3/envs/asp_deps")))
 ISISDATA = os.environ.get("ISISDATA", os.path.expanduser("~/projects/isis3data"))
 SP = os.environ.get("ASPROOT", os.path.expanduser("~/projects/BinaryBuilder/StereoPipeline"))
 SPK_MK = f"{ISISDATA}/lro_south/usgs_polar_spk.mk"
@@ -50,6 +50,24 @@ def fix_distortion_coeff(json_path):
     with open(json_path, "w") as f:
       json.dump(d, f, indent=2)
     print(f"Patched scalar coefficient {coeff} -> [{coeff}] in {os.path.basename(json_path)}")
+
+def find_tool(tool_name, prefer_dirs=None):
+  if prefer_dirs:
+    for d in prefer_dirs:
+      if not d:
+        continue
+      cand = os.path.join(d, "bin", tool_name)
+      if os.path.isfile(cand) and os.access(cand, os.X_OK):
+        return cand
+      cand = os.path.join(d, tool_name)
+      if os.path.isfile(cand) and os.access(cand, os.X_OK):
+        return cand
+  which_tool = shutil.which(tool_name)
+  if which_tool:
+    return which_tool
+  if prefer_dirs and prefer_dirs[0]:
+    return os.path.join(prefer_dirs[0], "bin", tool_name)
+  return tool_name
 
 def find_fetch_tool():
   # Prefer the sibling fetch_lro_nac.sh in this script's dir.
@@ -92,10 +110,13 @@ def process_product(pid, out_dir, use_polar=False):
 
   # Environment for ISIS tools
   env_isis = os.environ.copy()
-  env_isis["ISISROOT"] = ISISROOT
+  if ISISROOT:
+    env_isis["ISISROOT"] = ISISROOT
+    env_isis["PATH"] = f"{ISISROOT}/bin:{env_isis.get('PATH', '')}"
+    if os.path.isdir(os.path.join(ISISROOT, "lib")):
+      env_isis["LD_LIBRARY_PATH"] = f"{ISISROOT}/lib:{env_isis.get('LD_LIBRARY_PATH', '')}"
   env_isis["ISISDATA"] = ISISDATA
   env_isis["ALESPICEROOT"] = ISISDATA
-  env_isis["PATH"] = f"{ISISROOT}/bin:{env_isis.get('PATH', '')}"
 
   # Step 1: If pre-existing uncalibrated .cub exists, rename it to raw.cub
   if os.path.exists(old_cub) and not os.path.exists(raw_cub):
@@ -109,33 +130,38 @@ def process_product(pid, out_dir, use_polar=False):
       run_cmd(cmd_fetch, env=env_isis)
 
     # Ingest with lronac2isis
-    cmd_ingest = f"{ISISROOT}/bin/lronac2isis from={img_path} to={raw_cub}"
+    tool_ingest = find_tool("lronac2isis", prefer_dirs=[ISISROOT])
+    cmd_ingest = f"{tool_ingest} from={img_path} to={raw_cub}"
     run_cmd(cmd_ingest, env=env_isis)
 
   # Step 2: spiceinit on raw_cub. Vanilla (standard mission kernels) by default;
   # USGS South Pole custom polar kernels only when explicitly requested.
+  tool_spice = find_tool("spiceinit", prefer_dirs=[ISISROOT])
   if use_polar:
     cmd_spice = (
-      f"{ISISROOT}/bin/spiceinit from={raw_cub} "
+      f"{tool_spice} from={raw_cub} "
       f"spk={SPK_MK} ck={CK_MK} web=false"
     )
   else:
-    cmd_spice = f"{ISISROOT}/bin/spiceinit from={raw_cub} web=false"
+    cmd_spice = f"{tool_spice} from={raw_cub} web=false"
   run_cmd(cmd_spice, env=env_isis)
   print("spiceinit attached kernels successfully.")
 
   # Step 3: lronaccal (radiometric calibration)
-  cmd_cal = f"{ISISROOT}/bin/lronaccal from={raw_cub} to={cal_cub}"
+  tool_cal = find_tool("lronaccal", prefer_dirs=[ISISROOT])
+  cmd_cal = f"{tool_cal} from={raw_cub} to={cal_cub}"
   run_cmd(cmd_cal, env=env_isis)
   print(f"Radiometric calibration complete: {cal_cub}")
 
   # Step 4: lronacecho (echo correction)
-  cmd_echo = f"{ISISROOT}/bin/lronacecho from={cal_cub} to={final_cub}"
+  tool_echo = find_tool("lronacecho", prefer_dirs=[ISISROOT])
+  cmd_echo = f"{tool_echo} from={cal_cub} to={final_cub}"
   run_cmd(cmd_echo, env=env_isis)
   print(f"Echo correction complete: {final_cub}")
 
   # Step 5: isd_generate from final cal.echo.cub with linear reduction
-  cmd_isd = f"{ISISROOT}/bin/isd_generate -k {final_cub} {final_cub} --reduction linear -o {final_json}"
+  tool_isd = find_tool("isd_generate", prefer_dirs=[ISISROOT, SP])
+  cmd_isd = f"{tool_isd} -k {final_cub} {final_cub} --reduction linear -o {final_json}"
   run_cmd(cmd_isd, env=env_isis)
   print(f"Generated raw ISD JSON: {final_json}")
 
@@ -145,15 +171,26 @@ def process_product(pid, out_dir, use_polar=False):
   # Step 7: Validate with cam_test
   env_asp = os.environ.copy()
   env_asp["PATH"] = f"{SP}/bin:{SP}/libexec:{env_asp.get('PATH', '')}"
-  isis_asp = os.environ.get("ISIS_ASP", os.path.expanduser("~/miniconda3/envs/asp_deps"))
+  isis_asp = os.environ.get("ISIS_ASP", ISISROOT)
   env_asp["ISISROOT"] = isis_asp
-  env_asp["LD_LIBRARY_PATH"] = f"{isis_asp}/lib:{SP}/lib:{SP}/lib/csmplugins:{env_asp.get('LD_LIBRARY_PATH', '')}"
+  ld_paths = []
+  if isis_asp and os.path.isdir(os.path.join(isis_asp, "lib")):
+    ld_paths.append(os.path.join(isis_asp, "lib"))
+  if os.path.isdir(os.path.join(SP, "lib")):
+    ld_paths.append(os.path.join(SP, "lib"))
+  csm_p = os.path.join(SP, "lib", "csmplugins")
+  if os.path.isdir(csm_p):
+    ld_paths.append(csm_p)
+  if env_asp.get("LD_LIBRARY_PATH"):
+    ld_paths.append(env_asp["LD_LIBRARY_PATH"])
+  env_asp["LD_LIBRARY_PATH"] = ":".join(ld_paths)
   env_asp["GDAL_DATA"] = f"{SP}/share/gdal"
   env_asp["PROJ_DATA"] = f"{SP}/share/proj"
   env_asp["ISISDATA"] = ISISDATA
 
   # cam_test is a sanity check only; non-fatal
-  cmd_camtest = f"cam_test --image {final_cub} --cam1 {final_cub} --cam2 {final_json} --sample-rate 5000"
+  tool_camtest = find_tool("cam_test", prefer_dirs=[SP])
+  cmd_camtest = f"{tool_camtest} --image {final_cub} --cam1 {final_cub} --cam2 {final_json} --sample-rate 5000"
   try:
     out_test = run_cmd(cmd_camtest, env=env_asp, cwd=out_dir)
     for line in out_test.splitlines():

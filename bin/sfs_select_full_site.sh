@@ -36,7 +36,7 @@ export ISISROOT=${ISISROOT:-$HOME/miniconda3/envs/asp_deps}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 s=StereoPipeline
 export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
-share=$HOME/projects/BinaryBuilder/$s/share
+share=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/share
 [ -d "$share/proj" ] && export GDAL_DATA=$share/gdal PROJ_DATA=$share/proj PROJ_LIB=$share/proj
 umask 022
 ulimit -c 0
