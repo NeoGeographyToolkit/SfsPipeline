@@ -1,8 +1,8 @@
 # SfsPipeline
 
-Scripts supporting the practical operation of Shape-from-Shading (SfS) with the Ames Stereo Pipeline. The reference documentation is the [ASP SfS guide](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html).
+An end-to-end collection of scripts for Shape-from-Shading (SfS) terrain creation with the Ames Stereo Pipeline, based on the [reference documentation](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html).
 
-See [WORKFLOW.md](WORKFLOW.md) for an end-to-end example.
+See [WORKFLOW.md](WORKFLOW.md) for the detailed workflow.
 
 ## Installation
 
