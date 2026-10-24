@@ -27,7 +27,7 @@ export groupName=your_allocation
 - The canonical submission form is:
 
 ```bash
-qsub -m n -r n -N <name> -q normal \
+qsub -V -m n -r n -N <name> -q normal \
   -W group_list=$groupName -j oe -S /bin/bash \
   -l select=<N>:ncpus=<C>:model=<model> -l walltime=<HH:MM:SS> \
   -- <script>.sh <args...> $(pwd)
@@ -41,12 +41,12 @@ qsub -m n -r n -N <name> -q normal \
 
 - Activate the environment first (`source init_asp.sh`), which puts `bin/` plus
   the ASP and ISIS tools on PATH and sets `ASPROOT`, `ISISROOT`, `ISISDATA`.
-- A `qsub` job starts with a fresh environment, so the submitting shell's
-  `ASPROOT`/`ISISROOT`/`ISISDATA`/`ALESPICEROOT` do not reach the worker unless
-  they are listed in the job's `-v`. A submitter that fans out per-chunk jobs
-  (`batch_mapproject.sh`, `launch_sfs_tiles.sh`) must forward these four, or the
-  worker falls back to its baked-in default `ISISROOT` (a conda env that may be
-  absent on the compute node) and fails. Both submitters now forward them.
+- Always pass `-V` to `qsub` (as shown in the canonical submission form above).
+  A `qsub` job starts with a fresh environment by default, so without `-V` the
+  submitting shell's `ASPROOT`/`ISISROOT`/`ISISDATA`/`ALESPICEROOT` do not reach
+  the compute node, causing workers to fall back to hardcoded default paths and
+  fail. Submitter scripts that fan out per-chunk jobs (`batch_mapproject.sh`,
+  `launch_sfs_tiles.sh`) forward these variables automatically.
 - Gate each stage on the PBS job reaching `job_state=F`, never on an output file
   appearing (a product shows up while still half-written). Inspect each product
   (hillshade, geodiff, red/green overlay) before moving on, not ten steps later.
@@ -74,7 +74,7 @@ Two conventions matter here:
   and let the name say so.
 
 ```bash
-qsub -m n -r n -N ref_dem -q normal \
+qsub -V -m n -r n -N ref_dem -q normal \
   -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=20:model=bro_ele -l walltime=1:00:00 \
   -- make_ref_dem.sh src_lola.tif ref/lola_1mpp.tif \
@@ -131,7 +131,7 @@ CSM `.json` about tenfold with sub-millimeter `cam_test` agreement, and these
 linear-reduced cameras are what ship at delivery. Suggested walltime 2:00:00:
 
 ```bash
-qsub -m n -r n -N calib -q normal \
+qsub -V -m n -r n -N calib -q normal \
   -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=40:model=cas_ait -l walltime=2:00:00 \
   -- batch_prepare_lro.sh lists/products.txt img $(pwd)
@@ -212,7 +212,7 @@ the reusable deliverable of this step. Suggested walltime up to a day on 8-16
 nodes (matching parallelizes well, often finishes in a few hours).
 
 ```bash
-qsub -m n -r n -N ba_match -q normal \
+qsub -V -m n -r n -N ba_match -q normal \
   -W group_list=$groupName -j oe -S /bin/bash \
   -l select=10:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "IMG_DIR=img,OVERLAP_LIMIT=100,NUM_ITERATIONS=0,PROCESSES=10,THREADS=8" \
@@ -235,19 +235,19 @@ single-node job. Each waits for the previous. Suggested walltime 8:00:00 each
   feeds on `ba_free` and reuses stage 1's clean matches.
 
 ```bash
-qsub -m n -r n -N ba_fix -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_fix -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "FIXED_LIST=lists/usgs_fixed_images.txt" \
   -- bundle_adjust_refine.sh lists/filtered_images.txt lists/filtered_cameras.txt \
      ba/run ba_fix $(pwd)
 
-qsub -m n -r n -N ba_free -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_free -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "USE_CLEAN=1" \
   -- bundle_adjust_refine.sh ba_fix/run-image_list.txt ba_fix/run-camera_list.txt \
      ba_fix/run ba_free $(pwd)
 
-qsub -m n -r n -N ba_htdem -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_htdem -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "USE_CLEAN=1,REF_DEM=ref/lola_1mpp.tif" \
   -- bundle_adjust_refine.sh ba_free/run-image_list.txt ba_free/run-camera_list.txt \
@@ -366,7 +366,7 @@ query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt ref/lola_1mpp.
 every later simulation reuses. Run it once over the selected set before tiling.
 
 ```bash
-qsub -m n -r n -N sfs_exp -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sfs_exp -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
   -- sfs_exposures.sh lists/secondary_images.txt ba_htdem/run ref/lola_1mpp.tif \
      exposures_sec $(pwd)
@@ -401,7 +401,7 @@ Merge with a blended `dem_mosaic` (no `--max`, so tile seams stay smooth). The
 output product name is `sfs_dem.tif`.
 
 ```bash
-qsub -m n -r n -N sfs_merge -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sfs_merge -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=4:00:00 \
   -- dem_mosaic_list.sh lists/sfs_tiles.txt sfs_dem.tif $(pwd)
 ```
@@ -429,7 +429,7 @@ sfs_exposures.sh lists/filtered_images.txt ba_htdem/run sfs_dem.tif exposures_al
 Then render and align, one GCP per image.
 
 ```bash
-qsub -m n -r n -N sim_align -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sim_align -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "ALIGN_THRESH=0,EXPOSURES_PREFIX=exposures_all/run" \
   -- batch_sfs_sim.sh lists/filtered_images.txt 1 99999 sfs_dem.tif lronac_all \
@@ -442,7 +442,7 @@ and read the robust median of the dx/dy disparity (ignore the pc_align matrix, a
 origin-vs-centroid artifact). Add `geodiff` for dz:
 
 ```bash
-qsub -m n -r n -N hcorr -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N hcorr -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=20:model=bro_ele -l walltime=1:00:00 \
   -- hillshade_correlator.sh sfs_dem.tif ref/lola_1mpp.tif $(pwd) hcorr_sfs_lola 25
 ```
@@ -487,7 +487,7 @@ a wedged node (a stuck job that even `qdel -W force` will not reap) while the
 head-node run would have finished in under two minutes.
 
 ```bash
-qsub -m n -r n -N jitter -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N jitter -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "NUM_ITER=75,NUM_PASSES=2,NUM_LINES_POS=15000,NUM_LINES_ORIENT=2000,DEM_UNC=20,\
 ANCHOR_DEM_UNC=20,NUM_ANCHOR=5000,MAX_PAIRWISE=5000,MAX_NUM_TRI=300000,\
@@ -553,7 +553,7 @@ Both ortho mosaics are delivered, with distinct roles:
 Build the max-lit mosaic, which is the matching ortho and the `sfs_blend` input.
 
 ```bash
-qsub -m n -r n -N maxlit -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N maxlit -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- dem_mosaic_list.sh lists/sfs_maps.txt max_lit.tif $(pwd) --max
 ```
@@ -564,7 +564,7 @@ LOLA grid with `regrid_to_grid.sh` so it matches the max-lit mosaic pixel for
 pixel.
 
 ```bash
-qsub -m n -r n -N blendmos -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N blendmos -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- blend_img_mosaic.sh lists/sfs_maps.txt average_mosaic_raw.tif 0.005 $(pwd)
 regrid_to_grid.sh average_mosaic_raw.tif average_mosaic.tif \
@@ -574,7 +574,7 @@ regrid_to_grid.sh average_mosaic_raw.tif average_mosaic.tif \
 Blend the SfS DEM with the reference DEM in permanently shadowed areas.
 
 ```bash
-qsub -m n -r n -N sfs_blend -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sfs_blend -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- sfs_blend.sh ref/lola_1mpp.tif sfs_dem.tif max_lit.tif $(pwd)
 ```
@@ -673,7 +673,7 @@ registered cameras), which mapprojects each at its own native resolution and wri
 `gsd.csv`:
 
 ```bash
-qsub -m n -r n -N natres -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N natres -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
   -- mapproject_native_res.sh lists/native_res_images.txt lists/native_res_cameras.txt \
      ref/lola_1mpp.tif map_images_native_res $(pwd)
