@@ -23,9 +23,9 @@ SfsPipeline is installed both locally and on the NASA HECC HPC. Some steps apply
 6. Add the bin directory to PATH and set the ASP, ISIS, and data paths in `.bashrc`:
    ```bash
    export PATH="$PATH:/path/to/SfsPipeline/bin"
-   export ISISDATA=/path/to/your/ISISDATA/
+   export ISISDATA=/path/to/your/ISISDATA
    export ISISROOT=/path/to/your/conda/envs/isis
-   export ASPROOT=/path/to/your/extracted/ASP/
+   export ASPROOT=/path/to/your/extracted/ASP
    ```
 7. Activate the `SfsPipeline` conda environment to run the command-line tools. The bash worker scripts in bin/ are on PATH regardless of the active environment.
 8. Run `source init_asp.sh` for ISIS and ASP commands, or `source init_sfs.sh` for the SfsPipeline tools and GDAL.
