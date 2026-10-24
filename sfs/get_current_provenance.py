@@ -1,10 +1,8 @@
 import datetime
-import getpass
 import hashlib
 import json
 import os
 from pathlib import Path
-import socket
 import fire
 
 def compute_md5(path: Path) -> str:
@@ -19,8 +17,6 @@ def run(tab_path: str = "CUMINDEX.TAB"):
   md5_str = compute_md5(p) if p.is_file() else ""
   provenance_info = {
     "date": str(datetime.datetime.now()),
-    "user": getpass.getuser(),
-    "hostname": socket.gethostname(),
     "md5sum": md5_str
   }
   provenance_info_json = json.dumps(provenance_info, separators=(',', ':'))

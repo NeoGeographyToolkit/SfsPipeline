@@ -88,7 +88,7 @@ while [ 1 ]; do
   done
   vopt=""
   [ -n "$vlist" ] && vopt="-v $vlist"
-  $QSUB_BIN_RES -m n -r ${RERUNNABLE:-y} -N map_${beg}_${end} -q normal \
+  $QSUB_BIN_RES -V -m n -r ${RERUNNABLE:-y} -N map_${beg}_${end} -q normal \
     -l walltime=$WALLTIME_RES                            \
     -W group_list=${groupName:?set groupName (PBS allocation) before submitting} -j oe -S /bin/bash               \
     -o $currDir/                                         \
