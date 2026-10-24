@@ -20,7 +20,7 @@ SfsPipeline is installed both locally and on the NASA HECC HPC. Some steps apply
    ```bash
    micromamba env create -n SfsPipeline -f environment.yaml
    ```
-6. Add the bin directory to PATH and set the ASP, ISIS, and data paths in `.bashrc` or `.zshrc`:
+6. Add the bin directory to PATH and set the ASP, ISIS, and data paths in `.bashrc`:
    ```bash
    export PATH="$PATH:/path/to/SfsPipeline/bin"
    export ISISDATA=/path/to/your/ISISDATA/

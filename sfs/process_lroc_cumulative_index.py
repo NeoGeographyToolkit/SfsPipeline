@@ -5,14 +5,13 @@ import pvl
 import polars as pl
 from .ground_azimuth import ground_azimuth_numpy as ground_azimuth
 
-# first download CUMINDEX.LBL to your home dir
-# next download CUMINDEX.TAB to your home dir 
-
-
-def run(lbl_path: str = '~/LRO_EDR_CUMINDEX/CUMINDEX.LBL'):
+def run(lbl_path: str = 'CUMINDEX.LBL'):
     lbl_path: Path = Path(lbl_path).expanduser()
     db_path: Path = lbl_path.with_suffix('.TAB')
-    assert lbl_path.exists() and db_path.exists()
+    if not lbl_path.exists():
+        raise FileNotFoundError(f"Cumulative index label not found: {lbl_path}")
+    if not db_path.exists():
+        raise FileNotFoundError(f"Cumulative index table not found: {db_path}")
     ## load label and parse manually with pvl
     lbl = pvl.load(Path(lbl_path).expanduser())
     index = lbl['INDEX_TABLE']

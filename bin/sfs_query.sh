@@ -36,7 +36,7 @@ mkdir -p "$outDir"
 
 # Environment configuration
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-$HOME/miniconda3/envs/asp_deps}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 s=StereoPipeline
 export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/libexec:$ISISROOT/bin:$PATH

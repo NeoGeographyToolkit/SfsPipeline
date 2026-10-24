@@ -92,7 +92,7 @@ each to a `.cal.echo.cub` plus a CSM `.json` camera.
 Discovery is local and fast. Two front ends are available. Use either.
 
 Cumulative-index front end: `make-index` builds geoparquet index files from
-CUMINDEX.LBL/TAB in `~/LRO_EDR_CUMINDEX/` (about two minutes, embeds provenance),
+`CUMINDEX.LBL`/`CUMINDEX.TAB` (about two minutes, embeds provenance),
 then `sfs-cover` selects the observations for an ROI polygon into a GeoPackage:
 
 ```bash

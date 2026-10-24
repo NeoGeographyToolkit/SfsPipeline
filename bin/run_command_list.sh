@@ -16,7 +16,7 @@ cmdFile=$1; currDir=$2
 cd "$currDir" || exit 1
 
 export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-$HOME/miniconda3/envs/asp_deps}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH

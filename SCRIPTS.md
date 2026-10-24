@@ -87,7 +87,7 @@ These entry points handle discovery, selection, and validation.
 [WORKFLOW.md](WORKFLOW.md) shows each one in the order you actually run it, with
 the surrounding commands. This is just a reference.
 
-- `make-index`, `prep-index`, `provenance`: build the geoparquet LROC cumulative index (from CUMINDEX.LBL/TAB in `~/LRO_EDR_CUMINDEX/`) with embedded provenance.
+- `make-index`, `prep-index`, `provenance`: build the geoparquet LROC cumulative index (from `CUMINDEX.LBL`/`CUMINDEX.TAB`) with embedded provenance.
 - `sfs-cover`: select the observations crossing an ROI polygon into a GeoPackage.
 - `find-image-overlaps`: build a spatial/illumination connectivity graph from the cover GeoPackage. `--check_connectivity` reports component sizes, otherwise it writes the overlap list. Used for validation and downselect.
 - `verify-ba`: after bundle adjustment, report the largest connected camera component from the match-offset and residual stats so islands can be dropped.

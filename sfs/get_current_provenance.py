@@ -1,23 +1,33 @@
-import sh
 import datetime
-from pathlib import Path
-import json
-import socket
 import getpass
+import hashlib
+import json
+import os
+from pathlib import Path
+import socket
 import fire
 
-def run():
-    provenance_info = {
-        "date": str(datetime.datetime.now()),
-        "user": getpass.getuser(),
-        "hostname": socket.gethostname(),
-        "md5sum": sh.md5sum(Path('~/LRO_EDR_CUMINDEX/CUMINDEX.TAB').expanduser()).split(' ')[0]
-    }
-    provenance_info_json = json.dumps(provenance_info, separators=(',', ':'))
-    print(provenance_info_json, flush=True)
+def compute_md5(path: Path) -> str:
+  h = hashlib.md5()
+  with open(path, "rb") as f:
+    for chunk in iter(lambda: f.read(65536), b""):
+      h.update(chunk)
+  return h.hexdigest()
+
+def run(tab_path: str = "CUMINDEX.TAB"):
+  p = Path(tab_path).expanduser()
+  md5_str = compute_md5(p) if p.is_file() else ""
+  provenance_info = {
+    "date": str(datetime.datetime.now()),
+    "user": getpass.getuser(),
+    "hostname": socket.gethostname(),
+    "md5sum": md5_str
+  }
+  provenance_info_json = json.dumps(provenance_info, separators=(',', ':'))
+  print(provenance_info_json, flush=True)
 
 def main():
-    fire.Fire(run)
+  fire.Fire(run)
 
 if __name__ == '__main__':
-    main()
+  main()

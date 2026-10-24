@@ -127,13 +127,12 @@ for tile in "${tiles[@]}"; do
     cp -f $exposuresFile $sfsDir/run-exposures.txt
     qFlag=""
     if [ -n "$queue" ]; then qFlag="-q $queue"; fi
-    $qsubBin $qFlag -m n -r n -N sfs${id}                        \
+    $qsubBin $qFlag -V -m n -r n -N sfs${id}                    \
         -l walltime=$walltime -W group_list=${groupName:?set groupName (PBS allocation) before submitting}                \
         -j oe -S /bin/bash                                       \
         -o $currDir/                                             \
-        -v IMAGE_DIR,IMAGE_SUFFIX,ASPROOT,ISISROOT,ISISDATA,ALESPICEROOT \
         -l select=${numNodes}:ncpus=${ncpus}:model=${model} --   \
-        $binDir/parallel_sfs.sh                           \
+        $binDir/parallel_sfs.sh                                  \
           $tile $numCpu $baPrefix $imageList $estimError         \
           $sfsPrefix $currDir $demWeight $shadowThresh
     sleep 2

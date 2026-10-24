@@ -32,7 +32,7 @@ fi
 
 # Set up the paths
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-$HOME/miniconda3/envs/asp_deps}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 s=StereoPipeline
 export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
@@ -68,7 +68,7 @@ while [ 1 ]; do
   #   PROCESSES - number of worker processes per node (default 10)
   #   THREADS   - threads per process
   #   TILE_SIZE - mapproject tile size (default 2048)
-  #   NO_MOSAIC - when set, skip per-chunk dem_mosaic --max
+  #   NO_MOSAIC - 0/1 flag: 1 skips per-chunk dem_mosaic --max; 0/unset builds it
   #   EXTRA_OPTS - any additional flags passed to mapproject
   QSUB_BIN_RES=${QSUB_BIN:-qsub}
   MODEL_RES=${MODEL:-bro_ele}

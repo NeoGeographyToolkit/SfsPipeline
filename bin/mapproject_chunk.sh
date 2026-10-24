@@ -22,7 +22,8 @@
 #   PROCESSES - number of worker processes per node (default 10).
 #   THREADS   - number of threads per process.
 #   TILE_SIZE - tile size for mapproject (default 2048).
-#   NO_MOSAIC - when set, skip the per-chunk dem_mosaic --max step.
+#   NO_MOSAIC - 0/1 flag: 1 skips the per-chunk dem_mosaic --max step; 0 or
+#               unset builds it.
 #   IMG_DIR / IMG_EXT - input image dir and extension (defaults img / .cal.echo.cub).
 #   EXTRA_OPTS - any additional flags forwarded to mapproject.
 
@@ -56,7 +57,7 @@ fi
 
 # Set up the paths
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-$HOME/miniconda3/envs/asp_deps}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
 export PATH=$ASPROOT/bin:$ASPROOT/libexec:$ISISROOT/bin:$PATH
@@ -175,12 +176,16 @@ for raw_entry in $(sed -n "$((beg + 1)),${end}p" "$imageList" | awk '{print $1}'
 
 done
 
-# Per-chunk max-lit mosaic. Skipped in native-resolution mode (NO_MOSAIC),
-# where frames are on differing grids and a per-chunk max-mosaic is moot.
-if [ -n "$NO_MOSAIC" ]; then
-  echo "NO_MOSAIC set: skipping per-chunk dem_mosaic" >> "$out"
-  exit 0
-fi
+# Per-chunk max-lit mosaic. NO_MOSAIC is a 0/1 flag: 1 (or yes/true/on) skips
+# the per-chunk dem_mosaic --max; 0 or unset builds it. Keep the max-lit ON for
+# small chunks (cheap, gives a per-chunk coverage quicklook); skip it for the
+# matches pipeline or native-resolution mode (frames on differing grids).
+case "${NO_MOSAIC:-0}" in
+  1|y|yes|true|on)
+    echo "NO_MOSAIC=$NO_MOSAIC: skipping per-chunk dem_mosaic" >> "$out"
+    exit 0
+    ;;
+esac
 
 # Collect existing non-empty maps
 mapList=${mapDir}/map_list_${beg}_${end}.txt
