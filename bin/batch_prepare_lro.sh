@@ -1,13 +1,25 @@
 #!/bin/bash
 # Head-node friendly batch ingest runner for LRO NAC images.
-# Processes one image at a time with 1 process, 1 thread, and a 10s sleep between new images.
-# Fully resumable with fast-skip logic: immediately skips already-finished products.
+# Processes one image at a time with 1 process, 1 thread, and a sleep between new
+# images (SLEEP_SECONDS, default 10). Fully resumable with fast-skip logic:
+# immediately skips already-finished products.
+#
+# Remote-server etiquette (ODE at oderest.rsl.wustl.edu + the PDS archive): this
+# runner is SERIAL, so one copy opens at most ONE download connection at a time.
+# To go faster, run a few copies on different nodes over DISJOINT sublists. The
+# invariant is simple and structural: number of concurrent copies = number of
+# concurrent connections. Keep that at most 3. Three serial copies match the 2-3
+# gentle paced streams the ODE/PDS archives expect and stay within NAS head-node
+# limits. Do NOT raise it, and do NOT add xargs -P / GNU parallel inside one copy.
 #
 # Usage:
 #   batch_prepare_lro.sh <list.txt> <out_dir> [--usgs-polar|--no-usgs-polar] [log_file]
 
 set -u
 umask 022
+
+# Pause between new images, overridable (never set below ~5 to stay polite).
+SLEEP_SECONDS="${SLEEP_SECONDS:-10}"
 
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <list.txt> <out_dir> [--usgs-polar|--no-usgs-polar] [log_file]"
@@ -61,7 +73,7 @@ while read -r pid; do
 
   echo "----- [$n/$total] $pid $(date) -----" | tee -a "$log_file"
   python3 "$tool" "$polar_flag" --outdir "$out_dir" "$pid" >> "$log_file" 2>&1
-  sleep 10
+  sleep "$SLEEP_SECONDS"
 done < "$list_file"
 
 echo "===== Batch Ingest Done: $(date). Output cubs: $(ls "$out_dir"/*.cub 2>/dev/null | wc -l) =====" | tee -a "$log_file"

@@ -18,9 +18,23 @@
 #   libLinearMath and the ISIS apps fail to load). Set ISISROOT + PATH + ISISDATA
 #   before --prep. lronac2isis needs no kernels; spiceinit/lronaccal need a
 #   populated ISISDATA (base + lro). See the lro-nac / isis-data skills.
+#
+# Remote-server etiquette: this tool opens exactly ONE connection at a time to
+# the ODE server and then to the PDS archive. Each curl identifies itself with a
+# User-Agent and retries with backoff, so a transient 5xx or an HTTP 429 (too many
+# requests) is honored politely rather than hammered. The only parallelism comes
+# from how many copies of this run at once. Keep that at most 3 (see
+# batch_prepare_lro.sh), which matches the 2-3 gentle streams the ODE/PDS archives
+# expect. Do NOT fan this out with xargs -P, GNU parallel, or many runners.
 
 set -e
 pid="$1"; outdir="${2:-.}"; prep=0
+
+# Polite, robust curl options, uniform for the ODE query and the IMG download.
+# --retry with backoff honors Retry-After on 429/503. -A identifies the client.
+# Pass -A "$ua" separately (the UA has a space) alongside $curl_common.
+ua="lro-nac-fetch/1.0 (ASP SfS pipeline)"
+curl_common="--connect-timeout 30 --retry 4 --retry-delay 5 --retry-connrefused"
 for a in "$@"; do [ "$a" = "--prep" ] && prep=1; done
 if [ -z "$pid" ] || [ "$pid" = "--prep" ]; then
   echo "Usage: $0 <PRODUCTID e.g. M167222041RE> [outdir] [--prep]"; exit 1
@@ -32,7 +46,7 @@ low=$(echo "$pid" | tr 'A-Z' 'a-z')
 pdsid="nac.${low}"
 q="https://oderest.rsl.wustl.edu/live2/?query=product&output=JSON&target=moon&ihid=LRO&iid=LROC&pt=EDRNAC4&pdsid=${pdsid}&results=pdf"
 echo "ODE query: $q"
-curl -sS "$q" -o "${pid}.ode.json"
+curl -sS $curl_common --max-time 120 -A "$ua" "$q" -o "${pid}.ode.json"
 url=$(python3 -c "
 import json,sys
 d=json.load(open('${pid}.ode.json'))
@@ -49,7 +63,7 @@ for f in pf:
 echo "IMG URL: $url"
 if [ ! -f "${pid}.IMG" ]; then
   echo "Downloading ${pid}.IMG ..."
-  curl -sS -L -o "${pid}.IMG" "$url"
+  curl -sS -L $curl_common --max-time 1800 -A "$ua" -o "${pid}.IMG" "$url"
 fi
 ls -la "${pid}.IMG"
 

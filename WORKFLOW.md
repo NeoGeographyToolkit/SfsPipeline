@@ -89,11 +89,12 @@ Confirm 100% valid and a half-integer origin with `gdalinfo -stats`.
 Query candidate NAC observations for the ROI, download the EDRs, and calibrate
 each to a `.cal.echo.cub` plus a CSM `.json` camera.
 
-Discovery is local and fast. Two front ends are available. Use either.
+Discovery finds the NAC observations covering the ROI and their ids and URLs. Two
+ways, use either.
 
-Cumulative-index front end: `make-index` builds geoparquet index files from
-`CUMINDEX.LBL`/`CUMINDEX.TAB` (about two minutes, embeds provenance),
-then `sfs-cover` selects the observations for an ROI polygon into a GeoPackage:
+Cumulative-index method (local, offline after a one-time index build). `make-index`
+builds geoparquet index files from `CUMINDEX.LBL`/`CUMINDEX.TAB` (about two minutes,
+embeds provenance), then `sfs-cover` selects the ROI polygon into a GeoPackage:
 
 ```bash
 make-index
@@ -103,7 +104,10 @@ sfs-cover \
   -t my_roi --gpkg my_roi.gpkg
 ```
 
-ODE front end (standalone, no index needed):
+ODE method (live network query, no index). `query_lro.sh` queries the PDS Orbital
+Data Explorer by DEM extent (`--dem`, optional `--margin-km`) or `--lat-lon` box,
+optionally filtering by incidence, and writes the `.IMG` URLs (`--output-urls`, for
+download) and the product ids (`--output-products`, for ingest):
 
 ```bash
 query_lro.sh --dem ref/lola_1mpp.tif --margin-km 1.0 \
@@ -111,30 +115,45 @@ query_lro.sh --dem ref/lola_1mpp.tif --margin-km 1.0 \
   --output-urls lists/urls.txt --output-products lists/products.txt
 ```
 
-Download the EDRs on a front end, which has network access. Roughly 600 GB
-completes in 10 to 15 minutes. From a GeoPackage, `db_to_urls.sh` emits the IMG
-URLs. Pass `im` to use the IM server and avoid billing the USGS mirror.
+Download the EDRs on a front end (compute nodes have no network). A site is roughly
+600 GB and fetching it serially can take the better part of a day or more.
 
-```bash
-db_to_urls.sh my_roi.gpkg im | xargs -n 1 -P 8 -I {} wget {} -P img/
-```
-
-Alternatively, feed `download_all.sh` the ODE URL list.
+Fetch serially, one cube at a time, which is gentlest on the server:
 
 ```bash
 download_all.sh lists/urls.txt
 ```
 
-Batch ingest (fetch + lronac2isis + spiceinit + lronaccal + lronacecho +
-`isd_generate --reduction linear`). The linear ephemeris reduction shrinks each
-CSM `.json` about tenfold with sub-millimeter `cam_test` agreement, and these
-linear-reduced cameras are what ship at delivery. Suggested walltime 2:00:00:
+To speed this up, split `lists/urls.txt` into two or three sublists and launch
+one instance on each of a few NAS head nodes. More than three instances is not
+recommended.
+
+Less recommended is three parallel fetches at once, acceptable only against the CDN
+default or the `im` mirror, never the ODE service (`oderest.rsl.wustl.edu`) or ASU
+PDS node (`pds.lroc.asu.edu`), the primary archive:
 
 ```bash
+db_to_urls.sh my_roi.gpkg im | xargs -n 1 -P 3 -I {} wget {} -P img/
+```
+
+Batch ingest turns each id into a calibrated cube and CSM camera. Per id,
+`batch_prepare_lro.sh` runs: fetch the EDR `.IMG` (`fetch_lro_nac.sh`: ODE query
+then one download), `lronac2isis`, `spiceinit`, `lronaccal`, `lronacecho`, and
+`isd_generate --reduction linear` (the CSM `.json`, reduced linearly to about a
+tenth the size with sub-mm `cam_test` agreement, and these cameras ship at
+delivery). The runner is serial (one id, one process, one thread, `SLEEP_SECONDS`
+default 10 between) and resumable (skips finished ids).
+
+Run it under qsub. To go faster, split the id list the same way as above (two or
+three serial runners on separate front ends, no more), each writing `img/`. Walltime
+2:00:00 per runner:
+
+```bash
+split -n l/3 -d --additional-suffix=.txt lists/products.txt lists/part
 qsub -V -m n -r n -N calib -q normal \
   -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=40:model=cas_ait -l walltime=2:00:00 \
-  -- batch_prepare_lro.sh lists/products.txt img $(pwd)
+  -- batch_prepare_lro.sh lists/part00.txt img $(pwd)
 ```
 
 ### 2a. USGS-registered (controlled) south-polar images
