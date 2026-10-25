@@ -213,7 +213,10 @@ def query_ode_products(minlat, maxlat, westlon, eastlon,
       break
 
     prods_block = ode.get("Products")
-    if not prods_block:
+    # ODE returns Products as an empty or non-empty string (not a dict) on an
+    # empty or trailing page, e.g. once the offset passes the available count.
+    # Treat any non-dict Products as end-of-results and stop paginating.
+    if not prods_block or not isinstance(prods_block, dict):
       break
     prods = prods_block.get("Product", [])
     if isinstance(prods, dict):
