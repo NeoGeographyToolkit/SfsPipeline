@@ -137,6 +137,45 @@ qsub -V -m n -r n -N calib -q normal \
   -- batch_prepare_lro.sh lists/products.txt img $(pwd)
 ```
 
+### 2a. USGS-registered (controlled) south-polar images
+
+For the Lunar South Pole a large set of NAC images has USGS-provided, well-registered
+camera geometry (bundle-adjusted and controlled to LOLA). Holding these fixed in the
+first bundle adjustment (section 5b) registers the rest of the cameras to the LOLA frame
+without a separate alignment step.
+
+The list of registered images ships in this repo:
+`data/updated_SPole_2023_ImageGCPAdd_root.lis` (18323 NAC root ids, LE and RE, acquired
+July 2009 to August 2013). Find the registered subset for a site by intersecting it with
+the site's NAC candidate list:
+
+```bash
+M=data/updated_SPole_2023_ImageGCPAdd_root.lis
+grep -Fxf "$M" lists/products.txt | sort -u > lists/usgs_registered.txt
+```
+
+Build the registered CSM cameras by running `spiceinit` with the USGS polar SPICE kernels
+and regenerating the camera. For a fresh ingest, pass `--usgs-polar` to the batch ingest;
+for cubs already prepared with standard kernels, re-register a copy in place (no re-fetch)
+with `redo_spiceinit_usgs.sh`:
+
+```bash
+batch_prepare_lro.sh lists/usgs_registered.txt usgs_south --usgs-polar
+redo_spiceinit_usgs.sh lists/usgs_registered.txt img usgs_south $(pwd)
+```
+
+The matching polar SPICE kernels (CK `.bc` + SPK `.bsp`) are referenced by the
+`usgs_polar_ck.mk` / `usgs_polar_spk.mk` meta-kernels under `$ISISDATA/lro_south` on a
+populated ISIS data area, or can be downloaded from the USGS data release (south pole
+item): https://www.sciencebase.gov/catalog/item/688a51d7d4be02367c9c1271
+
+Data release citation: Weller, L.A., et al., 2025, Improved camera pointing and spacecraft
+ephemeris data for Lunar Reconnaissance Orbiter Camera (LROC) Narrow Angle Camera (NAC)
+images of the lunar poles: U.S. Geological Survey data release,
+https://doi.org/10.5066/P1OASYRV. See `data/README.md` for the full citation. The ASP
+documentation describes the registered-camera workflow:
+[Incorporation of well-registered images](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#usgs-reg).
+
 ## 3. Image selection and sorting by illumination
 
 Get each camera's Sun azimuth and sort the list by it, so that the later

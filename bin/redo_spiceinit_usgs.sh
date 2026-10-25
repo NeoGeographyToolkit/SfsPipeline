@@ -28,8 +28,8 @@
 #     outDir  - dir to write the USGS-registered <id>.cal.echo.cub + .json
 #     workDir - dir to cd into first (all paths are relative to it)
 #
-# Env overrides (sensible pfe defaults):
-#   ISISROOT   full ISIS env with spiceinit + isd_generate (default isis10)
+# Env overrides (same defaults as prepare_lro_nac.py; set these for your system):
+#   ISISROOT   full ISIS env with spiceinit + isd_generate
 #   ISISDATA   populated ISIS kernel tree, must contain lro_south/usgs_polar_*.mk
 #   ASPROOT    ASP build whose bin/ wrapper runs cam_test
 
@@ -48,7 +48,7 @@ outDir="$3"
 workDir="$4"
 cd "$workDir" || { echo "Cannot cd to $workDir"; exit 1; }
 
-ISISROOT="${ISISROOT:-/swbuild/oalexan1/miniconda3/envs/isis10}"
+ISISROOT="${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}"
 ISISDATA="${ISISDATA:-$HOME/projects/isis3data}"
 ASPROOT="${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}"
 export ISISROOT ISISDATA
