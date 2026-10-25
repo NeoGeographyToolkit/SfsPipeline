@@ -166,15 +166,13 @@ redo_spiceinit_usgs.sh lists/usgs_registered.txt img usgs_south $(pwd)
 
 The matching polar SPICE kernels (CK `.bc` + SPK `.bsp`) are referenced by the
 `usgs_polar_ck.mk` / `usgs_polar_spk.mk` meta-kernels under `$ISISDATA/lro_south` on a
-populated ISIS data area, or can be downloaded from the USGS data release (south pole
-item): https://www.sciencebase.gov/catalog/item/688a51d7d4be02367c9c1271
+populated ISIS data area, or can be downloaded from the [USGS data release (south pole item)](https://www.sciencebase.gov/catalog/item/688a51d7d4be02367c9c1271).
 
 Data release citation: Weller, L.A., et al., 2025, Improved camera pointing and spacecraft
 ephemeris data for Lunar Reconnaissance Orbiter Camera (LROC) Narrow Angle Camera (NAC)
-images of the lunar poles: U.S. Geological Survey data release,
-https://doi.org/10.5066/P1OASYRV. See `data/README.md` for the full citation. The ASP
-documentation describes the registered-camera workflow:
-[Incorporation of well-registered images](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#usgs-reg).
+images of the lunar poles: [U.S. Geological Survey data release](https://doi.org/10.5066/P1OASYRV).
+See [data/README.md](data/README.md) for the full citation. The registered-camera workflow is
+described in the ASP documentation under [Incorporation of well-registered images](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#usgs-reg).
 
 ## 3. Image selection and sorting by illumination
 
