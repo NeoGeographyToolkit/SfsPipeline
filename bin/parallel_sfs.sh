@@ -43,6 +43,9 @@ fi
 if [ "$shadowThresh" = "" ]; then
   shadowThresh=0.005
 fi
+# smoothness weight, overridable via the SMOOTHNESS env var (default is the
+# historical 0.08; lower values let SfS add more fine detail).
+SMOOTHNESS=${SMOOTHNESS:-0.08}
 
 echo dem=$dem
 echo numCpu=$numCpu
@@ -54,6 +57,7 @@ echo currDir=$currDir
 echo demWeight=$demWeight
 echo shadowThresh=$shadowThresh
 echo lowLightThresh=$lowLightThresh
+echo SMOOTHNESS=$SMOOTHNESS
 
 # Set up the paths
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
@@ -171,7 +175,7 @@ parallel_sfs                                   \
     --blending-dist 10                         \
     --min-blend-size 50                        \
     --threads 8                                \
-    --smoothness-weight 0.08                   \
+    --smoothness-weight ${SMOOTHNESS}          \
     --initial-dem-constraint-weight $demWeight \
     --reflectance-type 1                       \
     --max-iterations 5                         \
