@@ -89,25 +89,11 @@ Confirm 100% valid and a half-integer origin with `gdalinfo -stats`.
 Query candidate NAC observations for the ROI, download the EDRs, and calibrate
 each to a `.cal.echo.cub` plus a CSM `.json` camera.
 
-Discovery finds the NAC observations covering the ROI and their ids and URLs. Two
-ways, use either.
-
-Cumulative-index method (local, offline after a one-time index build). `make-index`
-builds geoparquet index files from `CUMINDEX.LBL`/`CUMINDEX.TAB` (about two minutes,
-embeds provenance), then `sfs-cover` selects the ROI polygon into a GeoPackage:
-
-```bash
-make-index
-sfs-cover \
-  --db_path lroc_cumulative_south_polar.parquet \
-  -p "POLYGON((72471 158818,128309 158818,128309 119030,72471 119030,72471 158818))" \
-  -t my_roi --gpkg my_roi.gpkg
-```
-
-ODE method (live network query, no index). `query_lro.sh` queries the PDS Orbital
-Data Explorer by DEM extent (`--dem`, optional `--margin-km`) or `--lat-lon` box,
-optionally filtering by incidence, and writes the `.IMG` URLs (`--output-urls`, for
-download) and the product ids (`--output-products`, for ingest):
+Discovery finds the NAC observations covering the ROI and their ids and URLs.
+`query_lro.sh` queries the PDS Orbital Data Explorer by DEM extent (`--dem`,
+optional `--margin-km`) or `--lat-lon` box, optionally filtering by incidence, and
+writes the `.IMG` URLs (`--output-urls`, for download) and the product ids
+(`--output-products`, for ingest):
 
 ```bash
 query_lro.sh --dem ref/lola_1mpp.tif --margin-km 1.0 \
@@ -126,15 +112,9 @@ download_all.sh lists/urls.txt
 
 To speed this up, split `lists/urls.txt` into two or three sublists and launch
 one instance on each of a few NAS head nodes. More than three instances is not
-recommended.
-
-Less recommended is three parallel fetches at once, acceptable only against the CDN
-default or the `im` mirror, never the ODE service (`oderest.rsl.wustl.edu`) or ASU
-PDS node (`pds.lroc.asu.edu`), the primary archive:
-
-```bash
-db_to_urls.sh my_roi.gpkg im | xargs -n 1 -P 3 -I {} wget {} -P img/
-```
+recommended, and never run parallel fetches against the ODE service
+(`oderest.rsl.wustl.edu`) or the ASU PDS node (`pds.lroc.asu.edu`), the primary
+archive.
 
 Batch ingest turns each id into a calibrated cube and CSM camera. Per id,
 `batch_prepare_lro.sh` runs: fetch the EDR `.IMG` (`fetch_lro_nac.sh`: ODE query
@@ -215,27 +195,6 @@ reads the `sfs_query.sh` table) to judge how the illumination clusters and wheth
 coverage is representative. At the poles the low Sun is usually strongly clustered,
 often bimodal with near-empty gaps, which matters later when forming subset groups.
 
-Camera-graph connectivity (optional, a useful downselect): refresh the
-GeoPackage footprints to the actual mapprojected, shadow-masked extents, then
-check connectivity with `find-image-overlaps`. The matcher in bundle adjustment
-is the azimuth-sort plus `--overlap-limit`, not this overlap graph, but the graph
-is a good way to find and drop images that cannot connect. After mapprojection
-(step 4):
-
-```bash
-source sfs_utilities.sh
-collect_geojson_stream img 'map.mask.geojson' > mask_footprints.geojson
-update-db SOURCE.gpkg my_roi_mask.gpkg mask_footprints.geojson
-find-image-overlaps --check_connectivity -d ./my_roi_mask.gpkg --max_diff_slrgaz=8
-```
-
-Here `--max_diff_slrgaz` is the sub-solar ground-azimuth difference over which
-connectivity is reported. `find-image-overlaps` reports `is_connected`,
-`num_components`, and `component_sizes` (largest first). Raise `--max_diff_slrgaz`
-until the graph is a single connected component without producing too many pairs
-(6 to 8 degrees is usually a good range). Images outside the largest component are
-dropped.
-
 ## 4. Mapprojection
 
 Mapproject every image onto the reference DEM. `batch_mapproject.sh` slices the
@@ -259,6 +218,13 @@ batch_mapproject.sh ref/lola_1mpp.tif \
 ## 5. Bundle adjustment
 
 ### 5a. Matches-only harvest
+
+Ensure we make use of all available images that are relevant for this site,
+and that they are sorted by illumination.
+
+Eliminate all raw images that do not produce a mapprojected image, or if the
+statistics show no valid pixels. The kept images are saved to
+`lists/filtered_map.txt`.
 
 Harvest interest-point matches with `NUM_ITERATIONS=0` (no drift-prone free
 solve yet). We use our own IP detection (`--ip-detect-method 0`, OBALoG, which
@@ -777,12 +743,4 @@ which lists the 25th-percentile convergence angle (column 2) and the match count
 ```bash
 stereo-from-ba baD/baD bundle_adjust_components.json --use_ba_mapproj_tifs \
   --max_residual_error 1.25 --max_mapproj_error 1.75 > STEREO_PAIR_LIST.txt
-```
-
-### Collecting mapprojected footprints into a GeoPackage
-
-```bash
-source bin/sfs_utilities.sh
-collect_geojson ./IMAGES 'map.mask.geojson' > all_mask_footprints.geojson
-update-db ./footprints.gpkg ./shadow_mask_footprints.gpkg ./all_mask_footprints.geojson
 ```
