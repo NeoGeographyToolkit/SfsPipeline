@@ -385,12 +385,16 @@ direction as its own whole group, drop empty slices, and merge a lone stray fram
 into the adjacent slice. Do not blind-cut into four 90-degree quadrants. Each slice
 is then thinned by `image_subset` (a crowded angle is thinned hardest, since it
 only has to fill the same ground), for a primary cover plus an extra (2x) cover on
-the remainder, driven by `sfs_select_full_site.sh` over low-resolution sub images
-(`prepare_lowres.sh`). Validate with a max-lit of the selection against the
-full-set max-lit.
+the remainder, driven by `sfs_select_full_site.sh` over low-resolution sub8 images.
+Build the sub8 copies with `make_sub8.sh` (`gdal_translate -outsize 12.5% -r average`,
+which preserves the data type and georeferencing so the reduced images stay
+registered). The old `prepare_lowres.sh` stereo_gui-pyramid path is retired, as
+stereo_gui no longer writes `_subN.tif` pyramids. Validate with a max-lit of the
+selection against the full-set max-lit.
 
 ```bash
-sfs_select_full_site.sh lists/filtered_map.txt lists/azimuth.txt selection $(pwd) 0.05 28
+make_sub8.sh lists/filtered_map.txt sub8 lists/sub8_map.txt $(pwd)
+sfs_select_full_site.sh lists/filtered_map.txt lists/azimuth.txt selection $(pwd) 0.01 28
 ```
 
 Note on GSD: coarse frames hurt SfS and the max-lit mosaic. Ground area per pixel
@@ -405,9 +409,14 @@ only as a last resort where it is the sole cover (gate on coverage holes first).
 Drop only from the SfS subset, never from the bundle solve, where the large
 footprints are tie-point coverage assets.
 
-The `image_subset` coverage threshold (last arg above) starts at a low value. If it
-barely thins, raising it to roughly 0.05 to 0.1 is usually wise, but that changes
-which images SfS sees, so decide it deliberately rather than bumping it silently.
+The `image_subset` coverage threshold (last arg above) should stay at 0.01 for a
+shadow-calibrated reflectance like LRO NAC, where the lit/shadow cutoff is about
+0.005, so 0.01 means weak-but-solidly-lit. It will not thin the set dramatically,
+and that is correct: at a grazing polar site much real terrain is only ever weakly
+lit, and raising the threshold drops genuinely-lit terrain the SfS solve needs. The
+lever for fewer images is the grouping, not the threshold. Change it only as a
+deliberate user decision, tuning by clicking pixel values in stereo_gui, never
+raising it on your own to thin more.
 
 ```bash
 query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt ref/lola_1mpp.tif \

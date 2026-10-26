@@ -11,10 +11,14 @@
 # image is judged only on how it covers that box. All inputs must share one projection.
 #
 # image_subset is slow (O(n^2 * output pixels)) and reads each image fully into memory:
-# feed it LOW-RES sub images (see prepare_lowres.sh) and 50-150 images per call (split by
+# feed it LOW-RES sub8 images (see make_sub8.sh) and 50-150 images per call (split by
 # quadrant and Sun azimuth first). Threshold: a pixel >= threshold counts as covered.
-# 0.01 is the ASP default but is often too permissive (keeps nearly everything); try
-# 0.05-0.1 to actually thin the set, and tune by clicking pixel values in stereo_gui.
+# Use 0.01 (the ASP default) for a shadow-calibrated reflectance like LRO NAC, where the
+# lit/shadow max cutoff is ~0.005, so 0.01 = weak-but-solidly-lit. It will NOT thin
+# dramatically, and that is correct: at a grazing polar site much real terrain is only
+# ever weakly lit. Do NOT raise it to "thin more" (that drops genuinely-lit terrain SfS
+# needs). The lever for fewer images is the GROUPING, not the threshold. Changing it is a
+# USER decision: tune by clicking pixel values in stereo_gui, never raise it on your own.
 #
 # Usage: image_subset_2x.sh <lowresList> <outPrefix> <currDir> [threshold] [projwin]
 #   projwin (optional): "xmin ymin xmax ymax" (unquoted 4 numbers passed to --t_projwin)

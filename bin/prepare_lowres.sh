@@ -1,4 +1,9 @@
 #!/bin/bash
+# RETIRED - use make_sub8.sh instead. This built low-res inputs from stereo_gui
+# image pyramids, but stereo_gui no longer writes _subN.tif pyramids (it uses an
+# on-the-fly overlay), so this path no longer produces anything. make_sub8.sh builds
+# the sub8 copies directly with gdal_translate -outsize 12.5% -r average.
+#
 # Prepare low-resolution mapprojected images for image_subset coverage selection.
 #
 # For each full-res mapprojected tif, ensure its stereo_gui pyramid exists, then pick
