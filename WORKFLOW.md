@@ -442,12 +442,13 @@ mean dz near zero, sub-meter std, and no tile seams.
 
 ## 9. Re-register the SfS terrain to LOLA
 
-The SfS DEM can carry a residual, spatially-varying shift against LOLA. Measure
-it, and if it is real, re-register the cameras and redo SfS. This per-line GCP
-re-registration is the committed final refine. `jitter_solve.sh` (no GCP) is only
-for removing intrinsic jitter when there is no re-registration target.
+The SfS DEM can carry a residual shift against LOLA. Measure it, and if it is real,
+re-register the cameras and redo SfS. This GCP re-registration (a bundle adjustment for a
+uniform shift, a per-line jitter solve for a spatially structured one, see below) is the
+committed final refine. `jitter_solve.sh` (no GCP) is only for removing intrinsic jitter
+when there is no re-registration target.
 
-Measure the shift two ways. Per image, render an SfS-simulated view, `image_align`
+Measure the shift two ways. Per image, [render an SfS-simulated view](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-sim), `image_align`
 it to the real mapprojected image, and record the pixel shift (set `ALIGN_THRESH=0`
 to force a GCP for every image, not just the large-shift ones):
 
@@ -467,10 +468,10 @@ qsub -V -m n -r n -N sim_align -W group_list=$groupName -j oe -S /bin/bash \
      ba_htdem sim_eval $(pwd)
 ```
 
-Globally, correlate the SfS and LOLA hillshades (ASP `hillshade -e 10`, grazing,
-which gives more valid disparity than a washed-out multidirectional hillshade),
-and read the robust median of the dx/dy disparity (ignore the pc_align matrix, an
-origin-vs-centroid artifact). Add `geodiff` for dz:
+Globally, [correlate the SfS and LOLA hillshades](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-align-refine)
+(ASP `hillshade -e 10`, grazing, which gives more valid disparity than a washed-out
+multidirectional hillshade), and read the robust median of the dx/dy disparity (ignore the
+pc_align matrix, an origin-vs-centroid artifact). Add `geodiff` for dz:
 
 ```bash
 qsub -V -m n -r n -N hcorr -W group_list=$groupName -j oe -S /bin/bash \
@@ -487,17 +488,49 @@ elevation over 1 m pixels, yields a flat textureless raster and the correlation 
 produces no tiles and no run-F. Note the correlator can exit 0 with no output in that
 failure mode, so always confirm run-F exists and run-D is megabytes, not bytes.
 
-If the shift is real (a roughly uniform few meters beyond LOLA's own uncertainty), turn
-the disparity into a GCP with `dem2gcp.sh` and run the GCP-driven per-line refine
-`jitter_gcp.sh`. A rigid `bundle_adjust` under-corrects a spatially-structured
-shift because the dense match network pins the relative geometry. The per-line
-flex of jitter reproduces the structure a rigid shift cannot.
+If the shift is real (beyond LOLA's own uncertainty), turn the disparity into a GCP with
+[`dem2gcp.sh`](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-gcp), then
+re-solve the cameras against it. There are two ways, chosen by how the shift looks in the
+dh/dv maps.
+
+Bundle adjustment can be used to fix any systematic offset observed in the disparity. It
+corrects a single shift in each of the horizontal and vertical disparity, which is usually
+sufficient for sites on the order of 5 to 10 km on a side. It is the simpler, cheaper path
+and is the right one when the shift is close to uniform, that is, its MAD is small next to
+its median. Use `bundle_adjust_dem_gcp.sh`.
+
+The jitter solver gives a finer-grained, per-line correction if desired, but it is more
+technically involved. It is the one to reach for when the shift is spatially structured,
+that is, its MAD is comparable to or larger than its median. A rigid bundle under-corrects a
+structured shift because the dense match network pins the relative geometry, while the
+per-line flex of [`jitter_gcp.sh`](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-jitter)
+reproduces the structure a rigid shift cannot. After either re-solve, [validate](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-reg-valid)
+by correlating the old and new max-lit mosaics (`SKIP_HILLSHADE=1`): the old-to-new dh/dv
+should reproduce the SfS-to-LOLA dh/dv in sign and magnitude. If the bundle under-moves, it can be
+iterated (dem2gcp then bundle again on the new cameras), as the residual shrinks each pass.
+
+Either way, first create the GCP:
 
 ```bash
 dem2gcp.sh sfs_dem.tif ref/lola_1mpp.tif hcorr_sfs_lola/run-F.tif \
   ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt ba_htdem/run 20 \
   sfs_ref_corr/run.gcp $(pwd)
 ```
+
+For the bundle path (uniform shift), re-solve the cameras against the GCP. It reuses the
+clean match network, holds the camera positions loosely (`CAM_POS_UNC`, default 20,20,
+applied through the script default rather than `-v` since its comma would break the qsub
+variable list), and constrains heights to LOLA:
+
+```bash
+qsub -V -m n -r n -N ba_gcp -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=1:ncpus=28:model=bro_ele -l walltime=4:00:00 \
+  -v "DEM_UNCERTAINTY=20,MAX_GCP_TO_TRI_RATIO=2.0" \
+  -- bundle_adjust_dem_gcp.sh ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt \
+     ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run bundle_gcp $(pwd)
+```
+
+For the jitter path (structured shift), run the per-line refine instead, as below.
 
 Run the jitter re-registration over the full image set, the same list as bundle
 adjustment, never the thinned SfS subset. The dense tie-point network is what the
