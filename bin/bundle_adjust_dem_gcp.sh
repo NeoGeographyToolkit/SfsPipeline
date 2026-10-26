@@ -76,9 +76,13 @@ ratioOpt=""
 if [ "${MAX_GCP_TO_TRI_RATIO:-}" != "" ]; then
   ratioOpt="--max-gcp-to-tri-points-ratio ${MAX_GCP_TO_TRI_RATIO}"
 fi
-# Optional loose camera-position clamp (all cameras). Only added when set.
+# Loose camera-position clamp (all cameras), default 20,20 meters (hor,vert). It keeps weak
+# cameras from flying off while the GCPs move the block toward the reference. Override with
+# CAM_POS_UNC, or set it to "none" to disable the clamp entirely. Note the comma in the
+# value breaks a qsub -v list, so set it through the environment, not -v.
+CAM_POS_UNC=${CAM_POS_UNC:-"20,20"}
 camPosOpt=""
-if [ "${CAM_POS_UNC:-}" != "" ]; then
+if [ "${CAM_POS_UNC}" != "" ] && [ "${CAM_POS_UNC}" != "none" ]; then
   camPosOpt="--camera-position-uncertainty ${CAM_POS_UNC}"
 fi
 
