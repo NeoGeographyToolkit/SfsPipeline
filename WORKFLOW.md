@@ -216,15 +216,18 @@ batch_mapproject.sh ref/lola_1mpp.tif \
 
 ### Filter out bad images
 
-Mapproject skips a frame whose footprint misses the DEM (no file is written) and
-can emit an all-nodata tile for a frame that barely clips it. Either kind must be
-filtered out before bundle adjustment: a single all-nodata tile fails the
-image-statistics step and aborts the whole run (the failure is intentional, the
-filtering is what keeps bad images out). Build the mapprojected list in azimuth
-order, then filter with `filter_by_max.sh`, which drops any tile that is missing
-or whose maximum is below the lit-vs-shadow cutoff (0.005 for calibrated LRO NAC,
-the same value as the SfS shadow threshold). An all-nodata tile yields no maximum
-and is dropped. The kept paths land in `lists/filtered_map.txt` in azimuth order.
+Two kinds of images must be filtered out before bundle adjustment: any image that
+failed to mapproject (its footprint misses the DEM, so no file is written) and any
+image that mapprojected with no valid data (all-nodata, from an image that barely
+overlaps with the DEM).
+
+An all-nodata mapprojected image will result in failure of bundle adjustment, so
+it should be taken out ahead of time. Build the mapprojected list in Sun azimuth
+order, then filter with `filter_by_max.sh`, which drops any mapprojected image
+that is missing or whose maximum is below the lit-vs-shadow cutoff (0.005 for
+calibrated LRO NAC, the same value as the SfS shadow threshold). An all-nodata
+image yields no maximum and is dropped. The kept paths land in
+`lists/filtered_map.txt` in azimuth order.
 
 ```bash
 cat lists/azimuth_images.txt                                             \
@@ -241,7 +244,8 @@ Ensure we make use of all available images that are relevant for this site,
 and that they are sorted by illumination.
 
 `lists/filtered_map.txt` is the filtered, azimuth-sorted mapprojected list built
-in section 4 (missing and all-nodata tiles already removed). It is the input here.
+in section 4 (any image that did not mapproject and any with no valid data
+already removed). It is the input here.
 
 Harvest interest-point matches with `NUM_ITERATIONS=0` (no drift-prone free
 solve yet). We use our own IP detection (`--ip-detect-method 0`, OBALoG, which
