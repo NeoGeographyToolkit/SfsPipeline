@@ -67,7 +67,10 @@ ulimit -c 0
 
 mkdir -p "${mapDir}"
 
-out="output_${mapDir}_${beg}_${end}.txt"
+# Use only the last component of mapDir in the log name. This log is written in
+# currDir, so an absolute mapDir would inject slashes into the name and point the
+# redirect below at a nonexistent directory, failing the whole chunk in seconds.
+out="output_$(basename "$mapDir")_${beg}_${end}.txt"
 echo "Will write the output to $out"
 
 rm -f "$out"

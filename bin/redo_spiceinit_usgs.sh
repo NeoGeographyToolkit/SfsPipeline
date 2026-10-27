@@ -21,6 +21,12 @@
 # kernels only, no internet, so this can also be qsubbed to a compute node).
 # Resumable: skips ids whose output .json already exists and is non-trivial.
 #
+# Writes, in outDir, usgs_built_<idList>.txt: the ids whose registered camera built
+# successfully (a non-trivial json). This is the authoritative success list, since
+# a few in-window ids can still fail the polar spiceinit. Aggregate these files
+# across sublists to form the fixed-camera list for bundle adjustment. The ids that
+# fail are simply absent, and stay in the solve later with their plain cameras.
+#
 # Usage:
 #   redo_spiceinit_usgs.sh <idList> <srcDir> <outDir> <workDir>
 #     idList  - file of LRO NAC product ids (one per line, e.g. M123456789LE)
@@ -67,6 +73,12 @@ done
 
 mkdir -p "$outDir"
 
+# Authoritative list of ids whose registered camera built. Named by the input
+# sublist so parallel instances sharing outDir do not race on one file. Truncated
+# at the start so each run regenerates the full list for its sublist.
+builtList="$outDir/usgs_built_$(basename "$idList" .txt).txt"
+: > "$builtList"
+
 total=$(grep -c . "$idList" || true)
 echo "redo_spiceinit_usgs: $total ids, src=$srcDir out=$outDir, $(date)"
 n=0; ok=0; miss=0; fail=0
@@ -82,6 +94,7 @@ while read -r id; do
 
   if [ -f "$outJson" ] && [ "$(wc -c < "$outJson")" -gt 1000 ]; then
     ok=$((ok + 1))
+    echo "$id" >> "$builtList"
     continue
   fi
   if [ ! -f "$srcCub" ]; then
@@ -128,6 +141,7 @@ PYEOF
 
   if [ -f "$outJson" ] && [ "$(wc -c < "$outJson")" -gt 1000 ]; then
     ok=$((ok + 1))
+    echo "$id" >> "$builtList"
   else
     echo "  output json missing/too small after run"
     fail=$((fail + 1))
@@ -135,3 +149,4 @@ PYEOF
 done < "$idList"
 
 echo "redo_spiceinit_usgs DONE $(date): ok=$ok missing=$miss failed=$fail of $n processed"
+echo "Successfully-built ids written to $builtList"

@@ -168,6 +168,11 @@ batch_prepare_lro.sh lists/usgs_registered.txt usgs_south --usgs-polar
 redo_spiceinit_usgs.sh lists/usgs_registered.txt img usgs_south $(pwd)
 ```
 
+A few registered ids can fail the polar spiceinit even though they are in-window,
+so not every id on the list gets a registered camera. `redo_spiceinit_usgs.sh`
+records the ids that built in `usgs_south/usgs_built_*.txt`. That is the list to
+trust, and it feeds the fixed-camera list assembled in section 5b.
+
 The matching polar SPICE kernels (CK `.bc` + SPK `.bsp`) are referenced by the
 `usgs_polar_ck.mk` / `usgs_polar_spk.mk` meta-kernels under `$ISISDATA/lro_south` on a
 populated ISIS data area, or can be downloaded from the [USGS data release (south pole item)](https://www.sciencebase.gov/catalog/item/688a51d7d4be02367c9c1271).
@@ -190,9 +195,14 @@ value to judge it by.
 sfs_query.sh img/*.cal.echo.cub > lists/azimuth_tables.txt
 sort -k3,3 -n lists/azimuth_tables.txt > lists/azimuth.txt
 awk '{print $1}' lists/azimuth.txt > lists/azimuth_images.txt
+sed 's/\.cub$/.json/' lists/azimuth_images.txt > lists/azimuth_cameras.txt
 ```
 
-Keep every `lists/*.txt` in azimuth order and 1-to-1 between images and cameras.
+`lists/azimuth_cameras.txt` holds the plain CSM cameras, one per line matching
+`lists/azimuth_images.txt`. These are what mapprojection (section 4) and the match
+harvest (section 5a) use. The registered USGS cameras enter only at the 5b fixed
+stage. Keep every `lists/*.txt` in azimuth order and 1-to-1 between images and
+cameras.
 
 Visualize the azimuth distribution as a polar rose with `plot_sfs_azimuth.py` (it
 reads the `sfs_query.sh` table) to judge how the illumination clusters and whether
@@ -210,6 +220,11 @@ variables. Chunks finish in a few hours at most.
 Leave `TR` unset so mapproject uses `--tr 1` and names outputs
 `<id>.cal.echo.map.tr1.tif`, which is what `bundle_adjust.sh` expects (setting
 `TR=1` names them `.map.tif` and bundle adjust then finds none).
+
+A chunk skips any output that already exists and is non-empty, so re-running into
+the same directory resumes an interrupted mapprojection and fills only the gaps.
+The flip side: when the cameras or the input list change, point it at a fresh
+output directory, or stale tiles from the old run are silently kept.
 
 ```bash
 export QSUB_BIN=/PBS/bin/qsub
@@ -290,6 +305,19 @@ single-node job. Each waits for the previous. Suggested walltime 8:00:00 each
   stage 1's clean matches so the network settles. It feeds on `ba_fix`.
 - **Stage 3, heights-from-dem.** A final tighten to the reference terrain. It
   feeds on `ba_free` and reuses stage 1's clean matches.
+
+Stage 1 holds the registered cameras fixed. Build `lists/usgs_fixed_images.txt`
+from the registered cameras that actually built, which `redo_spiceinit_usgs.sh`
+recorded in `usgs_south/usgs_built_*.txt`, keeping only those also present in the
+filtered image list so every fixed image is in the solve. The handful that failed
+the polar spiceinit are absent here and stay in as free images with their plain
+cameras.
+
+```bash
+cat usgs_south/usgs_built_*.txt | sort -u > lists/usgs_built_ids.txt
+grep -F -f lists/usgs_built_ids.txt lists/filtered_images.txt \
+  > lists/usgs_fixed_images.txt
+```
 
 ```bash
 qsub -V -m n -r n -N ba_fix -W group_list=$groupName -j oe -S /bin/bash \
@@ -373,6 +401,12 @@ the gap, so pruning loses no coverage. Confirm by differencing the pruned max-li
 against the full one. The difference should be a tiny fraction of pixels confined
 to those footprints, with the scene-wide sharpness unchanged.
 
+A frame with a detector readout stripe is another case the geometric stats miss.
+It is well-registered (good offset, match count, and reprojection) yet shows fine
+parallel diagonal lines in the max-lit. Only visual inspection catches it, and it
+must be dropped from the SfS solve, not just the mosaic, since it injects false
+intensities into the terrain.
+
 Verify a couple of flagged cameras visually before pruning, and after rebuilding
 confirm the streaks are gone and the terrain did not move.
 
@@ -402,7 +436,10 @@ Note on GSD: coarse frames hurt SfS and the max-lit mosaic. Ground area per pixe
 scales as GSD squared, so a 2 m/pixel frame covers about 4x the real estate of a
 1 m/pixel one, which is exactly why `image_subset`'s coverage-greedy ranking tends
 to prefer the coarse frame when a finer one would be better. `query_gsd.sh` reports
-each image's native ground sample distance. It also correlates with high
+each image's native ground sample distance, read from the camera with
+`mapproject --query-projection` (the authoritative source, not the per-site ODE
+tables, which omit images pulled in from an adjacent-site query). It also
+correlates with high
 `mapproj_match_offset` (partly a coarseness proxy), so the coarsest tend to be
 caught by the prune in step 6. Treat GSD over about 1.75 m as suspect and over 2 m
 as a drop from the SfS subset, preferring a finer frame and keeping a coarse one
@@ -454,6 +491,13 @@ per-tile worker, which bakes in the Lunar-Lambert reflectance, smoothness, and
 initial-DEM-constraint weights). Pass the exposures from 8a. A 4k tile is roughly
 6-10 h on 2 `bro_ele` nodes. Use the `long` queue. The trailing `0` is
 `estimError=0` (the SfS pass, no error map).
+
+The default smoothness weight is 0.08. For well-lit sites, lowering it to 0.04 or
+less can sharpen the result without introducing artifacts. Set it through the
+`SMOOTHNESS` env var.
+
+A walltime kill does not auto-requeue the tiles. Just resubmit the identical
+command: `parallel_sfs` resumes from the per-tile DEMs already written.
 
 ```bash
 export MODEL=bro_ele NCPUS=28 QUEUE=long WALLTIME=16:00:00
