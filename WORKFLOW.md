@@ -177,15 +177,14 @@ described in the ASP documentation under [Incorporation of well-registered image
 
 Get each camera's Sun azimuth and sort the list by it, so that the later
 `--overlap-limit` in bundle adjustment pairs images of similar illumination
-(matched shadows). Low-signal / shadowed frames are culled by their max value
-(0.005 is the LRO NAC lit-vs-shadow cutoff). Inspect the max-value distribution
-first and drop all-shadow and non-intersecting frames.
+(matched shadows). Low-signal and non-intersecting frames are filtered out after
+mapprojection (section 4), once each frame has a mapprojected footprint and a max
+value to judge it by.
 
 ```bash
 sfs_query.sh img/*.cal.echo.cub > lists/azimuth_tables.txt
 sort -k3,3 -n lists/azimuth_tables.txt > lists/azimuth.txt
 awk '{print $1}' lists/azimuth.txt > lists/azimuth_images.txt
-filter_by_max.sh lists/azimuth_map.txt lists/filtered_map.txt $(pwd) 0.005
 ```
 
 Keep every `lists/*.txt` in azimuth order and 1-to-1 between images and cameras.
@@ -215,6 +214,25 @@ batch_mapproject.sh ref/lola_1mpp.tif \
   lists/azimuth_images.txt ignored maps $(pwd) lists/azimuth_cameras.txt
 ```
 
+### Filter out bad images
+
+Mapproject skips a frame whose footprint misses the DEM (no file is written) and
+can emit an all-nodata tile for a frame that barely clips it. Either kind must be
+filtered out before bundle adjustment: a single all-nodata tile fails the
+image-statistics step and aborts the whole run (the failure is intentional, the
+filtering is what keeps bad images out). Build the mapprojected list in azimuth
+order, then filter with `filter_by_max.sh`, which drops any tile that is missing
+or whose maximum is below the lit-vs-shadow cutoff (0.005 for calibrated LRO NAC,
+the same value as the SfS shadow threshold). An all-nodata tile yields no maximum
+and is dropped. The kept paths land in `lists/filtered_map.txt` in azimuth order.
+
+```bash
+cat lists/azimuth_images.txt                                             \
+  | perl -p -e "s#^.*?(M\d+[LR]E).*?\n#maps/\$1.cal.echo.map.tr1.tif\n#" \
+  > lists/azimuth_map.txt
+filter_by_max.sh lists/azimuth_map.txt lists/filtered_map.txt $(pwd) 0.005
+```
+
 ## 5. Bundle adjustment
 
 ### 5a. Matches-only harvest
@@ -222,9 +240,8 @@ batch_mapproject.sh ref/lola_1mpp.tif \
 Ensure we make use of all available images that are relevant for this site,
 and that they are sorted by illumination.
 
-Eliminate all raw images that do not produce a mapprojected image, or if the
-statistics show no valid pixels. The kept images are saved to
-`lists/filtered_map.txt`.
+`lists/filtered_map.txt` is the filtered, azimuth-sorted mapprojected list built
+in section 4 (missing and all-nodata tiles already removed). It is the input here.
 
 Harvest interest-point matches with `NUM_ITERATIONS=0` (no drift-prone free
 solve yet). We use our own IP detection (`--ip-detect-method 0`, OBALoG, which
