@@ -47,6 +47,11 @@ qsub -V -m n -r n -N <name> -q normal \
   the compute node, causing workers to fall back to hardcoded default paths and
   fail. Submitter scripts that fan out per-chunk jobs (`batch_mapproject.sh`,
   `launch_sfs_tiles.sh`) forward these variables automatically.
+- In a `-v` list, every named variable must be set in the submitting shell.
+  `qsub` rejects the whole job if even one is unset. It prints a banner, emits no
+  job id, and nothing shows up in `qstat`. A single unset name silently breaks
+  every submission built from that list, so define all of them, or build the `-v`
+  list from only the variables that are set.
 - Gate each stage on the PBS job reaching `job_state=F`, never on an output file
   appearing (a product shows up while still half-written). Inspect each product
   (hillshade, geodiff, red/green overlay) before moving on, not ten steps later.
@@ -225,15 +230,24 @@ An all-nodata mapprojected image will result in failure of bundle adjustment, so
 it should be taken out ahead of time. Build the mapprojected list in Sun azimuth
 order, then filter with `filter_by_max.sh`, which drops any mapprojected image
 that is missing or whose maximum is below the lit-vs-shadow cutoff (0.005 for
-calibrated LRO NAC, the same value as the SfS shadow threshold). An all-nodata
-image yields no maximum and is dropped. The kept paths land in
-`lists/filtered_map.txt` in azimuth order.
+calibrated LRO NAC, the same value as the SfS shadow threshold).
+It also eliminates images with less than 0.2% valid pixels.
+
+`filter_by_max.sh` runs many parallel `gdalinfo` workers, so submit it as a short
+job, never inline on the head node.
+
+The kept images are recorded in `lists/filtered_map.txt`, in Sun azimuth order.
 
 ```bash
 cat lists/azimuth_images.txt                                             \
   | perl -p -e "s#^.*?(M\d+[LR]E).*?\n#maps/\$1.cal.echo.map.tr1.tif\n#" \
   > lists/azimuth_map.txt
-filter_by_max.sh lists/azimuth_map.txt lists/filtered_map.txt $(pwd) 0.005
+
+qsub -V -m n -r n -N filter_max -q normal \
+  -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=1:ncpus=28:model=bro_ele -l walltime=00:30:00 \
+  -v "PROCS=28" \
+  -- filter_by_max.sh lists/azimuth_map.txt lists/filtered_map.txt $(pwd) 0.005 0.2
 ```
 
 ## 5. Bundle adjustment
@@ -298,9 +312,9 @@ qsub -V -m n -r n -N ba_htdem -W group_list=$groupName -j oe -S /bin/bash \
 ```
 
 Stage 1 uses the raw harvested matches (the `NUM_ITERATIONS=0` clean matches are
-over-culled against un-optimized cameras). Stages 2 and 3 reuse stage 1's clean
-matches, which were filtered against a real registered solve. The final cameras
-are `ba_htdem/run-...-adjusted_state.json`.
+filtered too aggressively against un-optimized cameras). Stages 2 and 3 reuse
+stage 1's clean matches, which were filtered against a real registered solve. The
+final cameras are `ba_htdem/run-...-adjusted_state.json`.
 
 Validate each stage: the median reprojection error per camera in
 `<outDir>/run-final_residuals_stats.txt` should fall to about 1-2 px. Then check
@@ -568,7 +582,7 @@ pad) on the head node, or as a short devel job. It is a single-thread
 cubic-spline `gdalwarp` (`GDAL_NUM_THREADS=1`, no `-multi`), so it is
 head-node-compliant and finishes in one to two minutes even for a 25k by 18k
 output. A normal-queue `qsub` for this trivial regrid is wasteful and can land on
-a wedged node (a stuck job that even `qdel -W force` will not reap) while the
+a stuck node (a job that even `qdel -W force` will not remove) while the
 head-node run would have finished in under two minutes.
 
 ```bash
