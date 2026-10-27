@@ -42,10 +42,12 @@ binDir="$(cd "$(dirname "$0")" && pwd)"
 #   NCPUS          (28)              cpus per selected node;
 #                                    256 for tur_ath.
 #
-# Env var pass-through (forwarded to parallel_sfs.sh workers via -v):
-#   IMAGE_DIR / IMAGE_SUFFIX - default img / .cal.echo.cub. Set
-#     IMAGE_DIR=img IMAGE_SUFFIX=.cal.echo.cub (the default), where cubs live
-#     at img/<id>.cal.echo.cub.
+# Env var pass-through (forwarded to the parallel_sfs.sh workers through qsub -V,
+# which exports the whole submitting environment):
+#   IMAGE_DIR / IMAGE_SUFFIX - where the cubs live (img/<id>.cal.echo.cub). These
+#     are defaulted below (img / .cal.echo.cub) so they are always set. An UNSET
+#     name in a qsub -v list makes PBS reject the whole job with "cannot send
+#     environment with the job", silently - a banner, no job id, nothing in qstat.
 #
 # Example (regular run):
 #   cd /path/to/your/project
@@ -84,6 +86,13 @@ qsubBin=${QSUB_BIN:-/PBS/bin/qsub}
 model=${MODEL:-bro_ele}
 ncpus=${NCPUS:-28}
 
+# Worker image-location vars forwarded to parallel_sfs.sh. Default and export them so
+# they are ALWAYS set: an unset name in a qsub -v list makes PBS reject the whole job
+# ("cannot send environment with the job") silently. -V (used below) forwards all set
+# vars; defaulting these guarantees the worker finds the cubs at img/<id>.cal.echo.cub.
+export IMAGE_DIR=${IMAGE_DIR:-img}
+export IMAGE_SUFFIX=${IMAGE_SUFFIX:-.cal.echo.cub}
+
 cd $currDir
 umask 022
 
@@ -93,6 +102,10 @@ if [ ! -d "$tileDir" ]; then
 fi
 if [ ! -f "$exposuresFile" ]; then
     echo "ERROR: exposures file not found: $exposuresFile"
+    exit 1
+fi
+if [ -z "${groupName:-}" ]; then
+    echo "ERROR: set groupName (the PBS allocation / group_list) before submitting"
     exit 1
 fi
 
@@ -127,13 +140,23 @@ for tile in "${tiles[@]}"; do
     cp -f $exposuresFile $sfsDir/run-exposures.txt
     qFlag=""
     if [ -n "$queue" ]; then qFlag="-q $queue"; fi
-    $qsubBin $qFlag -V -m n -r n -N sfs${id}                    \
-        -l walltime=$walltime -W group_list=${groupName:?set groupName (PBS allocation) before submitting}                \
-        -j oe -S /bin/bash                                       \
-        -o $currDir/                                             \
-        -l select=${numNodes}:ncpus=${ncpus}:model=${model} --   \
-        $binDir/parallel_sfs.sh                                  \
-          $tile $numCpu $baPrefix $imageList $estimError         \
-          $sfsPrefix $currDir $demWeight $shadowThresh
+    jobid=$($qsubBin $qFlag -V -m n -r n -N sfs${id}           \
+        -l walltime=$walltime -W group_list=$groupName         \
+        -j oe -S /bin/bash                                     \
+        -o $currDir/                                           \
+        -l select=${numNodes}:ncpus=${ncpus}:model=${model} -- \
+        $binDir/parallel_sfs.sh                                \
+          $tile $numCpu $baPrefix $imageList $estimError       \
+          $sfsPrefix $currDir $demWeight $shadowThresh)
+    rc=$?
+    # A failed qsub (bad queue, unset -v name, over-limit walltime) prints a banner to
+    # stderr, returns non-zero, and emits NO job id. Abort loudly rather than march on
+    # having silently queued nothing.
+    if [ $rc -ne 0 ] || [ -z "$jobid" ]; then
+        echo "ERROR: qsub failed for tile $tile (rc=$rc), job id empty - aborting." >&2
+        echo "       see the qsub banner above for the reason." >&2
+        exit 1
+    fi
+    echo "  submitted $jobid for $tile"
     sleep 2
 done

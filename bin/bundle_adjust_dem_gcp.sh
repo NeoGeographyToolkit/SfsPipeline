@@ -86,6 +86,19 @@ if [ "${CAM_POS_UNC}" != "" ] && [ "${CAM_POS_UNC}" != "none" ]; then
   camPosOpt="--camera-position-uncertainty ${CAM_POS_UNC}"
 fi
 
+# Optional robust (Cauchy) loss on the GCP position residual. The threshold acts on the
+# residual ALREADY NORMALIZED by the per-GCP sigma (columns 5,6,7 of the GCP file), so its
+# units are sigma-multiples, i.e. meters divided by the gcp sigma. Default -1 = off (pure
+# L2, GCP treated as exact). Set it ABOVE the normalized legitimate shift so good control
+# keeps full pull and only gross outliers are softened. Example: a 5 m expected shift at
+# gcp sigma 0.25 normalizes to 5/0.25 = 20, so use 40 (knee at ~10 m ground offset, 2x the
+# shift) to leave the real move untouched and down-weight only blunders.
+GCP_ROBUST_THRESHOLD=${GCP_ROBUST_THRESHOLD:--1}
+gcpRobustOpt=""
+if [ "${GCP_ROBUST_THRESHOLD}" != "" ] && [ "${GCP_ROBUST_THRESHOLD}" != "-1" ]; then
+  gcpRobustOpt="--gcp-robust-threshold ${GCP_ROBUST_THRESHOLD}"
+fi
+
 # Threads: default to ALL cores of the node (nproc). The ASP/VW default (~8 via
 # .vwrc) badly under-uses a full node. Override with NUM_THREADS.
 numThreads=${NUM_THREADS:-${NCPUS:-$(nproc --all)}}
@@ -102,6 +115,7 @@ echo maxPairwise=$maxPairwise
 echo maxGcpErr=$maxGcpErr
 echo ratioOpt=$ratioOpt
 echo camPosOpt=$camPosOpt
+echo gcpRobustOpt=$gcpRobustOpt
 echo numThreads=$numThreads
 
 # Set up the paths
@@ -140,6 +154,7 @@ echo "Machines:  $(cat ${PBS_NODEFILE})" >> $out
     --max-gcp-reproj-err $maxGcpErr         \
     $ratioOpt                               \
     $camPosOpt                              \
+    $gcpRobustOpt                           \
     --num-iterations 100                    \
     --num-passes 2                          \
     --min-matches 1                         \

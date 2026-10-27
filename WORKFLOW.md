@@ -468,6 +468,9 @@ query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt ref/lola_1mpp.
 `sfs --compute-exposures-only` writes one `run-exposures.txt` that every tile and
 every later simulation reuses. Run it once over the selected set before tiling.
 
+If later SfS is redone, after refining the registration of the cameras, these
+exposures can be reused as they would change only in minor ways.
+
 ```bash
 qsub -V -m n -r n -N sfs_exp -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
@@ -477,11 +480,14 @@ qsub -V -m n -r n -N sfs_exp -W group_list=$groupName -j oe -S /bin/bash \
 
 ### 8b. Tile the reference DEM
 
-Tile into roughly 4k x 4k padded tiles so SfS runs as many independent per-tile
-jobs that are merged afterwards. Local, fast (run under the `geo` conda env):
+A single SfS job over a full domain runs past the walltime, so split it into
+tiles, merged in 8d. Tile sizes on the order of 2500 to 3000 px are suggested
+(pick a size that actually splits the domain, since `tile_dem.py` rounds the tile
+count). The last argument is the per-side overlap in pixels, so tiles overlap and
+the mosaic has no seams. Local, fast (`geo` conda env):
 
 ```bash
-tile_dem.py ref/lola_1mpp.tif 4000 4000 tiles 200
+tile_dem.py ref/lola_1mpp.tif 2500 2500 tiles 200
 ```
 
 ### 8c. Run parallel_sfs per tile
