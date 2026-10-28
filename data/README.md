@@ -1,6 +1,6 @@
 # USGS-registered Lunar South Pole LRO NAC image list
 
-`updated_SPole_2023_ImageGCPAdd_root.lis` is the list of Lunar South Pole LRO NAC
+`updated_SPole_2023_ImageGCPAdd_root.txt` is the list of Lunar South Pole LRO NAC
 images for which the USGS provides improved, well-registered camera geometry. It
 holds 18323 NAC root product ids, one per line (for example `M103039846LE`), both
 the LROC left (`LE`) and right (`RE`) frames.

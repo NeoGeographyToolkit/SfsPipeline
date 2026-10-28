@@ -149,12 +149,12 @@ first bundle adjustment (section 5b) registers the rest of the cameras to the LO
 without a separate alignment step.
 
 The list of registered images ships in this repo:
-`data/updated_SPole_2023_ImageGCPAdd_root.lis` (18323 NAC root ids, LE and RE, acquired
+`data/updated_SPole_2023_ImageGCPAdd_root.txt` (18323 NAC root ids, LE and RE, acquired
 July 2009 to August 2013). Find the registered subset for a site by intersecting it with
 the site's NAC candidate list:
 
 ```bash
-M=data/updated_SPole_2023_ImageGCPAdd_root.lis
+M=data/updated_SPole_2023_ImageGCPAdd_root.txt
 grep -Fxf "$M" lists/products.txt | sort -u > lists/usgs_registered.txt
 ```
 
@@ -174,8 +174,26 @@ records the ids that built in `usgs_south/usgs_built_*.txt`. That is the list to
 trust, and it feeds the fixed-camera list assembled in section 5b.
 
 The matching polar SPICE kernels (CK `.bc` + SPK `.bsp`) are referenced by the
-`usgs_polar_ck.mk` / `usgs_polar_spk.mk` meta-kernels under `$ISISDATA/lro_south` on a
-populated ISIS data area, or can be downloaded from the [USGS data release (south pole item)](https://www.sciencebase.gov/catalog/item/688a51d7d4be02367c9c1271).
+`usgs_polar_ck.mk` / `usgs_polar_spk.mk` meta-kernels under
+`$ISISDATA/lro_south` on a populated ISIS data area, or can be downloaded from
+the [USGS data release (south pole
+item)](https://www.sciencebase.gov/catalog/item/688a51d7d4be02367c9c1271). The
+release delivers the per-year, per-sensor kernels named
+`LRONAC_SPole_{LE,RE}_{2009..2013}_ck.bc` (pointing) and files ending in `_spk.bsp`
+(ephemeris). Once downloaded, place all the `.bc` and `.bsp` files in
+`$ISISDATA/lro_south/kernels/`, then write the two meta-kernels one level up, as
+`$ISISDATA/lro_south/usgs_polar_ck.mk` and
+`$ISISDATA/lro_south/usgs_polar_spk.mk`.
+
+Each meta-kernel is a plain-text SPICE file: a `PATH_VALUES` / `PATH_SYMBOLS`
+pair points at the `kernels/` directory, and the `KERNELS_TO_LOAD` block lists
+the standard LRO base kernels first and the downloaded USGS polar kernels last,
+so the polar pointing and ephemeris override the standard mission kernels for
+the 2009 to 2013 window (in a SPICE meta-kernel the kernel listed last wins).
+
+With that in place, `spiceinit` should be invoked with 
+`ck=usgs_polar_ck.mk spk=usgs_polar_spk.mk`, which is implemented via the 
+`--usgs-polar` option.
 
 Data release citation: Weller, L.A., et al., 2025, Improved camera pointing and spacecraft
 ephemeris data for Lunar Reconnaissance Orbiter Camera (LROC) Narrow Angle Camera (NAC)
