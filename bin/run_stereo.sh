@@ -20,13 +20,9 @@ fi
 lImg=$1; rImg=$2; lCam=$3; rCam=$4; dem=$5; baPrefix=$6; currDir=$7
 cd "$currDir" || exit 1
 
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
-umask 022
-ulimit -c 0
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 lbase=$(basename "$lImg"); rbase=$(basename "$rImg")
 outDir="run_stereo_${baPrefix##*/}/${lbase%%.*}__${rbase%%.*}"

@@ -38,14 +38,10 @@ fi
 src=$1; out=$2; te=$3; tr=$4; currDir=$5; proj=$6; blurSigma=$7
 cd "$currDir"
 
-# GDAL and dem_mosaic from the ASP build (ASPROOT; set it in init_asp.sh or
-# your shell rc, else it defaults to ~/projects/BinaryBuilder/StereoPipeline).
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export PATH=$ASPROOT/bin:$PATH
-export GDAL_DATA=$ASPROOT/share/gdal PROJ_DATA=$ASPROOT/share/proj PROJ_LIB=$ASPROOT/share/proj
-export GDAL_NUM_THREADS=1
-umask 022 # make files readable by others
-ulimit -c 0 # no core dumps
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
+export GDAL_NUM_THREADS=1   # single-thread gdalwarp (head-node safe)
 
 log=output_$(basename "$out" .tif).txt
 exec >> "$log" 2>&1

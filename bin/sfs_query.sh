@@ -34,15 +34,9 @@ fi
 
 mkdir -p "$outDir"
 
-# Environment configuration
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-s=StereoPipeline
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/libexec:$ISISROOT/bin:$PATH
-export LD_LIBRARY_PATH=$ISISROOT/lib:${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/lib:${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/lib/csmplugins:${LD_LIBRARY_PATH:-}
-umask 022
-ulimit -c 0
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 totalImgs=$(wc -l < "$imgList" | tr -d ' ')
 echo "Querying solar azimuth for $totalImgs images using DEM: $dem (processes: $numProc)"

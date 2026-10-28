@@ -26,13 +26,9 @@ echo range=$range
 echo currDir=$currDir
 echo stereoDir=$stereoDir
 
-# Set up the paths
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-s=StereoPipeline
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
-umask 022 # needed to handle permissions
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 # Set up the output file
 mkdir -p $stereoDir

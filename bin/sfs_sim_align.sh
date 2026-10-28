@@ -47,13 +47,9 @@ if [ ! -f "${EXPOSURES_PREFIX}-exposures.txt" ]; then
     exit 1
 fi
 
-# Set up the paths
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-s=StereoPipeline
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
-umask 022 
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 # Create output directory and log file
 mkdir -p $simDir

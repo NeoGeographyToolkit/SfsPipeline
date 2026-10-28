@@ -9,6 +9,10 @@ the conda environment.
 
 ### Environment and helpers
 
+- `sfs_env.sh`: central environment setup every bash worker sources. Validates
+  ASPROOT, ISISROOT, and ISISDATA (set per machine in your .bashrc, see README
+  step 6), puts the ASP and ISIS tools on PATH, and points GDAL/PROJ at the ASP
+  bundle. Not run directly.
 - `init_asp.sh`: activate the conda environment with ASP and ISIS on PATH.
 - `init_isis.sh`: activate the ISIS conda environment.
 - `init_sfs.sh`: activate the SfsPipeline environment (ASP bin not on PATH).

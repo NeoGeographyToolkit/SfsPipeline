@@ -65,13 +65,8 @@ if [ -z "$procs" ]; then
 fi
 
 cd $currDir
-umask 022
-
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-s=StereoPipeline
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+source "$binDir/sfs_env.sh" || exit 1
 
 echo "imageList=$imageList"
 echo "beg=$beg end=$end"

@@ -17,13 +17,9 @@ if [ "$#" -lt 3 ]; then echo "Usage: $0 imageList outName currDir"; exit 1; fi
 imageList=$1; outName=$2; currDir=$3
 cd "$currDir" || exit 1
 
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
-umask 022
-ulimit -c 0
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 threads=${THREADS:-${NCPUS:-$(nproc --all)}}
 args=(--max --save-index-map --threads "$threads")

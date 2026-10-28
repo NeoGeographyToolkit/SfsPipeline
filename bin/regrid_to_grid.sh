@@ -23,8 +23,9 @@ te=$3
 tr=$4
 currDir=$5
 cd $currDir
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}/bin:${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}/bin:$PATH
-umask 022
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 out=output_regrid_$(basename $output .tif).txt
 exec >> "$out" 2>&1

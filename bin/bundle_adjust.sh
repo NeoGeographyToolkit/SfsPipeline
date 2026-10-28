@@ -24,14 +24,9 @@ echo mapDir=$mapDir
 echo outPrefix=$outPrefix
 echo currDir=$currDir
 
-# Set up the paths
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-s=StereoPipeline
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
-umask 022 # make files readable by others
-ulimit -c 0 # no core dumps
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 # Tunables, overridable via env. Defaults preserve prior behavior.
 #   IMG_DIR        - dir holding <id>.cal.echo.cub / .json (default img)

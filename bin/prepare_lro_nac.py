@@ -20,14 +20,29 @@ import shutil
 import subprocess
 import sys
 
-# Default paths (can be overridden by environment variables)
-ISISROOT = os.environ.get("ISISROOT", os.environ.get("CONDA_PREFIX", os.path.expanduser("~/miniconda3/envs/isis")))
-ISISDATA = os.environ.get("ISISDATA", os.path.expanduser("~/projects/isis3data"))
-SP = os.environ.get("ASPROOT", os.path.expanduser("~/projects/BinaryBuilder/StereoPipeline"))
-SPK_MK = f"{ISISDATA}/lro_south/usgs_polar_spk.mk"
-CK_MK = f"{ISISDATA}/lro_south/usgs_polar_ck.mk"
+# Environment. Set ASPROOT, ISISROOT, and ISISDATA per machine in your .bashrc
+# (see README step 6). No hardcoded fallback to a personal layout: validate_env()
+# checks these are set and exist before any work runs, matching bin/sfs_env.sh.
+ISISROOT = os.environ.get("ISISROOT") or os.environ.get("CONDA_PREFIX")
+ISISDATA = os.environ.get("ISISDATA")
+SP = os.environ.get("ASPROOT")
+SPK_MK = None  # set by validate_env() once ISISDATA is confirmed
+CK_MK = None
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def validate_env():
+  """Confirm ASPROOT, ISISROOT, ISISDATA are set and point at real dirs, else exit."""
+  global SPK_MK, CK_MK
+  for name, val in (("ISISROOT", ISISROOT), ("ISISDATA", ISISDATA), ("ASPROOT", SP)):
+    if not val:
+      sys.exit(f"prepare_lro_nac.py: {name} is not set. Set ASPROOT, ISISROOT, and "
+               f"ISISDATA in your .bashrc (see README step 6).")
+    if not os.path.isdir(val):
+      sys.exit(f"prepare_lro_nac.py: {name}={val} does not exist. Fix it in your "
+               f".bashrc (see README step 6).")
+  SPK_MK = f"{ISISDATA}/lro_south/usgs_polar_spk.mk"
+  CK_MK = f"{ISISDATA}/lro_south/usgs_polar_ck.mk"
 
 def run_cmd(cmd, env=None, cwd=None):
   print(f"Running: {cmd}")
@@ -234,6 +249,7 @@ def main():
   if not pids:
     sys.exit("No product IDs specified.")
 
+  validate_env()
   os.makedirs(args.outdir, exist_ok=True)
   for pid in pids:
     try:

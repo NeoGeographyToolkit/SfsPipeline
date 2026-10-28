@@ -168,38 +168,39 @@ batch_prepare_lro.sh lists/usgs_registered.txt usgs_south --usgs-polar
 redo_spiceinit_usgs.sh lists/usgs_registered.txt img usgs_south $(pwd)
 ```
 
-A few registered ids can fail the polar spiceinit even though they are in-window,
-so not every id on the list gets a registered camera. `redo_spiceinit_usgs.sh`
-records the ids that built in `usgs_south/usgs_built_*.txt`. That is the list to
-trust, and it feeds the fixed-camera list assembled in section 5b.
+A few registered ids can fail the polar spiceinit even though they are
+in-window, so not every id on the list gets a registered camera.
+`redo_spiceinit_usgs.sh` records the ids that built in
+`usgs_south/usgs_built_*.txt`. That is the list to trust, and it feeds the
+fixed-camera list assembled in section 5b.
 
 The matching polar SPICE kernels (CK `.bc` + SPK `.bsp`) are referenced by the
 `usgs_polar_ck.mk` / `usgs_polar_spk.mk` meta-kernels under
-`$ISISDATA/lro_south` on a populated ISIS data area, or can be downloaded from
-the [USGS data release (south pole
+`$ISISDATA/lro_south` can be downloaded from the [USGS data release (south pole
 item)](https://www.sciencebase.gov/catalog/item/688a51d7d4be02367c9c1271). The
 release delivers the per-year, per-sensor kernels named
-`LRONAC_SPole_{LE,RE}_{2009..2013}_ck.bc` (pointing) and files ending in `_spk.bsp`
-(ephemeris). Once downloaded, place all the `.bc` and `.bsp` files in
-`$ISISDATA/lro_south/kernels/`, then write the two meta-kernels one level up, as
+`LRONAC_SPole_{LE,RE}_{2009..2013}_ck.bc` (pointing) and files ending in
+`_spk.bsp` (ephemeris). Once downloaded, place all the `.bc` and `.bsp` files in
+`$ISISDATA/lro_south/kernels/`, and put the two meta-kernels one level up, as
 `$ISISDATA/lro_south/usgs_polar_ck.mk` and
 `$ISISDATA/lro_south/usgs_polar_spk.mk`.
 
-Each meta-kernel is a plain-text SPICE file: a `PATH_VALUES` / `PATH_SYMBOLS`
-pair points at the `kernels/` directory, and the `KERNELS_TO_LOAD` block lists
-the standard LRO base kernels first and the downloaded USGS polar kernels last,
-so the polar pointing and ephemeris override the standard mission kernels for
-the 2009 to 2013 window (in a SPICE meta-kernel the kernel listed last wins).
+Sample meta-kernels are shipped with this repository in the `lro_south`
+subdirectory. Copy them to `$ISISDATA/lro_south` and edit the `PATH_VALUES` in
+each (replace the `/path/to/isisdata` placeholder with your own `$ISISDATA`).
+The custom USGS polar kernels must be listed last in `KERNELS_TO_LOAD`, so that
+they override the standard mission kernels where they apply.
 
-With that in place, `spiceinit` should be invoked with 
-`ck=usgs_polar_ck.mk spk=usgs_polar_spk.mk`, which is implemented via the 
-`--usgs-polar` option.
+With that in place, `spiceinit` is invoked with `ck=usgs_polar_ck.mk
+spk=usgs_polar_spk.mk`, which is what the `--usgs-polar` option does.
 
-Data release citation: Weller, L.A., et al., 2025, Improved camera pointing and spacecraft
-ephemeris data for Lunar Reconnaissance Orbiter Camera (LROC) Narrow Angle Camera (NAC)
-images of the lunar poles: [U.S. Geological Survey data release](https://doi.org/10.5066/P1OASYRV).
-See [data/README.md](data/README.md) for the full citation. The registered-camera workflow is
-described in the ASP documentation under [Incorporation of well-registered images](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#usgs-reg).
+Data release citation: Weller, L.A., et al., 2025, Improved camera pointing and
+spacecraft ephemeris data for Lunar Reconnaissance Orbiter Camera (LROC) Narrow
+Angle Camera (NAC) images of the lunar poles: [U.S. Geological Survey data
+release](https://doi.org/10.5066/P1OASYRV). See [data/README.md](data/README.md)
+for the full citation. The registered-camera workflow is described in the ASP
+documentation under [Incorporation of well-registered
+images](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#usgs-reg).
 
 ## 3. Image selection and sorting by illumination
 

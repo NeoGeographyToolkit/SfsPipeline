@@ -33,15 +33,10 @@ currDir=$1; shift
 pct=${1:-12.5}
 cd "$currDir"
 
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-s=StereoPipeline
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
-share=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/share
-[ -d "$share/proj" ] && export GDAL_DATA=$share/gdal PROJ_DATA=$share/proj PROJ_LIB=$share/proj
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 export GDAL_NUM_THREADS=1
-umask 022
-ulimit -c 0
 
 mkdir -p "$sub8Dir"
 : > "$sub8Out"

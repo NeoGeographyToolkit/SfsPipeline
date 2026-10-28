@@ -23,8 +23,9 @@ run=$1
 wd=$2
 cd "$wd"
 
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export PATH=$ASPROOT/bin:$PATH
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 nt=${NCPUS:-28}
 wildP95=${WILD_P95:-50}
 stats=jitter_${run}/run-mapproj_match_offset_stats.txt

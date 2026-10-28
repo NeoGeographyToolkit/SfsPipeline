@@ -15,13 +15,9 @@ if [ "$#" -lt 2 ]; then echo "Usage: $0 src currDir"; exit 1; fi
 src=$1; currDir=$2
 cd "$currDir" || exit 1
 
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
-umask 022
-ulimit -c 0
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 srs=${SRS:-IAU_2015:30135}
 mpp=${MPP:-1.0}

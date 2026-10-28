@@ -26,11 +26,9 @@ list=$1
 output=$2
 threads=${3:-${NCPUS:-$(nproc --all)}}
 
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-s=StereoPipeline
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
-umask 022
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 # Under PBS, cd to submit dir so log lands next to the lists/ the user
 # prepared, not in $HOME. Harmless when not under PBS.

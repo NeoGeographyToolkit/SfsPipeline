@@ -30,12 +30,9 @@ currDir=$5
 threads=${6:-${NCPUS:-$(nproc --all)}}
 cd "$currDir"
 
-SP=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export PATH=$SP/bin:$SP/libexec:$PATH
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-umask 022
-ulimit -c 0
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 mkdir -p "$outDir"
 log="output_$(basename "$outDir").txt"

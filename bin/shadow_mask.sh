@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # gdal_calc, gdalinfo and gdal_footprint must be on PATH (a StereoPipeline
 # build or a gdal conda env); the checks below enforce this.
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export PATH=$ASPROOT/bin:$PATH
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 # Must have 2 arguments. Print usage on failure.
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <i> <shadow threshold>"

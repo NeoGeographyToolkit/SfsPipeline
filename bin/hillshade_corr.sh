@@ -21,14 +21,9 @@
 set -e
 leftDem=$1; rightDem=$2; stereoDir=$3; currDir=$4; maxSearch=${5:-20}
 cd "$currDir"
-umask 022
-ulimit -c 0
-
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 N=${NCPUS:-28}
 algo=${STEREO_ALGO:-asp_mgm}

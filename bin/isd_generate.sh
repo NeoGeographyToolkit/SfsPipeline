@@ -22,17 +22,9 @@ inputTarget="$1"
 numProc="${2:-${NCPUS:-1}}"
 outDir="${3:-}"
 
-# Configure environment
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-if [ -n "${ISISROOT:-}" ]; then
-  export PATH=$ISISROOT/bin:$PATH
-fi
-
-umask 022
-ulimit -c 0
+# Configure environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 # Optional ephem sample rate override
 EPHEM_OPT=""

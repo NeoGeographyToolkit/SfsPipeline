@@ -55,15 +55,9 @@ else
   echo "cameraList=$cameraList"
 fi
 
-# Set up the paths
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export PATH=$ASPROOT/bin:$ASPROOT/libexec:$ISISROOT/bin:$PATH
-export GDAL_DATA=$ASPROOT/share/gdal PROJ_DATA=$ASPROOT/share/proj PROJ_LIB=$ASPROOT/share/proj
-umask 022
-ulimit -c 0
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 mkdir -p "${mapDir}"
 

@@ -125,14 +125,9 @@ maxAnchorToTriRatio=${MAX_ANCHOR_TO_TRI_RATIO:-4.0}
 # affinity mask and can return 1. Override with NUM_THREADS.
 numThreads=${NUM_THREADS:-${NCPUS:-$(nproc --all)}}
 
-# Set up the paths
-export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
-export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
-s=${ASP_BUILD:-StereoPipeline}   # override to test an alternate BinaryBuilder build
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
-umask 022
-ulimit -c 0
+# Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
+binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$binDir/sfs_env.sh" || exit 1
 
 mkdir -p $outDir
 out=output_${outDir##*/}.txt
