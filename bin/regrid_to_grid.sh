@@ -23,7 +23,7 @@ te=$3
 tr=$4
 currDir=$5
 cd $currDir
-export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}/bin:${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}/bin:$PATH
+export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}/bin:${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}/bin:$PATH
 umask 022
 
 out=output_regrid_$(basename $output .tif).txt

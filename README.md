@@ -9,7 +9,7 @@ See [WORKFLOW.md](WORKFLOW.md) for the detailed workflow.
 SfsPipeline is installed both locally and on the NASA HECC HPC. Some steps apply only to the HPC install.
 
 1. Install ASP from the precompiled binaries ([instructions](https://stereopipeline.readthedocs.io/en/latest/installation.html#precompiled-binaries)). Note the install folder for step 6.
-2. Install [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) if conda or mamba is not already available.
+2. Install [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) if it is not already available.
 3. Install ISIS into a new conda environment named `isis` and set up its data area ([instructions](https://astrogeology.usgs.gov/docs/how-to-guides/environment-setup-and-maintenance/installing-isis-via-anaconda/)).
 4. Clone the repository:
    ```bash
@@ -18,7 +18,7 @@ SfsPipeline is installed both locally and on the NASA HECC HPC. Some steps apply
    ```
 5. Create the conda environment:
    ```bash
-   micromamba env create -n SfsPipeline -f environment.yaml
+   conda env create -n SfsPipeline -f environment.yaml
    ```
 6. Add the bin directory to PATH and set the ASP, ISIS, and data paths in `.bashrc`:
    ```bash

@@ -24,7 +24,7 @@ outDir="${3:-}"
 
 # Configure environment
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
 
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 if [ -n "${ISISROOT:-}" ]; then

@@ -21,7 +21,7 @@ lImg=$1; rImg=$2; lCam=$3; rCam=$4; dem=$5; baPrefix=$6; currDir=$7
 cd "$currDir" || exit 1
 
 export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH

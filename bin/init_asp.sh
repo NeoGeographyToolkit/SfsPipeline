@@ -1,17 +1,11 @@
 #!/bin/bash
-# Activate the SfsPipeline conda environment with whichever frontend is present
-# (micromamba, mamba, or conda), then add the ASP and ISIS bin dirs to PATH.
-if command -v micromamba >/dev/null 2>&1; then
-  eval "$(micromamba shell hook --shell bash)"
-  micromamba activate SfsPipeline
-elif command -v mamba >/dev/null 2>&1; then
-  eval "$(mamba shell hook --shell bash)"
-  mamba activate SfsPipeline
-elif command -v conda >/dev/null 2>&1; then
+# Activate the SfsPipeline conda environment, then add the ASP and ISIS bin
+# dirs to PATH.
+if command -v conda >/dev/null 2>&1; then
   eval "$(conda shell.bash hook)"
   conda activate SfsPipeline
 else
-  echo "init_asp.sh: no micromamba, mamba, or conda found on PATH" >&2
+  echo "init_asp.sh: conda not found on PATH" >&2
   return 1 2>/dev/null || exit 1
 fi
 [ -n "$ASPROOT" ] && export PATH=$PATH:$ASPROOT/bin

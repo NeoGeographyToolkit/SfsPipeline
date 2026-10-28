@@ -54,7 +54,7 @@ outDir="$3"
 workDir="$4"
 cd "$workDir" || { echo "Cannot cd to $workDir"; exit 1; }
 
-ISISROOT="${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}"
+ISISROOT="${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}"
 ISISDATA="${ISISDATA:-$HOME/projects/isis3data}"
 ASPROOT="${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}"
 export ISISROOT ISISDATA

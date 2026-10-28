@@ -18,7 +18,7 @@ imageList=$1; outName=$2; currDir=$3
 cd "$currDir" || exit 1
 
 export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH

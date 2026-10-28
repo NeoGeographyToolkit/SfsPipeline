@@ -34,7 +34,7 @@ pct=${1:-12.5}
 cd "$currDir"
 
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
 s=StereoPipeline
 export PATH=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/bin:$ISISROOT/bin:$PATH
 share=${ASPROOT:-$HOME/projects/BinaryBuilder/$s}/share

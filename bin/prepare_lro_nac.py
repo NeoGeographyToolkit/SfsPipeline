@@ -21,7 +21,7 @@ import subprocess
 import sys
 
 # Default paths (can be overridden by environment variables)
-ISISROOT = os.environ.get("ISISROOT", os.environ.get("CONDA_PREFIX", os.path.expanduser("~/miniconda3/envs/asp_deps")))
+ISISROOT = os.environ.get("ISISROOT", os.environ.get("CONDA_PREFIX", os.path.expanduser("~/miniconda3/envs/isis")))
 ISISDATA = os.environ.get("ISISDATA", os.path.expanduser("~/projects/isis3data"))
 SP = os.environ.get("ASPROOT", os.path.expanduser("~/projects/BinaryBuilder/StereoPipeline"))
 SPK_MK = f"{ISISDATA}/lro_south/usgs_polar_spk.mk"

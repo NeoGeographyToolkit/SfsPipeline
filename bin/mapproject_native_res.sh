@@ -33,7 +33,7 @@ cd "$currDir"
 SP=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
 export PATH=$SP/bin:$SP/libexec:$PATH
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
 umask 022
 ulimit -c 0
 

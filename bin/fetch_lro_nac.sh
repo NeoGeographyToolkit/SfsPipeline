@@ -14,7 +14,7 @@
 # We always fetch the EDR (raw) and do our OWN radiometric calibration + echo.
 #
 # ISIS env note (pfe): use the FULL ISIS env (has libLinearMath), e.g.
-#   ISISROOT=$HOME/miniconda3/envs/asp_deps   (a full ISIS env; note isis10asp lacks
+#   ISISROOT=$HOME/miniconda3/envs/isis   (a full ISIS env; note isis10asp lacks
 #   libLinearMath and the ISIS apps fail to load). Set ISISROOT + PATH + ISISDATA
 #   before --prep. lronac2isis needs no kernels; spiceinit/lronaccal need a
 #   populated ISISDATA (base + lro). See the lro-nac / isis-data skills.

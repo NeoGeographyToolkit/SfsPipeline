@@ -47,7 +47,7 @@ cd "$currDir"
 binDir="$(cd "$(dirname "$0")" && pwd)"
 
 export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 export PATH=$ASPROOT/bin:$ISISROOT/bin:$PATH

@@ -57,7 +57,7 @@ fi
 
 # Set up the paths
 export ISISDATA=${ISISDATA:-$HOME/projects/isis3data}
-export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/asp_deps}}
+export ISISROOT=${ISISROOT:-${CONDA_PREFIX:-$HOME/miniconda3/envs/isis}}
 export ALESPICEROOT=${ALESPICEROOT:-$ISISDATA}
 export ASPROOT=${ASPROOT:-$HOME/projects/BinaryBuilder/StereoPipeline}
 export PATH=$ASPROOT/bin:$ASPROOT/libexec:$ISISROOT/bin:$PATH

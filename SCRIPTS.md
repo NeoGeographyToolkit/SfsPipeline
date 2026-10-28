@@ -9,7 +9,7 @@ the conda environment.
 
 ### Environment and helpers
 
-- `init_asp.sh`: activate the environment with ASP and ISIS on PATH (micromamba, mamba, or conda).
+- `init_asp.sh`: activate the conda environment with ASP and ISIS on PATH.
 - `init_isis.sh`: activate the ISIS conda environment.
 - `init_sfs.sh`: activate the SfsPipeline environment (ASP bin not on PATH).
 - `sfs_utilities.sh`: bash helper functions for SfS processing. Source to load.
