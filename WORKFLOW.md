@@ -24,6 +24,14 @@ and drives the scripts in `bin/`.
 export groupName=your_allocation
 ```
 
+- Create the two directories that are populated by shell redirects and
+  `gdalwarp` rather than by a script (every worker script makes its own output
+  directory, but `lists/` and `ref/` are written into directly):
+
+```bash
+mkdir -p lists ref
+```
+
 - The canonical submission form is:
 
 ```bash
@@ -210,12 +218,27 @@ Get each camera's Sun azimuth and sort the list by it, so that the later
 mapprojection (section 4), once each frame has a mapprojected footprint and a max
 value to judge it by.
 
+First build the unsorted image and camera lists from the calibrated cubes in
+`img/`, one camera per image. Then `sfs_query.sh <dem> <imageList> <cameraList>
+<outDir>` reads the Sun geometry from each camera and writes
+`<outDir>/azimuth_table.txt` with columns image, raw azimuth, 0-360 azimuth, and
+elevation. Sort that table by the 0-360 azimuth column into `lists/azimuth.txt`,
+then split off the azimuth-ordered image and camera lists.
+
 ```bash
-sfs_query.sh img/*.cal.echo.cub > lists/azimuth_tables.txt
-sort -k3,3 -n lists/azimuth_tables.txt > lists/azimuth.txt
+ls img/*.cal.echo.cub > lists/all_images.txt
+sed 's/\.cub$/.json/' lists/all_images.txt > lists/all_cameras.txt
+
+sfs_query.sh ref/lola_1mpp.tif lists/all_images.txt lists/all_cameras.txt sfs_query
+
+sort -k3,3 -n sfs_query/azimuth_table.txt > lists/azimuth.txt
 awk '{print $1}' lists/azimuth.txt > lists/azimuth_images.txt
 sed 's/\.cub$/.json/' lists/azimuth_images.txt > lists/azimuth_cameras.txt
 ```
+
+`sfs_query.sh` loads one camera per image to read its Sun position, so run it
+from the work dir where the cubes and cameras are. It is single-process by
+default, which is head-node-safe.
 
 `lists/azimuth_cameras.txt` holds the plain CSM cameras, one per line matching
 `lists/azimuth_images.txt`. These are what mapprojection (section 4) and the match
@@ -223,10 +246,11 @@ harvest (section 5a) use. The registered USGS cameras enter only at the 5b fixed
 stage. Keep every `lists/*.txt` in azimuth order and 1-to-1 between images and
 cameras.
 
-Visualize the azimuth distribution as a polar rose with `plot_sfs_azimuth.py` (it
-reads the `sfs_query.sh` table) to judge how the illumination clusters and whether
-coverage is representative. At the poles the low Sun is usually strongly clustered,
-often bimodal with near-empty gaps, which matters later when forming subset groups.
+Visualize the azimuth distribution as a polar rose with `plot_sfs_azimuth.py`
+(point it at `lists/azimuth.txt`) to judge how the illumination clusters and
+whether coverage is representative. At the poles the low Sun is usually strongly
+clustered, often bimodal with near-empty gaps, which matters later when forming
+subset groups.
 
 ## 4. Mapprojection
 
@@ -282,6 +306,18 @@ qsub -V -m n -r n -N filter_max -q normal \
   -l select=1:ncpus=28:model=bro_ele -l walltime=00:30:00 \
   -v "PROCS=28" \
   -- filter_by_max.sh lists/azimuth_map.txt lists/filtered_map.txt $(pwd) 0.005 0.2
+```
+
+`filter_by_max.sh` keeps mapprojected tif paths. Derive the matching cub and
+camera lists from it, so all three stay in the same azimuth order and 1-to-1.
+These `lists/filtered_images.txt` and `lists/filtered_cameras.txt` are the image
+and camera lists the refine chain (section 5b) and the GSD query (section 7) read.
+
+```bash
+cat lists/filtered_map.txt                                      \
+  | perl -p -e "s#^.*?(M\d+[LR]E).*?\n#img/\$1.cal.echo.cub\n#" \
+  > lists/filtered_images.txt
+sed 's/\.cub$/.json/' lists/filtered_images.txt > lists/filtered_cameras.txt
 ```
 
 ## 5. Bundle adjustment
@@ -409,16 +445,18 @@ Rebuild the max-lit mosaic without re-mapprojecting, since the per-image
 sfs_prune_and_remosaic.sh map_htdem lists/removed_ids.txt $(pwd) 500 28
 ```
 
-After a per-line jitter solve (especially with a loose orientation guard or finer
-orientation knots), also screen for cameras with a catastrophic pose change using
-`cam_test`. Compare the pre-jitter camera against the jitter camera per image and
-drop any in the SfS set with a max pixel difference over about 250 px (severe over
-1000 px). Such poses still fit their own tie points, so reprojection and
+Jitter-solving, which is an advanced feature discussed below, can introduce its
+own issues. Especially with a loose orientation guard or finer orientation
+knots, also screen for cameras with a catastrophic pose change using `cam_test`.
+Compare the pre-jitter camera against the jitter camera per image and drop any
+in the SfS set with a max pixel difference over about 250 px (severe over 1000
+px). Such poses still fit their own tie points, so reprojection and
 mapproj-offset stay flat and the bundle-stats prune above misses them, but they
-smear their own localized footprint in the max-lit. They are a handful, and redundant frames cover
-the gap, so pruning loses no coverage. Confirm by differencing the pruned max-lit
-against the full one. The difference should be a tiny fraction of pixels confined
-to those footprints, with the scene-wide sharpness unchanged.
+smear their own localized footprint in the max-lit. They are a handful, and
+redundant frames cover the gap, so pruning loses no coverage. Confirm by
+differencing the pruned max-lit against the full one. The difference should be a
+tiny fraction of pixels confined to those footprints, with the scene-wide
+sharpness unchanged.
 
 A frame with a detector readout stripe is another case the geometric stats miss.
 It is well-registered (good offset, match count, and reprojection) yet shows fine
@@ -438,17 +476,27 @@ slices of roughly 45 degrees, respecting the natural gaps. Keep a rare illuminat
 direction as its own whole group, drop empty slices, and merge a lone stray frame
 into the adjacent slice. Do not blind-cut into four 90-degree quadrants. Each slice
 is then thinned by `image_subset` (a crowded angle is thinned hardest, since it
-only has to fill the same ground), for a primary cover plus an extra (2x) cover on
-the remainder, driven by `sfs_select_full_site.sh` over low-resolution sub8 images.
-Build the sub8 copies with `make_sub8.sh` (`gdal_translate -outsize 12.5% -r average`,
-which preserves the data type and georeferencing so the reduced images stay
-registered). The old `prepare_lowres.sh` stereo_gui-pyramid path is retired, as
-stereo_gui no longer writes `_subN.tif` pyramids. Validate with a max-lit of the
-selection against the full-set max-lit.
+only has to fill the same ground), for a primary cover plus an extra cover on the
+remainder (their union is the 2x cover). `sfs_select_full_site.sh` drives this over
+low-resolution sub8 copies it builds internally with `make_sub8.sh`
+(`gdal_translate -outsize 12.5% -r average`, which preserves the data type and
+georeferencing so the reduced images stay registered). The old `prepare_lowres.sh`
+stereo_gui-pyramid path is retired, as stereo_gui no longer writes `_subN.tif`
+pyramids. Validate with a max-lit of the selection against the full-set max-lit.
+
+It writes `selection/all_primary.txt`, `selection/all_extra.txt`, and their union
+`selection/all_2x.txt` (low-resolution paths, one chosen image per line). The SfS
+input set is one of these covers, called the "secondary" set. The extra cover is a
+good default, often crisper for SfS than the primary one, but inspect both max-lit
+mosaics and pick the better. Derive the SfS image list from the chosen cover as cub
+paths, one per line.
 
 ```bash
-make_sub8.sh lists/filtered_map.txt sub8 lists/sub8_map.txt $(pwd)
 sfs_select_full_site.sh lists/filtered_map.txt lists/azimuth.txt selection $(pwd) 0.01 28
+
+cat selection/all_extra.txt                                     \
+  | perl -p -e "s#^.*?(M\d+[LR]E).*?\n#img/\$1.cal.echo.cub\n#" \
+  | sort -u > lists/secondary_images.txt
 ```
 
 Note on GSD: coarse frames hurt SfS and the max-lit mosaic. Ground area per pixel
@@ -533,9 +581,11 @@ launch_sfs_tiles.sh tiles lists/secondary_images.txt ba_htdem/run \
 ### 8d. Merge the tiles
 
 Merge with a blended `dem_mosaic` (no `--max`, so tile seams stay smooth). The
-output product name is `sfs_dem.tif`.
+output product name is `sfs_dem.tif`. List the per-tile SfS DEMs first (each tile
+job wrote `sfs/clip<id>/run-DEM-final.tif`).
 
 ```bash
+ls sfs/clip*/run-DEM-final.tif > lists/sfs_tiles.txt
 qsub -V -m n -r n -N sfs_merge -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=4:00:00 \
   -- dem_mosaic_list.sh lists/sfs_tiles.txt sfs_dem.tif $(pwd)
@@ -548,9 +598,10 @@ mean dz near zero, sub-meter std, and no tile seams.
 
 The SfS DEM can carry a residual shift against LOLA. Measure it, and if it is real,
 re-register the cameras and redo SfS. This GCP re-registration (a bundle adjustment for a
-uniform shift, a per-line jitter solve for a spatially structured one, see below) is the
+uniform shift, a jitter solve for a spatially structured one, see below) is the
 committed final refine. `jitter_solve.sh` (no GCP) is only for removing intrinsic jitter
-when there is no re-registration target.
+when there is no re-registration target. (Bundle adjustment with GCP is usually simpler
+and sufficient, and jitter-solving is an advanced feature.)
 
 Measure the shift two ways. Per image, [render an SfS-simulated view](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-sim), `image_align`
 it to the real mapprojected image, and record the pixel shift (set `ALIGN_THRESH=0`
@@ -603,15 +654,18 @@ sufficient for sites on the order of 5 to 10 km on a side. It is the simpler, ch
 and is the right one when the shift is close to uniform, that is, its MAD is small next to
 its median. Use `bundle_adjust_dem_gcp.sh`.
 
-The jitter solver gives a finer-grained, per-line correction if desired, but it is more
-technically involved. It is the one to reach for when the shift is spatially structured,
-that is, its MAD is comparable to or larger than its median. A rigid bundle under-corrects a
-structured shift because the dense match network pins the relative geometry, while the
-per-line flex of [`jitter_gcp.sh`](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-jitter)
-reproduces the structure a rigid shift cannot. After either re-solve, [validate](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-reg-valid)
-by correlating the old and new max-lit mosaics (`SKIP_HILLSHADE=1`): the old-to-new dh/dv
-should reproduce the SfS-to-LOLA dh/dv in sign and magnitude. If the bundle under-moves, it can be
-iterated (dem2gcp then bundle again on the new cameras), as the residual shrinks each pass.
+The jitter solver gives a finer-grained (per block of lines) correction if
+desired, but it is more technically involved. It is the one to reach for when
+the shift is spatially structured, that is, its MAD is comparable to or larger
+than its median. A rigid bundle under-corrects a structured shift because the
+dense match network pins the relative geometry, while the per-block flex of
+[`jitter_gcp.sh`](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-jitter)
+reproduces the structure a rigid shift cannot. After either re-solve,
+[validate](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-reg-valid)
+by correlating the old and new max-lit mosaics (`SKIP_HILLSHADE=1`): the
+old-to-new dh/dv should reproduce the SfS-to-LOLA dh/dv in sign and magnitude.
+If the bundle under-moves, it can be iterated (dem2gcp then bundle again on the
+new cameras), as the residual shrinks each pass.
 
 Either way, first create the GCP:
 
@@ -634,11 +688,11 @@ qsub -V -m n -r n -N ba_gcp -W group_list=$groupName -j oe -S /bin/bash \
      ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run bundle_gcp $(pwd)
 ```
 
-For the jitter path (structured shift), run the per-line refine instead, as below.
+For the jitter path (structured shift), run the per-block refine instead, as below.
 
 Run the jitter re-registration over the full image set, the same list as bundle
 adjustment, never the thinned SfS subset. The dense tie-point network is what the
-per-line solve needs, so feed every image. Finer orientation knots track the
+per-block solve needs, so feed every image. Finer orientation knots track the
 shift better. Keep the anchor strength through `--anchor-dem-uncertainty` (a
 large value is light), over-provision anchors, and let the ratio caps prune.
 
@@ -708,6 +762,19 @@ DEM's hillshade is the delivery hillshade. Build it with
 which gives a clean, readable delivery hillshade. A grazing-light hillshade (low
 sun elevation, e.g. ASP `hillshade -e 10`) is kept only for the DEM-to-DEM
 correlation step and for artifact QC, not for delivery.
+
+Both mosaics are built over the SfS-subset orthos mapprojected with the final
+(re-registered) cameras, so first mapproject the SfS images with those cameras and
+list the results. Use the final-camera prefix from section 9 (`jitter/run`, or
+`bundle_gcp/run` if the bundle path was taken).
+
+```bash
+export PROJWIN="71240.5 162789.5 90731.5 178256.5"
+export NO_MOSAIC=1 CHUNK_SIZE=121 MODEL=bro_ele WALLTIME=4:00:00
+batch_mapproject.sh ref/lola_1mpp.tif lists/secondary_images.txt jitter/run \
+  maps_final $(pwd)
+ls maps_final/*.map.tr1.tif > lists/sfs_maps.txt
+```
 
 Both ortho mosaics are delivered, with distinct roles:
 - The **max-lit** mosaic (`dem_mosaic --max`) keeps the brightest pixel per
@@ -838,7 +905,25 @@ is wiped after delivery), leaving the dropped offenders and the pyramids behind.
 native-GSD set is built with
 `mapproject_native_res.sh` over the sub-1 m frames of the SfS set (paired with their
 registered cameras), which mapprojects each at its own native resolution and writes
-`gsd.csv`:
+`gsd.csv`.
+
+The native-res frames are those in the SfS subset whose native GSD (from the
+`lists/gsd_all.txt` table built in section 7) is below 1 m. Intersect the two id
+sets, then build the paired cub and final-camera lists, 1-to-1 (use the same
+final-camera prefix as section 10):
+
+```bash
+awk '$2 != "NaN" && $2 < 1.0 {print $1}' lists/gsd_all.txt                   \
+  | perl -pe 's#.*?(M\d+[LR]E).*#$1#' | sort -u > lists/gsd_lt1_ids.txt
+perl -pe 's#.*?(M\d+[LR]E).*#$1#' lists/secondary_images.txt                 \
+  | sort -u > lists/sfs_ids.txt
+comm -12 lists/gsd_lt1_ids.txt lists/sfs_ids.txt > lists/native_res_ids.txt
+
+sed 's#^#img/#; s#$#.cal.echo.cub#' lists/native_res_ids.txt                 \
+  > lists/native_res_images.txt
+while read -r id; do ls jitter/run*"$id"*adjusted_state.json | head -1; done \
+  < lists/native_res_ids.txt > lists/native_res_cameras.txt
+```
 
 ```bash
 qsub -V -m n -r n -N natres -W group_list=$groupName -j oe -S /bin/bash \

@@ -4,7 +4,7 @@
 # two-pass image_subset (primary + extra = 2x cover) on each azimuth group.
 #
 # Implementation of sfs-image-selection workflow for small-to-moderate sites (<25 km):
-#   1. Uses prepare_lowres.sh to select sub8 > sub4 > sub2 pyramids.
+#   1. Builds low-res sub8 copies with make_sub8.sh (gdal_translate -r average).
 #   2. Parses solar azimuths from azimuth_table (output of sfs_query.sh).
 #   3. Groups images into balanced azimuth bins.
 #   4. Runs image_subset_2x.sh per azimuth group.
@@ -35,15 +35,18 @@ tools_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$binDir/sfs_env.sh" || exit 1
 
-# 1. Prepare low-res sub image list
-echo "=== Step 1: Preparing low-res pyramid list ==="
+# 1. Build the low-res (sub8) copies image_subset runs on. make_sub8.sh replaces
+# the retired prepare_lowres.sh (stereo_gui no longer writes _subN.tif pyramids);
+# it reduces each map to 12.5% with gdal_translate -r average and writes the
+# chosen-path list, preserving input order.
+echo "=== Step 1: Building low-res sub8 copies ==="
 lowres_list="$out_dir/lowres_maps.txt"
-bash "$tools_dir/prepare_lowres.sh" "$map_list" "$lowres_list" "$curr_dir"
+bash "$tools_dir/make_sub8.sh" "$map_list" "$out_dir/sub8" "$lowres_list" "$curr_dir"
 
 # 2. Map image ID -> azimuth (0-360)
 declare -A id2az
 while read -r p _s az0360 _e; do
-  id=$(echo "$p" | perl -pe 's#^.*?(M\d+\wE|[A-Za-z0-9_]+).*#\1#')
+  id=$(echo "$p" | perl -pe 's#^.*/##; s#^.*?(M\d+\wE|[A-Za-z0-9_]+).*#\1#')
   id2az[$id]=$az0360
 done < "$az_file"
 
@@ -51,7 +54,7 @@ done < "$az_file"
 az_path_file="$out_dir/az_path.txt"
 : > "$az_path_file"
 while read -r lr; do
-  id=$(echo "$lr" | perl -pe 's#^.*?(M\d+\wE|[A-Za-z0-9_]+).*#\1#')
+  id=$(echo "$lr" | perl -pe 's#^.*/##; s#^.*?(M\d+\wE|[A-Za-z0-9_]+).*#\1#')
   az=${id2az[$id]:-}
   [ -z "$az" ] && continue
   printf '%s\t%s\n' "$az" "$lr" >> "$az_path_file"

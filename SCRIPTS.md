@@ -35,7 +35,7 @@ the conda environment.
 - `sfs_query.sh`, `query_azimuth.sh`: per-camera Sun azimuth/elevation via `sfs --query`.
 - `query_gsd.sh`: per-image ground sample distance via `mapproject --query-projection`.
 - `filter_by_max.sh`: order-preserving cull of shadowed/non-intersecting frames by max value.
-- `split_quadrants.py`, `prepare_lowres.sh`, `image_subset_2x.sh`, `sfs_select_full_site.sh`: minimal-but-covering image subset selection per quadrant.
+- `make_sub8.sh`, `split_quadrants.py`, `image_subset_2x.sh`, `sfs_select_full_site.sh`: minimal-but-covering image subset selection (build low-res sub8 copies, then two-pass `image_subset` per azimuth group).
 - `plot_sfs_azimuth.py`: Sun-azimuth rose plot.
 - `sfs_flag_bad_cameras.py`, `sfs_prune_and_remosaic.sh`: flag and drop whacky cameras, rebuild max-lit mosaics.
 

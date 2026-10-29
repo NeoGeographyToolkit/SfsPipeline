@@ -35,6 +35,10 @@ output=$1; shift
 currDir=$1; shift
 cd $currDir
 
+# dem_mosaic cannot create its output directory, so make it first. dirname
+# returns "." for a bare filename, which mkdir -p treats as a harmless no-op.
+mkdir -p "$(dirname "$output")"
+
 threads=${THREADS:-${NCPUS:-$(nproc --all)}}
 prefix=${output%.tif}
 

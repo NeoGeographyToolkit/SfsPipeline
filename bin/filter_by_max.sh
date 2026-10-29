@@ -41,6 +41,10 @@ threshold=${1:-0.005}
 minValidPercent=${2:-${MIN_VALID_PERCENT:-0.2}}
 cd "$currDir"
 
+# Make the output directory first. dirname returns "." for a bare filename,
+# which mkdir -p treats as a harmless no-op.
+mkdir -p "$(dirname "$outList")"
+
 # Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
 binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$binDir/sfs_env.sh" || exit 1

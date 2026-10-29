@@ -38,6 +38,10 @@ fi
 src=$1; out=$2; te=$3; tr=$4; currDir=$5; proj=$6; blurSigma=$7
 cd "$currDir"
 
+# gdalwarp cannot create its output directory, so make it first. dirname returns
+# "." for a bare filename, which mkdir -p treats as a harmless no-op.
+mkdir -p "$(dirname "$out")"
+
 # Set up the environment (ASPROOT, ISISROOT, ISISDATA from your .bashrc)
 binDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$binDir/sfs_env.sh" || exit 1
