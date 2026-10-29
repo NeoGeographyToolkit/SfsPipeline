@@ -685,7 +685,7 @@ qsub -V -m n -r n -N ba_gcp -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=4:00:00 \
   -v "DEM_UNCERTAINTY=20,MAX_GCP_TO_TRI_RATIO=2.0" \
   -- bundle_adjust_dem_gcp.sh ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt \
-     ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run bundle_gcp $(pwd)
+     ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run ba_gcp $(pwd)
 ```
 
 For the jitter path (structured shift), run the per-block refine instead, as below.
@@ -709,14 +709,14 @@ a stuck node (a job that even `qdel -W force` will not remove) while the
 head-node run would have finished in under two minutes.
 
 ```bash
-qsub -V -m n -r n -N jitter -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_jitter -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "NUM_ITER=75,NUM_PASSES=2,NUM_LINES_POS=15000,NUM_LINES_ORIENT=2000,DEM_UNC=20,\
 ANCHOR_DEM_UNC=20,NUM_ANCHOR=5000,MAX_PAIRWISE=5000,MAX_NUM_TRI=300000,\
 MAX_GCP_TO_TRI_RATIO=2.0,MAX_ANCHOR_TO_TRI_RATIO=4.0,\
 ANCHOR_DEM=ref/lola_1mpp_pad4k.tif" \
   -- jitter_gcp.sh ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt \
-     ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run jitter $(pwd)
+     ref/lola_1mpp.tif sfs_ref_corr/run.gcp ba_htdem/run ba_jitter $(pwd)
 ```
 
 `CAM_POS_UNC` is 20,20. A reasonably tight camera position uncertainty such as
@@ -765,8 +765,8 @@ correlation step and for artifact QC, not for delivery.
 
 Both mosaics are built over the SfS-subset orthos mapprojected with the final
 (re-registered) cameras, so first mapproject the SfS images with those cameras and
-list the results. Use the final-camera prefix from section 9 (`jitter/run`, or
-`bundle_gcp/run` if the bundle path was taken).
+list the results. Use the final-camera prefix from section 9 (`ba_jitter/run`, or
+`ba_gcp/run` if the bundle path was taken).
 
 ```bash
 export PROJWIN="71240.5 162789.5 90731.5 178256.5"
