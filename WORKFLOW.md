@@ -437,6 +437,19 @@ p95 exceeds 5 m, its median reprojection error exceeds 0.75 px, it moved more th
 sfs_flag_bad_cameras.py ba_htdem/run -o lists/removed_ids.txt
 ```
 
+That flagger keys on geometry (match count, mapproject offset, residual) and is BLIND to a
+RADIOMETRIC defect - a detector/readout stripe or a saturated band - whose frame has fine
+geometry yet pollutes the max-lit and the SfS solve. Screen for it directly on the orthos
+with `sfs_flag_striped_frames.py` (run in the `geo` env): it flags a frame whose
+99.9-percentile brightness is a set outlier or whose high-passed FFT carries a sharp
+off-axis periodic-stripe peak. Merge its ids into the removal list before remosaicking.
+
+```bash
+ls map_htdem/*.map.tr1.tif > lists/ortho_list.txt
+sfs_flag_striped_frames.py lists/ortho_list.txt -o lists/striped_ids.txt
+sort -u lists/removed_ids.txt lists/striped_ids.txt -o lists/removed_ids.txt
+```
+
 Rebuild the max-lit mosaic without re-mapprojecting, since the per-image
 `*.map.tr1.tif` survive. The removed ids are dropped from each chunk list, then
 `dem_mosaic --max` is re-run per chunk, per half, and for the total.
@@ -833,6 +846,17 @@ not on LOLA, so run it only after the blend is settled: tile the final blended D
 into the same tile grid, then launch with `estimError=1`. It is single-core per tile
 and slower. Budget it separately. Finally mosaic the per-tile error maps into the
 delivered `height_uncertainty.tif`.
+
+`estimError=1` uses the ASP sfs `--estimate-height-errors` method (the height
+perturbation at each pixel that makes a simulated image differ from the measured one by
+more than twice the unperturbed discrepancy). This estimate is KNOWN TO BE OPTIMISTIC - it
+underestimates the true uncertainty - and that option is now obsolete. The current ASP
+approach is `--save-variances` (per-pixel standard deviation) and, in recent builds,
+`--save-covariances` (which propagates into slope uncertainty and reveals the spatial
+correlation of errors). Until that variance/covariance path is settled, ship the
+`estimError` map but state the underestimate caveat in the readme. See the sfs discussion:
+[sfs tool reference](https://stereopipeline.readthedocs.io/en/latest/tools/sfs.html) and the
+[SfS overview](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html).
 
 Tile the final blended SfS DEM onto the same tile grid.
 
