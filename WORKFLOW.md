@@ -758,6 +758,24 @@ roughly 3.5 h on one 28-core node, so 1200 images at 120k tri is about 5 to 6 h,
 within an 8 h wall. Record the elapsed time and peak memory of each solve so the
 next estimate has a basis.
 
+Do not shrink `MAX_NUM_TRI` for a small site: it is backwards. A small, image-poor
+site (for example a 5 km, roughly 280-image polar site) already has a sparse tie
+network, so a cut such as 300000 down to 150000 starves it further and a few
+orientation knots fall into the solver null space and blow up (anchor residuals to
+1e36 px). Hold `MAX_NUM_TRI` at 300000 or higher regardless of how small the site
+is. More generally, if after a solve some cameras are degenerate (zero valid ground
+matches) or move unreasonably (camera-center offset or per-camera reprojection error
+far above the bulk), that is the signature of a poorly constrained problem, too few
+control points per pose, and the first response is to raise the triangulated, GCP,
+and anchor counts, not to clamp the camera position harder or reach for
+`--orientation-uncertainty`. A handful of frames can still stay degenerate even at
+high tri: a frame that only clips the domain and images terrain tens of km away
+carries few tie points and gets zero anchors, since its anchor rays all miss the
+padded anchor DEM (watch for `Num anchor points per image: 0` in the log). Those are
+harmless if they lie outside the SfS subset; to fix them, grow the `--anchor-dem`
+well beyond the usual 4 km pad to cover the actual union of footprints, or drop them
+from the set.
+
 Then redo SfS (repeat step 8, reusing the exposures since the pose change is
 sub-pixel) with the `jitter/run-...-adjusted_state.json` cameras. Run a few spread
 tiles first to confirm the bias collapsed, then run the full set.
