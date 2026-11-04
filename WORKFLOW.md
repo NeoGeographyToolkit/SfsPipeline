@@ -62,7 +62,7 @@ qsub -V -m n -r n -N <name> -q normal \
   list from only the variables that are set.
 - Gate each stage on the PBS job reaching `job_state=F`, never on an output file
   appearing (a product shows up while still half-written). Inspect each product
-  (hillshade, geodiff, red/green overlay) before moving on, not ten steps later.
+  (hillshade, geodiff, overlay) before moving on, not ten steps later.
 
 ## 1. Reference terrain preparation
 
@@ -311,7 +311,7 @@ qsub -V -m n -r n -N filter_max -q normal \
 `filter_by_max.sh` keeps mapprojected tif paths. Derive the matching cub and
 camera lists from it, so all three stay in the same azimuth order and 1-to-1.
 These `lists/filtered_images.txt` and `lists/filtered_cameras.txt` are the image
-and camera lists the refine chain (section 5b) and the GSD query (section 7) read.
+and camera lists the refine chain (section 5b) and the GSD query (section 6) read.
 
 ```bash
 cat lists/filtered_map.txt                                      \
@@ -410,7 +410,25 @@ verify-ba ba_htdem/run --min_match_count=10 --max_residual_error=2.0 | jq '.comp
 verify-ba ba_htdem/run --min_match_count=10 --max_residual_error=2.0 > ba_htdem_comps.json
 ```
 
-## 6. Post-bundle evaluation and camera prune
+## 6. Compute native image GSD
+
+Query each image's native ground sample distance.
+
+```bash
+query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt \
+  ref/lola_1mpp.tif lists/gsd 1.75 $(pwd)
+```
+
+This writes `lists/gsd_all.txt` (id and GSD) and a keep-list
+`lists/gsd_lt1.75.txt` of the frames finer than the cutoff.
+
+All images stay in bundle adjustment (section 5), where the large footprints of
+the coarse frames help tie the control network together. But the coarse frames
+(GSD at or above 1.75 m) tend to introduce misregistration, so they are left out
+of the registration-validation max-lit (section 7) and the SfS set (section 8),
+never out of the bundle solve.
+
+## 7. Post-bundle evaluation and camera prune
 
 Before SfS, confirm the cameras co-register and remove the misaligned ones,
 meaning images with large outliers or an insufficient match count in
@@ -419,10 +437,31 @@ discusses this validation at length in its
 [registration validation section](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-reg-valid).
 
 Mapproject the survivors with the final `ba_htdem` cameras, then build a max-lit
-mosaic of each azimuth half and overlay them red/green: coincident terrain means
-the cameras co-register. Red/green only on opposite crater walls is an
-illumination difference (fine). A uniform offset of whole crater outlines is a
-real misregistration. Then rank the per-camera bundle-adjust stats and prune.
+mosaic of each azimuth half and overlay the two in `stereo_gui`, toggling between
+them. Coincident terrain means the cameras co-register. A uniform offset of whole
+crater outlines is a real misregistration, while a difference only on opposite
+crater walls is just an illumination effect and is fine. Then rank the per-camera
+bundle-adjust stats and prune.
+
+Build these inspection max-lit mosaics from the finer-GSD frames only (the
+`lists/gsd_lt1.75.txt` keep-list from section 6), excluding the coarse ones. All
+images were kept in the bundle solve for connectivity, but a coarse frame blurs
+the max-lit and can mask or mimic a misregistration, and it is out of the SfS set
+anyway. The manual's registration-validation procedure then applies: sort the
+survivors by their 85th-percentile mapproject offset from
+`run-mapproj_match_offset_stats.txt`, build a few candidate max-lit sets at offset
+cutoffs around 1.25 to 1.75 m (an offset in meters, a different quantity from
+GSD), overlay them in `stereo_gui`, and keep the set that holds coverage with the
+least ghosting.
+
+Partial (per-chunk) max-lit mosaics localize a blur. Order the kept frames by a
+quality key (small GSD and small mapproject offset) and split them into chunks of
+about 100, so a thousand frames become ten partial mosaics. `batch_mapproject.sh`
+already writes a `dem_mosaic --max` per chunk when `NO_MOSAIC=0`, and
+`sfs_prune_and_remosaic.sh` likewise writes per-chunk mosaics, so these come for
+free. When the full max-lit shows a blur or ghost, find the partial mosaic that
+carries it to narrow the suspects from the whole site to about 100 frames, then to
+the single offending frame.
 
 Flag the misaligned cameras from the `ba_htdem` per-camera stats. The file
 `run-mapproj_match_offset_stats.txt` (meters off consensus) is the primary
@@ -458,6 +497,11 @@ Rebuild the max-lit mosaic without re-mapprojecting, since the per-image
 sfs_prune_and_remosaic.sh map_htdem lists/removed_ids.txt $(pwd) 500 28
 ```
 
+On occasion, images with similar enough illumination register well with each other
+but not with other groups of images of similar illumination. Fixing this can
+require quite some complex work. See also the ASP documentation on [handling
+failure](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-fail).
+
 Jitter-solving, which is an advanced feature discussed below, can introduce its
 own issues. Especially with a loose orientation guard or finer orientation
 knots, also screen for cameras with a catastrophic pose change using `cam_test`.
@@ -480,7 +524,7 @@ intensities into the terrain.
 Verify a couple of flagged cameras visually before pruning, and after rebuilding
 confirm the streaks are gone and the terrain did not move.
 
-## 7. SfS image subset
+## 8. SfS image subset
 
 The full image set is too expensive for the SfS solve, so pick a minimal-but-
 covering subset. The grouping axis is the Sun azimuth angle, not equal counts.
@@ -521,11 +565,11 @@ each image's native ground sample distance, read from the camera with
 tables, which omit images pulled in from an adjacent-site query). It also
 correlates with high
 `mapproj_match_offset` (partly a coarseness proxy), so the coarsest tend to be
-caught by the prune in step 6. Treat GSD over about 1.75 m as suspect and over 2 m
-as a drop from the SfS subset, preferring a finer frame and keeping a coarse one
-only as a last resort where it is the sole cover (gate on coverage holes first).
-Drop only from the SfS subset, never from the bundle solve, where the large
-footprints are tie-point coverage assets.
+caught by the prune in step 7. Treat GSD over about 1.75 m as suspect and over 2 m
+as a drop, preferring a finer frame and keeping a coarse one only as a last resort
+where it is the sole cover (gate on coverage holes first). Drop the coarse frames
+from the SfS subset and from the section-7 registration-validation max-lit, never
+from the bundle solve, where the large footprints are tie-point coverage assets.
 
 The `image_subset` coverage threshold (last arg above) should stay at 0.01 for a
 shadow-calibrated reflectance like LRO NAC, where the lit/shadow cutoff is about
@@ -536,14 +580,14 @@ lever for fewer images is the grouping, not the threshold. Change it only as a
 deliberate user decision, tuning by clicking pixel values in stereo_gui, never
 raising it on your own to thin more.
 
-```bash
-query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt ref/lola_1mpp.tif \
-  lists/gsd 2.0 $(pwd)
-```
+The GSD table was already built in section 6 (`lists/gsd_all.txt`, with the
+finer-than-1.75 m keep-list `lists/gsd_lt1.75.txt`). Reuse it here rather than
+re-querying. Intersect the chosen SfS cover with the keep-list to drop the coarse
+frames from the SfS set.
 
-## 8. Shape-from-Shading
+## 9. Shape-from-Shading
 
-### 8a. Compute exposures (do this first)
+### 9a. Compute exposures (do this first)
 
 `sfs --compute-exposures-only` writes one `run-exposures.txt` that every tile and
 every later simulation reuses. Run it once over the selected set before tiling.
@@ -558,10 +602,10 @@ qsub -V -m n -r n -N sfs_exp -W group_list=$groupName -j oe -S /bin/bash \
      exposures_sec $(pwd)
 ```
 
-### 8b. Tile the reference DEM
+### 9b. Tile the reference DEM
 
 A single SfS job over a full domain runs past the walltime, so split it into
-tiles, merged in 8d. Tile sizes on the order of 2500 to 3000 px are suggested
+tiles, merged in 9d. Tile sizes on the order of 2500 to 3000 px are suggested
 (pick a size that actually splits the domain, since `tile_dem.py` rounds the tile
 count). The last argument is the per-side overlap in pixels, so tiles overlap and
 the mosaic has no seams. Local, fast (`geo` conda env):
@@ -570,11 +614,11 @@ the mosaic has no seams. Local, fast (`geo` conda env):
 tile_dem.py ref/lola_1mpp.tif 2500 2500 tiles 200
 ```
 
-### 8c. Run parallel_sfs per tile
+### 9c. Run parallel_sfs per tile
 
 `launch_sfs_tiles.sh` submits one SfS job per tile (`parallel_sfs.sh` is the
 per-tile worker, which bakes in the Lunar-Lambert reflectance, smoothness, and
-initial-DEM-constraint weights). Pass the exposures from 8a. A 4k tile is roughly
+initial-DEM-constraint weights). Pass the exposures from 9a. A 4k tile is roughly
 6-10 h on 2 `bro_ele` nodes. Use the `long` queue. The trailing `0` is
 `estimError=0` (the SfS pass, no error map).
 
@@ -591,7 +635,7 @@ launch_sfs_tiles.sh tiles lists/secondary_images.txt ba_htdem/run \
   exposures_sec/run-exposures.txt sfs 0 $(pwd)
 ```
 
-### 8d. Merge the tiles
+### 9d. Merge the tiles
 
 Merge with a blended `dem_mosaic` (no `--max`, so tile seams stay smooth). The
 output product name is `sfs_dem.tif`. List the per-tile SfS DEMs first (each tile
@@ -607,7 +651,7 @@ qsub -V -m n -r n -N sfs_merge -W group_list=$groupName -j oe -S /bin/bash \
 Inspect: `geodiff` the SfS DEM against the reference and hillshade both. Expect
 mean dz near zero, sub-meter std, and no tile seams.
 
-## 9. Re-register the SfS terrain to LOLA
+## 10. Re-register the SfS terrain to LOLA
 
 The SfS DEM can carry a residual shift against LOLA. Measure it, and if it is real,
 re-register the cameras and redo SfS. This GCP re-registration (a bundle adjustment for a
@@ -776,14 +820,14 @@ harmless if they lie outside the SfS subset; to fix them, grow the `--anchor-dem
 well beyond the usual 4 km pad to cover the actual union of footprints, or drop them
 from the set.
 
-Then redo SfS (repeat step 8, reusing the exposures since the pose change is
+Then redo SfS (repeat step 9, reusing the exposures since the pose change is
 sub-pixel) with the `jitter/run-...-adjusted_state.json` cameras. Run a few spread
 tiles first to confirm the bias collapsed, then run the full set.
 Verify: `geodiff` versus LOLA (dz near zero) and `hillshade_correlator.sh` dx/dy
 versus LOLA now near zero, plus `geodiff` versus the original `sfs_dem.tif`
 showing the corrective move.
 
-## 10. Blending and mosaics
+## 11. Blending and mosaics
 
 On the final (re-registered) SfS DEM, build the ortho mosaics and blend the DEM
 back toward the reference where there is little illumination signal
@@ -796,7 +840,7 @@ correlation step and for artifact QC, not for delivery.
 
 Both mosaics are built over the SfS-subset orthos mapprojected with the final
 (re-registered) cameras, so first mapproject the SfS images with those cameras and
-list the results. Use the final-camera prefix from section 9 (`ba_jitter/run`, or
+list the results. Use the final-camera prefix from section 10 (`ba_jitter/run`, or
 `ba_gcp/run` if the bundle path was taken).
 
 ```bash
@@ -856,7 +900,7 @@ to be touched up. Because the blend is local, a chosen area can be re-blended
 on a padded clip with different settings, then merged back into the full result
 with `dem_mosaic --priority-blending-length`. See `sfs_usage.rst`.
 
-## 11. Height-uncertainty map
+## 12. Height-uncertainty map
 
 Re-run the SfS worker with `estimError=1` to write a `-height-error.tif` per tile.
 This pass evaluates height perturbations on the final produced SfS DEM (the blend),
@@ -898,7 +942,7 @@ ls sfs_err/clip*/run-height-error.tif > lists/height_error_tiles.txt
 dem_mosaic_list.sh lists/height_error_tiles.txt height_uncertainty.tif $(pwd)
 ```
 
-## 12. Delivery
+## 13. Delivery
 
 Assemble a self-describing results directory and fill in `inventory.yaml` so the
 project is self-describing when handed off.
@@ -950,9 +994,9 @@ registered cameras), which mapprojects each at its own native resolution and wri
 `gsd.csv`.
 
 The native-res frames are those in the SfS subset whose native GSD (from the
-`lists/gsd_all.txt` table built in section 7) is below 1 m. Intersect the two id
+`lists/gsd_all.txt` table built in section 6) is below 1 m. Intersect the two id
 sets, then build the paired cub and final-camera lists, 1-to-1 (use the same
-final-camera prefix as section 10):
+final-camera prefix as section 11):
 
 ```bash
 awk '$2 != "NaN" && $2 < 1.0 {print $1}' lists/gsd_all.txt                   \
