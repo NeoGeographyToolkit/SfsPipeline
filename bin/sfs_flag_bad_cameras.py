@@ -17,7 +17,17 @@ import os
 import re
 import sys
 
-ID_RE = re.compile(r"(M\d+[LR]E|[A-Za-z0-9_]+)")
+NAC_RE = re.compile(r"M\d+[LR]E")
+
+def extract_id(token):
+  # The stats first column can be a bare id or a full path. Strip the directory
+  # first (else the path's leading component, e.g. "img", is grabbed as the id),
+  # then prefer the LRO NAC id, else the basename up to the first dot.
+  base = os.path.basename(token)
+  m = NAC_RE.search(base)
+  if m:
+    return m.group(0)
+  return base.split(".")[0]
 
 def find_file(prefix, pattern):
   # Try exact pattern relative to prefix
@@ -66,9 +76,8 @@ def main():
           continue
         p = line.split()
         if len(p) >= 7:
-          m = ID_RE.search(p[0])
-          if m:
-            pid = m.group(1)
+          pid = extract_id(p[0])
+          if pid:
             try:
               p95 = float(p[4])
               count = int(p[6])
@@ -90,9 +99,8 @@ def main():
           continue
         p = line.split()
         if len(p) >= 3:
-          m = ID_RE.search(p[0])
-          if m:
-            pid = m.group(1)
+          pid = extract_id(p[0])
+          if pid:
             try:
               med = float(p[2])
               if med > args.max_reproj_med:
@@ -109,9 +117,8 @@ def main():
           continue
         p = line.split()
         if len(p) >= 2:
-          m = ID_RE.search(p[0])
-          if m:
-            pid = m.group(1)
+          pid = extract_id(p[0])
+          if pid:
             try:
               shift = float(p[1])
               if shift > args.max_shift_m:

@@ -72,8 +72,13 @@ to the target projection, resolution, and a half-integer extent. See the
 in the [reference documentation](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html),
 including [ensuring extents are offset by 0.5 pixels](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#terrain-bounds)
 so pixel centers are integer multiples of the grid (required by `sfs_blend`).
-`make_ref_dem.sh` wraps `gdalwarp` (cubic spline, 256-block tiling). Build it on
-a compute node, not the head node. Suggested walltime 1:00:00.
+`make_ref_dem.sh` wraps `gdalwarp` (cubic spline, 256-block tiling). Its work is a
+single-thread `gdalwarp` (`GDAL_NUM_THREADS=1`), and the optional spike blur is a
+single-thread `dem_mosaic`, so it is head-node safe and finishes in one to two
+minutes even for a large output. Run it directly on the head node, as shown below.
+A `devel`-queue `qsub` works too. A normal-queue `qsub` for this trivial regrid is
+wasteful and can land on a stuck node while the head-node run would already be done
+(the same point is made in section 10 for the padded anchor DEM).
 
 Two conventions matter here:
 - **Pad the extent beyond the delivery box** (footprints spill past the ROI).
@@ -87,12 +92,9 @@ Two conventions matter here:
   and let the name say so.
 
 ```bash
-qsub -V -m n -r n -N ref_dem -q normal \
-  -W group_list=$groupName -j oe -S /bin/bash \
-  -l select=1:ncpus=20:model=bro_ele -l walltime=1:00:00 \
-  -- make_ref_dem.sh src_lola.tif ref/lola_1mpp.tif \
-     "71240.5 162789.5 90731.5 178256.5" 1 $(pwd) \
-     "+proj=stere +lat_0=-90 +lon_0=0 +R=1737400 +units=m +no_defs"
+make_ref_dem.sh src_lola.tif ref/lola_1mpp.tif \
+  "71240.5 162789.5 90731.5 178256.5" 1 $(pwd) \
+  "+proj=stere +lat_0=-90 +lon_0=0 +R=1737400 +units=m +no_defs"
 ```
 
 Confirm 100% valid and a half-integer origin with `gdalinfo -stats`.
@@ -166,21 +168,28 @@ M=data/updated_SPole_2023_ImageGCPAdd_root.txt
 grep -Fxf "$M" lists/products.txt | sort -u > lists/usgs_registered.txt
 ```
 
-Build the registered CSM cameras by running `spiceinit` with the USGS polar SPICE kernels
-and regenerating the camera. For a fresh ingest, pass `--usgs-polar` to the batch ingest;
-for cubs already prepared with standard kernels, re-register a copy in place (no re-fetch)
-with `redo_spiceinit_usgs.sh`:
+Build the registered CSM cameras by running `spiceinit` with the USGS polar SPICE
+kernels and regenerating the camera. The registered ids are a subset of the candidate
+set, so their calibrated `.cal.echo.cub` files are already in `img/` from the section-2
+ingest. `redo_spiceinit_usgs.sh` reads those (its second argument, the source dir
+`img`), copies each into the output dir `usgs_south/`, and re-registers the copy there
+with the polar kernels, so the vanilla cub in `img/` is left intact for the
+non-registered path. No re-fetch and no re-calibration, since `spiceinit` rewrites only
+the SPICE geometry and the radiometry baked into the cub is preserved. It also records
+the ids whose registered camera actually built in `usgs_south/usgs_built_*.txt`:
 
 ```bash
-batch_prepare_lro.sh lists/usgs_registered.txt usgs_south --usgs-polar
 redo_spiceinit_usgs.sh lists/usgs_registered.txt img usgs_south $(pwd)
 ```
 
-A few registered ids can fail the polar spiceinit even though they are
-in-window, so not every id on the list gets a registered camera.
-`redo_spiceinit_usgs.sh` records the ids that built in
-`usgs_south/usgs_built_*.txt`. That is the list to trust, and it feeds the
-fixed-camera list assembled in section 5b.
+If the section-2 ingest wrote the cubs somewhere other than `img/`, pass that dir as
+the second argument instead. The registered cubs and cameras land in `usgs_south/` as
+`<id>.cal.echo.cub` and `<id>.cal.echo.json`.
+
+A few registered ids can fail the polar spiceinit even though they are in-window, so
+not every id on the list gets a registered camera, and `usgs_built_*.txt` is the
+authoritative list of the ones that did. The fixed-camera list in section 5b is
+assembled from it, so the first bundle adjustment cannot be set up without this step.
 
 The matching polar SPICE kernels (CK `.bc` + SPK `.bsp`) are referenced by the
 `usgs_polar_ck.mk` / `usgs_polar_spk.mk` meta-kernels under
@@ -199,8 +208,8 @@ each (replace the `/path/to/isisdata` placeholder with your own `$ISISDATA`).
 The custom USGS polar kernels must be listed last in `KERNELS_TO_LOAD`, so that
 they override the standard mission kernels where they apply.
 
-With that in place, `spiceinit` is invoked with `ck=usgs_polar_ck.mk
-spk=usgs_polar_spk.mk`, which is what the `--usgs-polar` option does.
+With that in place, `redo_spiceinit_usgs.sh` invokes `spiceinit` with
+`ck=usgs_polar_ck.mk spk=usgs_polar_spk.mk web=false`, reading the local polar kernels.
 
 Data release citation: Weller, L.A., et al., 2025, Improved camera pointing and
 spacecraft ephemeris data for Lunar Reconnaissance Orbiter Camera (LROC) Narrow
@@ -291,8 +300,11 @@ that is missing or whose maximum is below the lit-vs-shadow cutoff (0.005 for
 calibrated LRO NAC, the same value as the SfS shadow threshold).
 It also eliminates images with less than 0.2% valid pixels.
 
-`filter_by_max.sh` runs many parallel `gdalinfo` workers, so submit it as a short
-job, never inline on the head node.
+`filter_by_max.sh` runs many parallel `gdalinfo` workers (`PROCS` of them), so on a
+multi-process-limited head node submit it as a short job. The job itself is quick,
+usually a few minutes even for a large list, so it returns almost immediately. On a
+small site it can instead be run inline with `PROCS=1`, which stays within the
+head-node single-process limit.
 
 The kept images are recorded in `lists/filtered_map.txt`, in Sun azimuth order.
 
@@ -375,19 +387,19 @@ grep -F -f lists/usgs_built_ids.txt lists/filtered_images.txt \
 ```
 
 ```bash
-qsub -V -m n -r n -N ba_fix -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_fix -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "FIXED_LIST=lists/usgs_fixed_images.txt" \
   -- bundle_adjust_refine.sh lists/filtered_images.txt lists/filtered_cameras.txt \
      ba/run ba_fix $(pwd)
 
-qsub -V -m n -r n -N ba_free -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_free -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "USE_CLEAN=1" \
   -- bundle_adjust_refine.sh ba_fix/run-image_list.txt ba_fix/run-camera_list.txt \
      ba_fix/run ba_free $(pwd)
 
-qsub -V -m n -r n -N ba_htdem -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_htdem -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "USE_CLEAN=1,REF_DEM=ref/lola_1mpp.tif" \
   -- bundle_adjust_refine.sh ba_free/run-image_list.txt ba_free/run-camera_list.txt \
@@ -412,11 +424,17 @@ verify-ba ba_htdem/run --min_match_count=10 --max_residual_error=2.0 > ba_htdem_
 
 ## 6. Compute native image GSD
 
-Query each image's native ground sample distance.
+Query each image's native ground sample distance. `query_gsd.sh` loads one camera
+per image in a serial loop, so it is single-process (head-node legal) but slow on a
+large list and ties the head node up for a long time. Submit it rather than running
+it inline.
 
 ```bash
-query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt \
-  ref/lola_1mpp.tif lists/gsd 1.75 $(pwd)
+qsub -V -m n -r n -N query_gsd -q normal \
+  -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
+  -- query_gsd.sh lists/filtered_images.txt lists/filtered_cameras.txt \
+     ref/lola_1mpp.tif lists/gsd 1.75 $(pwd)
 ```
 
 This writes `lists/gsd_all.txt` (id and GSD) and a keep-list
@@ -442,6 +460,21 @@ them. Coincident terrain means the cameras co-register. A uniform offset of whol
 crater outlines is a real misregistration, while a difference only on opposite
 crater walls is just an illumination effect and is fine. Then rank the per-camera
 bundle-adjust stats and prune.
+
+Mapproject into a fresh `map_htdem` directory with the `ba_htdem` cameras. Pass
+`NO_MOSAIC=0` here, not `1`. That is what makes `mapproject_chunk.sh` write the
+per-chunk `map_list_<beg>_<end>.txt` files (and a per-chunk max-lit), which
+`sfs_prune_and_remosaic.sh` later prunes and re-mosaics per chunk and per azimuth
+half. A `NO_MOSAIC=1` run writes no chunk lists, and the prune step then has nothing
+to split into halves.
+
+```bash
+export QSUB_BIN=/PBS/bin/qsub
+export PROJWIN="71240.5 162789.5 90731.5 178256.5"
+export NO_MOSAIC=0 CHUNK_SIZE=121 MODEL=bro_ele WALLTIME=4:00:00
+batch_mapproject.sh ref/lola_1mpp.tif lists/filtered_images.txt ba_htdem/run \
+  map_htdem $(pwd) lists/filtered_cameras.txt
+```
 
 Build these inspection max-lit mosaics from the finer-GSD frames only (the
 `lists/gsd_lt1.75.txt` keep-list from section 6), excluding the coarse ones. All
@@ -491,10 +524,15 @@ sort -u lists/removed_ids.txt lists/striped_ids.txt -o lists/removed_ids.txt
 
 Rebuild the max-lit mosaic without re-mapprojecting, since the per-image
 `*.map.tr1.tif` survive. The removed ids are dropped from each chunk list, then
-`dem_mosaic --max` is re-run per chunk, per half, and for the total.
+`dem_mosaic --max` is re-run per chunk, per half, and for the total. It re-runs
+`dem_mosaic` multi-threaded over many chunks, so submit it rather than running it
+inline on the head node.
 
 ```bash
-sfs_prune_and_remosaic.sh map_htdem lists/removed_ids.txt $(pwd) 500 28
+qsub -V -m n -r n -N remosaic -q normal \
+  -W group_list=$groupName -j oe -S /bin/bash \
+  -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
+  -- sfs_prune_and_remosaic.sh map_htdem lists/removed_ids.txt $(pwd) 500 28
 ```
 
 On occasion, images with similar enough illumination register well with each other
@@ -556,6 +594,23 @@ cat selection/all_extra.txt                                     \
   | sort -u > lists/secondary_images.txt
 ```
 
+To pick between the primary and extra covers, build a full-resolution max-lit of
+each and compare them (and against the full-set max-lit). The `all_primary.txt` /
+`all_extra.txt` lists hold low-resolution sub8 paths, so first rewrite each id to
+its full-resolution mapprojected path under `maps/`, then `dem_mosaic --max` over
+that list with `dem_mosaic_list.sh`:
+
+```bash
+for cover in primary extra; do
+  perl -p -e "s#^.*?(M\d+[LR]E).*?\n#maps/\$1.cal.echo.map.tr1.tif\n#" \
+    selection/all_${cover}.txt | sort -u > lists/sel_${cover}_map.txt
+  qsub -V -m n -r n -N max_$cover -q normal \
+    -W group_list=$groupName -j oe -S /bin/bash \
+    -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
+    -- dem_mosaic_list.sh lists/sel_${cover}_map.txt selection/max_${cover}.tif $(pwd) --max
+done
+```
+
 Note on GSD: coarse frames hurt SfS and the max-lit mosaic. Ground area per pixel
 scales as GSD squared, so a 2 m/pixel frame covers about 4x the real estate of a
 1 m/pixel one, which is exactly why `image_subset`'s coverage-greedy ranking tends
@@ -596,7 +651,7 @@ If later SfS is redone, after refining the registration of the cameras, these
 exposures can be reused as they would change only in minor ways.
 
 ```bash
-qsub -V -m n -r n -N sfs_exp -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sfs_exp -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
   -- sfs_exposures.sh lists/secondary_images.txt ba_htdem/run ref/lola_1mpp.tif \
      exposures_sec $(pwd)
@@ -643,7 +698,7 @@ job wrote `sfs/clip<id>/run-DEM-final.tif`).
 
 ```bash
 ls sfs/clip*/run-DEM-final.tif > lists/sfs_tiles.txt
-qsub -V -m n -r n -N sfs_merge -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sfs_merge -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=4:00:00 \
   -- dem_mosaic_list.sh lists/sfs_tiles.txt sfs_dem.tif $(pwd)
 ```
@@ -673,7 +728,7 @@ sfs_exposures.sh lists/filtered_images.txt ba_htdem/run sfs_dem.tif exposures_al
 Then render and align, one GCP per image.
 
 ```bash
-qsub -V -m n -r n -N sim_align -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sim_align -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "ALIGN_THRESH=0,EXPOSURES_PREFIX=exposures_all/run" \
   -- batch_sfs_sim.sh lists/filtered_images.txt 1 99999 sfs_dem.tif lronac_all \
@@ -686,7 +741,7 @@ multidirectional hillshade), and read the robust median of the dx/dy disparity (
 pc_align matrix, an origin-vs-centroid artifact). Add `geodiff` for dz:
 
 ```bash
-qsub -V -m n -r n -N hcorr -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N hcorr -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=20:model=bro_ele -l walltime=1:00:00 \
   -- hillshade_correlator.sh sfs_dem.tif ref/lola_1mpp.tif $(pwd) hcorr_sfs_lola 25
 ```
@@ -738,7 +793,7 @@ applied through the script default rather than `-v` since its comma would break 
 variable list), and constrains heights to LOLA:
 
 ```bash
-qsub -V -m n -r n -N ba_gcp -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_gcp -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=4:00:00 \
   -v "DEM_UNCERTAINTY=20,MAX_GCP_TO_TRI_RATIO=2.0" \
   -- bundle_adjust_dem_gcp.sh ba_htdem/run-image_list.txt ba_htdem/run-camera_list.txt \
@@ -766,7 +821,7 @@ a stuck node (a job that even `qdel -W force` will not remove) while the
 head-node run would have finished in under two minutes.
 
 ```bash
-qsub -V -m n -r n -N ba_jitter -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N ba_jitter -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "NUM_ITER=75,NUM_PASSES=2,NUM_LINES_POS=15000,NUM_LINES_ORIENT=2000,DEM_UNC=20,\
 ANCHOR_DEM_UNC=20,NUM_ANCHOR=5000,MAX_PAIRWISE=5000,MAX_NUM_TRI=300000,\
@@ -863,7 +918,7 @@ Both ortho mosaics are delivered, with distinct roles:
 Build the max-lit mosaic, which is the matching ortho and the `sfs_blend` input.
 
 ```bash
-qsub -V -m n -r n -N maxlit -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N maxlit -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- dem_mosaic_list.sh lists/sfs_maps.txt max_lit.tif $(pwd) --max
 ```
@@ -874,7 +929,7 @@ LOLA grid with `regrid_to_grid.sh` so it matches the max-lit mosaic pixel for
 pixel.
 
 ```bash
-qsub -V -m n -r n -N blendmos -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N blendmos -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- blend_img_mosaic.sh lists/sfs_maps.txt average_mosaic_raw.tif 0.005 $(pwd)
 regrid_to_grid.sh average_mosaic_raw.tif average_mosaic.tif \
@@ -884,7 +939,7 @@ regrid_to_grid.sh average_mosaic_raw.tif average_mosaic.tif \
 Blend the SfS DEM with the reference DEM in permanently shadowed areas.
 
 ```bash
-qsub -V -m n -r n -N sfs_blend -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N sfs_blend -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
   -- sfs_blend.sh ref/lola_1mpp.tif sfs_dem.tif max_lit.tif $(pwd)
 ```
@@ -1012,7 +1067,7 @@ while read -r id; do ls jitter/run*"$id"*adjusted_state.json | head -1; done \
 ```
 
 ```bash
-qsub -V -m n -r n -N natres -W group_list=$groupName -j oe -S /bin/bash \
+qsub -V -m n -r n -N natres -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=2:00:00 \
   -- mapproject_native_res.sh lists/native_res_images.txt lists/native_res_cameras.txt \
      ref/lola_1mpp.tif map_images_native_res $(pwd)

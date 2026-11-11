@@ -19,8 +19,16 @@ else
 fi
 
 db_file=${1}
-file_name="${db_file##*/}"
-layer_name="${file_name%%.*}"
+
+# Read the layer name from the file, not the filename stem: a gpkg's internal layer
+# name often differs, and a mismatch made the SQL fail with "no such table".
+# ogrinfo lists layers as "N: name (type)"; take the first.
+layer_name=$(ogrinfo -ro -so "$db_file" 2>/dev/null \
+    | awk -F': ' '/^[0-9]+: /{sub(/ \(.*/,"",$2); print $2; exit}')
+if [ -z "$layer_name" ]; then
+    file_name="${db_file##*/}"
+    layer_name="${file_name%%.*}"
+fi
 
 if [[ "$pds_url" != *"cloudfront"* ]]; then
     sqlcmd="SELECT replace(FILE_SPECIFICATION_NAME, 'LRO-L-LROC-2-EDR-V1.0', \"$pds_url\") FROM $layer_name"

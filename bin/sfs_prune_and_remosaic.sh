@@ -36,6 +36,32 @@ fi
 
 echo "Pruning $(wc -l < "$rm_ids") suspect IDs from $map_dir"
 
+# The per-chunk map_list_<beg>_<end>.txt files are written by mapproject_chunk.sh
+# only when NO_MOSAIC=0. Without them the halves loop finds nothing and dem_mosaic
+# fails on an empty list, so fall back to a single pruned max-lit over all maps.
+nchunks=$(ls "$map_dir"/map_list_*.txt 2>/dev/null \
+  | grep -Ec 'map_list_[0-9]+_[0-9]+\.txt$' || true)
+if [ "$nchunks" -eq 0 ]; then
+  echo "No per-chunk map_list_<beg>_<end>.txt found in $map_dir"
+  echo "  (the mapprojection was run with NO_MOSAIC=1, which does not write them)."
+  echo "  Falling back to a single pruned max-lit from all surviving maps."
+  echo "  The two illumination halves are skipped, as the per-chunk azimuth order"
+  echo "  needed to split them is not recoverable without the chunk lists."
+  allMaps="$map_dir/all_maps_list.txt"
+  ls "$map_dir"/*.map.tr1.tif 2>/dev/null > "$allMaps" || true
+  if [ ! -s "$allMaps" ]; then
+    echo "Error: no *.map.tr1.tif found in $map_dir either, nothing to mosaic."
+    exit 1
+  fi
+  pruned="$map_dir/all_maps_pruned_list.txt"
+  grep -vF -f "$rm_ids" "$allMaps" > "$pruned" || true
+  echo "Maps: $(wc -l < "$allMaps") -> $(wc -l < "$pruned") after prune"
+  dem_mosaic --max --threads "$th" --dem-list "$pruned" \
+    -o "$map_dir/all_pruned_max_mosaic.tif"
+  echo "DONE: $map_dir/all_pruned_max_mosaic.tif successfully built."
+  exit 0
+fi
+
 : > "$map_dir/half1_pruned_list.txt"
 : > "$map_dir/half2_pruned_list.txt"
 
