@@ -17,9 +17,7 @@ the conda environment.
 - `init_isis.sh`: activate the ISIS conda environment.
 - `init_sfs.sh`: activate the SfsPipeline environment (ASP bin not on PATH).
 - `sfs_utilities.sh`: bash helper functions for SfS processing. Source to load.
-- `db_to_urls.sh`: produce NAC IMG download URLs from a GPKG source file.
 - `random_sample.sh`: take a random sample from a list file.
-- `ds_by_attr.sh`: subset a GPKG file by an attribute value range.
 
 ### Terrain, fetch, and calibration
 
