@@ -17,6 +17,13 @@
 #   Output: <stereoDir>/run-F_b1_nodata.tif = dx , run-F_b2_nodata.tif = dy (meters on a 1 m grid).
 # Env (defaults): STEREO_ALGO=asp_mgm  COST_MODE=3 (census, robust to illumination mismatch)
 #   HILLSHADE_OPTS="-multidirectional -compute_edges"  NCPUS=28
+#
+# Azimuth note: -multidirectional washes out relief contrast and, at a low altitude, still
+# blacks out slopes facing away from its northwest-centered azimuth set, and a black region
+# has no texture for the correlator. On a strong-relief polar site prefer a grazing single
+# azimuth that lights the terrain, e.g. HILLSHADE_OPTS="-az 135 -alt 15 -compute_edges" (pick
+# the azimuth with the highest mean brightness on the reference DEM). hillshade_correlator.sh
+# does this azimuth pick automatically via HS_AZIMUTH=auto.
 
 set -e
 leftDem=$1; rightDem=$2; stereoDir=$3; currDir=$4; maxSearch=${5:-20}

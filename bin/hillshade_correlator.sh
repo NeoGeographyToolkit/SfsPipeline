@@ -50,31 +50,58 @@ echo Machines: $(cat ${PBS_NODEFILE}) >> $out
 echo " " >> $out
 echo " " >> $out
 
-# Hillshade the DEMs with a small elevation to bring out contrast
-# Consider using instead:
-# gdaldem hillshade -multidirectional -compute_edges -alt 20.
-# SKIP_HILLSHADE=1 correlates the two inputs DIRECTLY, without hillshading. Use this
-# when the inputs are already textured images (e.g. mapprojected orthoimages or max-lit
-# mosaics), not DEMs: hillshading a reflectance image (values ~0..1 treated as elevation
-# over 1 m pixels) yields a flat, textureless raster and the correlation then produces no
-# tiles. For true DEM-to-DEM comparison leave this unset so the relief is brought out.
+# Hillshade the DEMs with a grazing sun to bring out relief contrast.
+# HS_ELEV: sun elevation in degrees (default 15, grazing). A grazing sun shows the finest
+#   relief and spreads the shade across the full 0-255 range, which the 8-bit subpixel
+#   optimizer reads; a high sun washes the relief out and gives fewer valid matches.
+# HS_AZIMUTH: sun azimuth. A single fixed azimuth (ASP hillshade's own default is 300)
+#   blacks out whatever slope faces away from it, and a black region carries no texture, so
+#   the correlator finds no disparity exactly there. The good azimuth is site-specific.
+#   Default "auto": hillshade the reference DEM at several azimuths on a downsampled copy and
+#   keep the best-lit one (highest mean brightness), applied to BOTH DEMs. Pass a number to pin it.
+# SKIP_HILLSHADE=1 correlates the two inputs DIRECTLY, without hillshading. Use this when the
+#   inputs are already textured images (mapprojected orthoimages or max-lit mosaics), not DEMs.
+hsElev=${HS_ELEV:-15}
+hsAz=${HS_AZIMUTH:-auto}
+
+pick_azimuth() { # $1 = DEM to probe; echoes the best-lit azimuth at hsElev
+  probeDem=$1
+  small=${stereoDir}/az_probe.tif
+  gdal_translate -q -outsize 1000 0 "$probeDem" "$small" >> $out 2>&1
+  best=300; bestMean=-1
+  for az in 0 45 90 135 180 225 270 315; do
+    shade=${stereoDir}/az_probe_a${az}.tif
+    gdaldem hillshade -az $az -alt $hsElev -compute_edges "$small" "$shade" >> $out 2>&1
+    mean=$(gdalinfo -stats "$shade" 2>/dev/null | perl -ne 'print $1 if /STATISTICS_MEAN=([0-9.]+)/')
+    echo "  probe azimuth $az mean brightness $mean" >> $out 2>&1
+    if [ -n "$mean" ] && awk "BEGIN{exit !($mean > $bestMean)}"; then bestMean=$mean; best=$az; fi
+  done
+  echo $best
+}
+
 if [ -n "$SKIP_HILLSHADE" ]; then
     leftHill=$leftDem
     rightHill=$rightDem
     echo "SKIP_HILLSHADE set: correlating inputs directly, no hillshade" >> $out 2>&1
 else
+    if [ "$hsAz" = "auto" ]; then
+        hsAz=$(pick_azimuth "$leftDem")
+        echo "Auto-selected hillshade azimuth: $hsAz (elevation $hsElev)" | tee -a $out
+    else
+        echo "Hillshade azimuth $hsAz (elevation $hsElev)" | tee -a $out
+    fi
     leftHill=${leftDem%.tif}_hill.tif
     rightHill=${rightDem%.tif}_hill.tif
     # Skip if done already
     if [ ! -f "$leftHill" ]; then
         echo Creating left hillshade: $leftHill
-        hillshade -e 10 $leftDem -o $leftHill >> $out 2>&1
+        hillshade -e $hsElev -a $hsAz $leftDem -o $leftHill >> $out 2>&1
     else
         echo Left hillshade $leftHill exists already, skipping >> $out 2>&1
     fi
     if [ ! -f "$rightHill" ]; then
         echo Creating right hillshade: $rightHill
-        hillshade -e 10 $rightDem -o $rightHill >> $out 2>&1
+        hillshade -e $hsElev -a $hsAz $rightDem -o $rightHill >> $out 2>&1
     else
         echo Right hillshade $rightHill exists already, skipping >> $out 2>&1
     fi
@@ -164,7 +191,7 @@ f=$stereoDir/align-trans_source.tif
 # Replace .tif by -DEM.tif
 f=${f%.tif}-DEM.tif
 g=${f%.tif}_hill.tif
-hillshade -e 10 $f -o $g >> $out 2>&1
+hillshade -e $hsElev -a $hsAz $f -o $g >> $out 2>&1
 
 # Build image pyramids for the hillshade
 stereo_gui --create-image-pyramids-only \

@@ -706,6 +706,20 @@ qsub -V -m n -r n -N sfs_merge -q normal -W group_list=$groupName -j oe -S /bin/
 Inspect: `geodiff` the SfS DEM against the reference and hillshade both. Expect
 mean dz near zero, sub-meter std, and no tile seams.
 
+A note on hillshading this far south. Hillshading polar terrain can leave large occluded
+regions that render black, so a good SfS DEM reads as a smooth, featureless brightness image
+and looks like a failed run. That is almost always the hillshade, not the DEM. A single-direction
+low-sun hillshade whose azimuth faces into the site's dominant slope shadows a large part of the
+terrain. ASP `hillshade` defaults to `-a 300 -e 20` and gdaldem defaults to azimuth 315, and on a
+site whose slope faces away from the northwest both shadow a large fraction. The good azimuth is
+wherever the dominant slope faces, so there is no universal value. If the shade blacks out, keep a
+grazing elevation (it shows the finest relief) and rotate the azimuth, for example `gdaldem
+hillshade -az 180 -alt 20 -compute_edges sfs_dem.tif out.tif`, trying 90, 135, 180, 225 until the
+terrain lights. Note that `-multidirectional` does not rescue a low sun, since its azimuth set is
+northwest-centered, the same dark directions. A black patch is a rendering effect until shown
+otherwise, not a bad DEM. Then overlay the lit hillshade on the LOLA reference to check for a real
+shift.
+
 ## 10. Re-register the SfS terrain to LOLA
 
 The SfS DEM can carry a residual shift against LOLA. Measure it, and if it is real,
@@ -736,9 +750,20 @@ qsub -V -m n -r n -N sim_align -q normal -W group_list=$groupName -j oe -S /bin/
 ```
 
 Globally, [correlate the SfS and LOLA hillshades](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-align-refine)
-(ASP `hillshade -e 10`, grazing, which gives more valid disparity than a washed-out
+(a grazing hillshade, which gives more valid disparity than a washed-out high-sun or
 multidirectional hillshade), and read the robust median of the dx/dy disparity (ignore the
-pc_align matrix, an origin-vs-centroid artifact). Add `geodiff` for dz:
+pc_align matrix, an origin-vs-centroid artifact). Add `geodiff` for dz.
+
+Azimuth matters for the correlator. A grazing sun gives the relief texture the correlator
+needs, but a grazing sun at the wrong azimuth blacks out whatever slope faces away from it,
+and a black region carries no texture, so the correlator finds no disparity exactly there.
+ASP `hillshade`'s default azimuth is 300, which on some polar sites is one of the worst. Both
+hillshades also come out 8-bit, so the better-lit (higher-contrast) azimuth also uses the 0-255
+range better for the subpixel optimizer. `hillshade_correlator.sh` therefore takes `HS_AZIMUTH`
+(default `auto`: it hillshades the reference DEM at a few azimuths and keeps the best-lit one,
+applied to both DEMs) and `HS_ELEV` (grazing, default 15). Pass `HS_AZIMUTH=<deg>` to pin a
+known-good azimuth. Confirm the two hillshades have no large black regions before trusting the
+dx/dy result.
 
 ```bash
 qsub -V -m n -r n -N hcorr -q normal -W group_list=$groupName -j oe -S /bin/bash \
