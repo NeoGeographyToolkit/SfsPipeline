@@ -524,11 +524,8 @@ per-chunk `map_list_<beg>_<end>.txt` files (and a per-chunk max-lit), which
 half. A `NO_MOSAIC=1` run writes no chunk lists, and the prune step then has nothing
 to split into halves.
 
-Pass no camera list here. The cameras are then found by the `ba_htdem/run` prefix.
-A camera list as the last argument replaces the bundle-adjusted cameras, so passing
-`lists/filtered_cameras.txt` (or `lists/fix_cameras.txt`) would mapproject with the
-unadjusted cameras. Use a new output directory each time, since existing maps are
-skipped and not redone.
+The cameras are found by the `ba_htdem/run` prefix. Existing maps are skipped, so
+use a new output directory each time.
 
 ```bash
 export QSUB_BIN=/PBS/bin/qsub
