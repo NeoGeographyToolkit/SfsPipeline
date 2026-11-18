@@ -44,6 +44,7 @@ the conda environment.
 - `mapproject_native_res.sh`: mapproject a list of images at their own native GSD (no fixed `--tr`) with paired cameras onto a reference DEM, building the native-resolution delivery ortho set plus a `gsd.csv` of the actual output pixel sizes.
 - `bundle_adjust.sh`: parallel_bundle_adjust wrapper (matches-only with `NUM_ITERATIONS=0`, or a solve).
 - `bundle_adjust_refine.sh`: the fixed (USGS-controlled) -> free -> heights-from-dem refine chain.
+- `ba_fixed_check.py`: compare the fixed and free per-camera errors of the fixed stage, to catch anchors that disagree.
 - `bundle_adjust_dem_gcp.sh`: bundle adjust constrained by a DEM-derived GCP file.
 - `hillshade_corr.sh`: standalone DEM-to-DEM hillshade correlation for a horizontal shift (dh/dv step, no pc_align).
 - `hillshade_correlator.sh`: DEM-to-DEM hillshade correlation and alignment (runs pc_align to emit aligned DEM).

@@ -33,6 +33,12 @@ binDir="$(cd "$(dirname "$0")" && pwd)"
 #                     Without exposures the per-image sfs sim renders
 #                     blank for darker images and image_align finds no
 #                     IPs. sfs_sim_align.sh errors out if unset.
+#   GCP_ONLY          1 = run gcp_gen for every image and stop (no per-image
+#                     bundle_adjust or re-mapproject). Records the shift and
+#                     a GCP for all images, the usual whole-site measurement.
+#   KEEP_IP           1 = keep the per-image .vwip files (default: wiped,
+#                     they eat disk over a whole site). The .match files
+#                     are always kept.
 #   SHADOW_THRESHOLD  passed to sfs as --shadow-threshold. Default 0.005
 #                     (matches sfs_exposures.sh and parallel_sfs.sh).
 #                     sfs's own default is -1 (off), which makes the
@@ -133,7 +139,8 @@ worker() {
     fi
 }
 export -f worker
-export sfsDem imgDir baDir simDir currDir out ALIGN_THRESH EXPOSURES_PREFIX SHADOW_THRESHOLD
+export binDir sfsDem imgDir baDir simDir currDir out ALIGN_THRESH EXPOSURES_PREFIX \
+  SHADOW_THRESHOLD GCP_ONLY KEEP_IP
 
 xargs -d '\n' -P $procs -I {} bash -c 'worker "$1"' _ {} < "$jobs"
 

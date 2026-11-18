@@ -60,9 +60,9 @@ qsub -V -m n -r n -N <name> -q normal \
   job id, and nothing shows up in `qstat`. A single unset name silently breaks
   every submission built from that list, so define all of them, or build the `-v`
   list from only the variables that are set.
-- Gate each stage on the PBS job reaching `job_state=F`, never on an output file
-  appearing (a product shows up while still half-written). Inspect each product
-  (hillshade, geodiff, overlay) before moving on, not ten steps later.
+- Start each stage only after the previous PBS job reaches `job_state=F`, never when
+  an output file appears (a product shows up while still half-written). Inspect each
+  product (hillshade, geodiff, overlay) before moving on, not ten steps later.
 
 ## 1. Reference terrain preparation
 
@@ -386,11 +386,41 @@ grep -F -f lists/usgs_built_ids.txt lists/filtered_images.txt \
   > lists/usgs_fixed_images.txt
 ```
 
+The fixed images must also use the registered cameras. `lists/filtered_cameras.txt`
+holds the plain cameras, so build a stage-1 camera list with the `usgs_south/`
+camera swapped in for each fixed image. Every other image keeps its plain camera,
+and the list stays 1-to-1 with `lists/filtered_images.txt`.
+
+```bash
+while read -r img; do
+  id=$(basename $img .cal.echo.cub)
+  if grep -qx "$id" lists/usgs_built_ids.txt; then
+    echo usgs_south/$id.cal.echo.json
+  else
+    echo ${img%.cub}.json
+  fi
+done < lists/filtered_images.txt > lists/fix_cameras.txt
+
+# Both counts must agree
+grep -c usgs_south lists/fix_cameras.txt
+wc -l < lists/usgs_fixed_images.txt
+```
+
+If the fixed images keep their plain cameras, the solve holds the plain SPICE poses
+rigid. Those disagree with each other by tens to hundreds of pixels, so the free
+cameras get pulled into a compromise frame, the first-pass outlier filter discards a
+large share of the matches, and the later stages inherit both problems.
+
+Whenever the image list is filtered again (for example to a `filtered_images2.txt`),
+rebuild `lists/usgs_fixed_images.txt` and `lists/fix_cameras.txt` from the new list.
+A fixed image missing from the image list stops `bundle_adjust` with
+`Could not find image ... read via --fixed-image-list among the input images`.
+
 ```bash
 qsub -V -m n -r n -N ba_fix -q normal -W group_list=$groupName -j oe -S /bin/bash \
   -l select=1:ncpus=28:model=bro_ele -l walltime=8:00:00 \
   -v "FIXED_LIST=lists/usgs_fixed_images.txt" \
-  -- bundle_adjust_refine.sh lists/filtered_images.txt lists/filtered_cameras.txt \
+  -- bundle_adjust_refine.sh lists/filtered_images.txt lists/fix_cameras.txt \
      ba/run ba_fix $(pwd)
 
 qsub -V -m n -r n -N ba_free -q normal -W group_list=$groupName -j oe -S /bin/bash \
@@ -411,11 +441,26 @@ filtered too aggressively against un-optimized cameras). Stages 2 and 3 reuse
 stage 1's clean matches, which were filtered against a real registered solve. The
 final cameras are `ba_htdem/run-...-adjusted_state.json`.
 
+Each stage names its output cameras after its input cameras, so the `run-` prefix
+grows by one per stage (`ba_free/run-run-<id>...`, and so on). This is expected.
+Always pass the previous stage's `run-camera_list.txt` rather than building camera
+names by hand.
+
 Validate each stage: the median reprojection error per camera in
-`<outDir>/run-final_residuals_stats.txt` should fall to about 1-2 px. Then check
-the camera graph with `verify-ba`, which uses the match-offset and residual
-stats to report the largest connected component. Iterate `--min_match_count` to
-see how it changes:
+`<outDir>/run-final_residuals_stats.txt` should fall to about 1-2 px. For the fixed
+stage, also compare the fixed cameras with the free ones:
+
+```bash
+ba_fixed_check.py ba_fix/run
+```
+
+Both groups should end at about 1 px median, with at most a few outliers. If the
+free cameras fit but many fixed cameras are left at 5 px or more, the fixed cameras
+disagree with each other. Check that `lists/fix_cameras.txt` points to the
+`usgs_south/` cameras for the fixed images, then rerun the stage. Then check the
+camera graph with `verify-ba`, which uses the match-offset and residual stats to
+report the largest connected component. Iterate `--min_match_count` to see how it
+changes:
 
 ```bash
 verify-ba ba_htdem/run --min_match_count=10 --max_residual_error=2.0 | jq '.component_sizes'
@@ -448,9 +493,9 @@ never out of the bundle solve.
 
 ## 7. Post-bundle evaluation and camera prune
 
-Before SfS, confirm the cameras co-register and remove the misaligned ones,
-meaning images with large outliers or an insufficient match count in
-`run-mapproj_match_offset_stats.txt`. This is the go/no-go gate. The ASP manual
+Before SfS, confirm the cameras co-register and remove the misaligned ones, meaning
+images with large outliers or an insufficient match count in
+`run-mapproj_match_offset_stats.txt`. This is the go/no-go check. The ASP manual
 discusses this validation at length in its
 [registration validation section](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-reg-valid).
 
@@ -460,6 +505,17 @@ them. Coincident terrain means the cameras co-register. A uniform offset of whol
 crater outlines is a real misregistration, while a difference only on opposite
 crater walls is just an illumination effect and is fine. Then rank the per-camera
 bundle-adjust stats and prune.
+
+Small misregistration is hard to spot at full view. Zoom to a few hundred meters and
+toggle against a reference (the other azimuth half, or a prior max-lit of the site)
+at a dozen spread locations. Double or ghost crater rims mean an image is off. A
+soft but single-image look is usually a coarser or blurrier frame that won the max,
+not misregistration. To find the image behind a ghost, compare the per-chunk max-lit
+mosaics (about 100 images each), then the images of that chunk. Do not rerun bundle
+adjustment after dropping such images. It weakens the match network and does not
+improve the others. Keep them in bundle adjustment, list them as bad, and keep them
+out of the SfS set. Residual small misregistration is measured and corrected after
+SfS (section 10).
 
 Mapproject into a fresh `map_htdem` directory with the `ba_htdem` cameras. Pass
 `NO_MOSAIC=0` here, not `1`. That is what makes `mapproject_chunk.sh` write the
@@ -617,14 +673,14 @@ scales as GSD squared, so a 2 m/pixel frame covers about 4x the real estate of a
 to prefer the coarse frame when a finer one would be better. `query_gsd.sh` reports
 each image's native ground sample distance, read from the camera with
 `mapproject --query-projection` (the authoritative source, not the per-site ODE
-tables, which omit images pulled in from an adjacent-site query). It also
-correlates with high
-`mapproj_match_offset` (partly a coarseness proxy), so the coarsest tend to be
-caught by the prune in step 7. Treat GSD over about 1.75 m as suspect and over 2 m
-as a drop, preferring a finer frame and keeping a coarse one only as a last resort
-where it is the sole cover (gate on coverage holes first). Drop the coarse frames
-from the SfS subset and from the section-7 registration-validation max-lit, never
-from the bundle solve, where the large footprints are tie-point coverage assets.
+tables, which omit images pulled in from an adjacent-site query). It also correlates
+with high `mapproj_match_offset` (partly a coarseness proxy), so the coarsest tend
+to be caught by the prune in step 7. Treat GSD over about 1.75 m as suspect and over
+2 m as a drop, preferring a finer frame and keeping a coarse one only as a last
+resort where it is the sole cover (check for coverage holes first). Drop the coarse
+frames from the SfS subset and from the section-7 registration-validation max-lit,
+never from the bundle solve, where the large footprints are tie-point coverage
+assets.
 
 The `image_subset` coverage threshold (last arg above) should stay at 0.01 for a
 shadow-calibrated reflectance like LRO NAC, where the lit/shadow cutoff is about
@@ -683,6 +739,14 @@ less can sharpen the result without introducing artifacts. Set it through the
 
 A walltime kill does not auto-requeue the tiles. Just resubmit the identical
 command: `parallel_sfs` resumes from the per-tile DEMs already written.
+
+Each tile runs with `--low-light-threshold 0.03` by default, as recommended in the
+[SfS documentation](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html).
+It reduces the weight of dim pixels where other images are brighter, which avoids
+streaks and seams in low-light terrain. Set `LOW_LIGHT=<value>` to change it, or
+`LOW_LIGHT=none` to turn it off. Passing the literal word `none` in place of the
+exposures file makes each tile compute its own local exposures instead of using the
+shared ones.
 
 ```bash
 export MODEL=bro_ele NCPUS=28 QUEUE=long WALLTIME=16:00:00
@@ -749,6 +813,12 @@ qsub -V -m n -r n -N sim_align -q normal -W group_list=$groupName -j oe -S /bin/
      ba_htdem sim_eval $(pwd)
 ```
 
+Add `GCP_ONLY=1` to the `-v` list to only record the shift and a GCP for every
+image, skipping the per-image bundle adjustment and re-mapprojection. The per-image
+`.vwip` files are removed as each image finishes, since they fill the disk over a
+whole site. The `.match` files are kept. Set `KEEP_IP=1` to keep the `.vwip` files
+too.
+
 Globally, [correlate the SfS and LOLA hillshades](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-align-refine)
 (a grazing hillshade, which gives more valid disparity than a washed-out high-sun or
 multidirectional hillshade), and read the robust median of the dx/dy disparity (ignore the
@@ -779,6 +849,12 @@ directly. Hillshading a reflectance image, whose values sit near zero and are re
 elevation over 1 m pixels, yields a flat textureless raster and the correlation then
 produces no tiles and no run-F. Note the correlator can exit 0 with no output in that
 failure mode, so always confirm run-F exists and run-D is megabytes, not bytes.
+
+Colorize the dx and dy disparity side by side over the full site (for example -5 to
+5 m) before reading the median. Jumps of a few pixels along tile boundaries are
+common where the terrain has little texture, since the `asp_mgm` correlator is less
+reliable there. They do not need a perfect fix, as `dem2gcp` and the bundle
+adjustment that follows average the shift over many points.
 
 If the shift is real (beyond LOLA's own uncertainty), turn the disparity into a GCP with
 [`dem2gcp.sh`](https://stereopipeline.readthedocs.io/en/latest/sfs_usage.html#sfs-gcp), then
@@ -901,11 +977,18 @@ well beyond the usual 4 km pad to cover the actual union of footprints, or drop 
 from the set.
 
 Then redo SfS (repeat step 9, reusing the exposures since the pose change is
-sub-pixel) with the `jitter/run-...-adjusted_state.json` cameras. Run a few spread
-tiles first to confirm the bias collapsed, then run the full set.
-Verify: `geodiff` versus LOLA (dz near zero) and `hillshade_correlator.sh` dx/dy
-versus LOLA now near zero, plus `geodiff` versus the original `sfs_dem.tif`
-showing the corrective move.
+sub-pixel) with the re-registered cameras (`ba_gcp/run` for the bundle path,
+`ba_jitter/run` for the jitter path). Run a few spread tiles first to confirm the
+bias collapsed, then run the full set. Verify: `geodiff` versus LOLA (dz near zero)
+and `hillshade_correlator.sh` dx/dy versus LOLA now near zero, plus `geodiff` versus
+the original `sfs_dem.tif` showing the corrective move.
+
+Do not skip this rerun. The new cameras move only the orthos and the max-lit into
+the LOLA frame. The old `sfs_dem.tif` stays where it was, so blending it (section
+11) gives a DEM that is still off LOLA, with a shadow mask from the new max-lit that
+does not line up with it. After this section, these must all come from the
+re-registered cameras: the SfS DEM, the orthos, the max-lit and average mosaics, and
+the blend.
 
 ## 11. Blending and mosaics
 
@@ -926,7 +1009,7 @@ list the results. Use the final-camera prefix from section 10 (`ba_jitter/run`, 
 ```bash
 export PROJWIN="71240.5 162789.5 90731.5 178256.5"
 export NO_MOSAIC=1 CHUNK_SIZE=121 MODEL=bro_ele WALLTIME=4:00:00
-batch_mapproject.sh ref/lola_1mpp.tif lists/secondary_images.txt jitter/run \
+batch_mapproject.sh ref/lola_1mpp.tif lists/secondary_images.txt ba_jitter/run \
   maps_final $(pwd)
 ls maps_final/*.map.tr1.tif > lists/sfs_maps.txt
 ```
@@ -1085,9 +1168,9 @@ perl -pe 's#.*?(M\d+[LR]E).*#$1#' lists/secondary_images.txt                 \
   | sort -u > lists/sfs_ids.txt
 comm -12 lists/gsd_lt1_ids.txt lists/sfs_ids.txt > lists/native_res_ids.txt
 
-sed 's#^#img/#; s#$#.cal.echo.cub#' lists/native_res_ids.txt                 \
+sed 's#^#img/#; s#$#.cal.echo.cub#' lists/native_res_ids.txt                    \
   > lists/native_res_images.txt
-while read -r id; do ls jitter/run*"$id"*adjusted_state.json | head -1; done \
+while read -r id; do ls ba_jitter/run*"$id"*adjusted_state.json | head -1; done \
   < lists/native_res_ids.txt > lists/native_res_cameras.txt
 ```
 

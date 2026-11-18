@@ -18,7 +18,8 @@ binDir="$(cd "$(dirname "$0")" && pwd)"
 #   imageList      images-per-line text file (ids or paths, same
 #                  format parallel_sfs.sh expects)
 #   baPrefix       prefix for camera glob (e.g. ba_final/run)
-#   exposuresFile  precomputed exposures; copied into each tile's
+#   exposuresFile  precomputed exposures, or "none" so each tile computes its
+#                  own local exposures; otherwise copied into each tile's
 #                  sfs dir as run-exposures.txt
 #   sfsBaseDir     per-tile outputs go under $sfsBaseDir/clip<id>/
 #   estimError     0 = regular SfS run; 1 = uncertainty pass
@@ -28,6 +29,7 @@ binDir="$(cd "$(dirname "$0")" && pwd)"
 # Env var overrides (defaults in parens):
 #   DEM_WEIGHT     (0.0025)
 #   SHADOW_THRESH  (0.005)
+#   LOW_LIGHT      (0.03)       --low-light-threshold for parallel_sfs, "none" = off
 #   NUM_CPU        (6)          per-node worker count (keep low for mem)
 #   NUM_NODES      (4)
 #   WALLTIME       (20:00:00)
@@ -78,6 +80,11 @@ currDir=$1;       shift
 
 demWeight=${DEM_WEIGHT:-0.0025}
 shadowThresh=${SHADOW_THRESH:-0.005}
+# Low-light threshold for parallel_sfs.sh. On by default, "none" turns it off.
+lowLight=${LOW_LIGHT:-0.03}
+if [ "$lowLight" = "none" ]; then
+    lowLight=""
+fi
 numCpu=${NUM_CPU:-6}
 numNodes=${NUM_NODES:-4}
 walltime=${WALLTIME:-20:00:00}
@@ -100,7 +107,7 @@ if [ ! -d "$tileDir" ]; then
     echo "ERROR: tile dir not found: $tileDir"
     exit 1
 fi
-if [ ! -f "$exposuresFile" ]; then
+if [ "$exposuresFile" != "none" ] && [ ! -f "$exposuresFile" ]; then
     echo "ERROR: exposures file not found: $exposuresFile"
     exit 1
 fi
@@ -137,7 +144,10 @@ for tile in "${tiles[@]}"; do
     sfsDir=$sfsBaseDir/clip${id}
     sfsPrefix=$sfsDir/run
     mkdir -p $sfsDir
-    cp -f $exposuresFile $sfsDir/run-exposures.txt
+    # "none" lets each tile compute its own (local) exposures.
+    if [ "$exposuresFile" != "none" ]; then
+        cp -f $exposuresFile $sfsDir/run-exposures.txt
+    fi
     qFlag=""
     if [ -n "$queue" ]; then qFlag="-q $queue"; fi
     jobid=$($qsubBin $qFlag -V -m n -r n -N sfs${id}           \
@@ -147,7 +157,7 @@ for tile in "${tiles[@]}"; do
         -l select=${numNodes}:ncpus=${ncpus}:model=${model} -- \
         $binDir/parallel_sfs.sh                                \
           $tile $numCpu $baPrefix $imageList $estimError       \
-          $sfsPrefix $currDir $demWeight $shadowThresh)
+          $sfsPrefix $currDir $demWeight $shadowThresh $lowLight)
     rc=$?
     # A failed qsub (bad queue, unset -v name, over-limit walltime) prints a banner to
     # stderr, returns non-zero, and emits NO job id. Abort loudly rather than march on

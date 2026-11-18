@@ -28,6 +28,11 @@ while [ "$#" -gt 0 ]; do
 done
 cd $currDir
 
+# GCP_ONLY=1 in the environment is the same as --gcp-only (the batch runner sets it).
+if [ "${GCP_ONLY:-0}" = "1" ]; then
+    gcpOnly=1
+fi
+
 # EXPOSURES_PREFIX is REQUIRED. Without per-image exposures the sfs
 # --save-sim-intensity-only step uses its default starting exposure
 # (~1.0) and does not iterate to refine it, so darker images render
@@ -95,20 +100,18 @@ gcpFile=${simDir}/${imageId}_gcp.gcp
 gcpBaPrefix=${simDir}/ba-${imageId}
 alignMap=${simDir}/${imageId}.align.map.tif
 
-# Wipe per-image intermediate match/vwip files on every exit path
-# (early skip, failure, or success). Keeps disk usage in check on shared
-# filesystems with quotas. -transform.txt and the .gcp / .tif outputs
-# fall outside the glob and are preserved.
+# Wipe the per-image .vwip interest-point files on every exit path (early
+# skip, failure, or success). They are the bulk of the disk use over a whole
+# site. The smaller .match files are kept. Set KEEP_IP=1 to keep the .vwip too.
 cleanup_intermediates() {
     # Only wipe via a non-empty prefix. An empty prefix would let the glob
-    # match unrelated *.vwip/*.match files in the working directory.
-    [ -n "$alignPrefix"  ] && rm -fv "${alignPrefix}"*.vwip  "${alignPrefix}"*.match  2>/dev/null
-    [ -n "$gcpBaPrefix" ] && rm -fv "${gcpBaPrefix}"*.vwip "${gcpBaPrefix}"*.match 2>/dev/null
+    # match unrelated *.vwip files in the working directory.
+    [ -n "$alignPrefix" ] && rm -fv "${alignPrefix}"*.vwip 2>/dev/null
+    [ -n "$gcpBaPrefix" ] && rm -fv "${gcpBaPrefix}"*.vwip 2>/dev/null
 }
-# Disabled by default - we want to keep matches/vwip for inspection.
-# Re-enable the trap below for very large batches (e.g. Mons-style
-# multi-thousand-image runs) where the .vwip / .match clutter eats disk.
-# trap 'cleanup_intermediates >> "$out" 2>&1' EXIT
+if [ "${KEEP_IP:-0}" != "1" ]; then
+    trap 'cleanup_intermediates >> "$out" 2>&1' EXIT
+fi
 
 # Threshold (in pixels). Below this, skip GCP/BA/re-mapproject.
 # Can be overridden via env var ALIGN_THRESH (e.g., huge value for verify
