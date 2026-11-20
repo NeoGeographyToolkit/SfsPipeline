@@ -645,8 +645,16 @@ good default, often crisper for SfS than the primary one, but inspect both max-l
 mosaics and pick the better. Derive the SfS image list from the chosen cover as cub
 paths, one per line.
 
+Run the selection on the orthos made with the bundle-adjusted cameras in
+`map_htdem` (section 7), not the initial ones in `maps`. Leave out the cameras
+removed in section 7 and the coarse frames, so neither can be picked.
+
 ```bash
-sfs_select_full_site.sh lists/filtered_map.txt lists/azimuth.txt selection $(pwd) 0.01 28
+cut -d' ' -f1 lists/gsd_lt1.75.txt                                            \
+  | perl -p -e "s#^.*?(M\d+[LR]E).*?\n#map_htdem/\$1.cal.echo.map.tr1.tif\n#" \
+  | grep -vF -f lists/removed_ids.txt > lists/sel_input_map.txt
+
+sfs_select_full_site.sh lists/sel_input_map.txt lists/azimuth.txt selection $(pwd) 0.01 28
 
 cat selection/all_extra.txt                                     \
   | perl -p -e "s#^.*?(M\d+[LR]E).*?\n#img/\$1.cal.echo.cub\n#" \
@@ -656,15 +664,15 @@ cat selection/all_extra.txt                                     \
 To pick between the primary and extra covers, build a full-resolution max-lit of
 each and compare them (and against the full-set max-lit). The `all_primary.txt` /
 `all_extra.txt` lists hold low-resolution sub8 paths, so first rewrite each id to
-its full-resolution mapprojected path under `maps/`, then `dem_mosaic --max` over
-that list with `dem_mosaic_list.sh`:
+its full-resolution mapprojected path under `map_htdem/` (bundle-adjusted cameras),
+then `dem_mosaic --max` over that list with `dem_mosaic_list.sh`:
 
 ```bash
 for cover in primary extra; do
-  perl -p -e "s#^.*?(M\d+[LR]E).*?\n#maps/\$1.cal.echo.map.tr1.tif\n#" \
+  perl -p -e "s#^.*?(M\d+[LR]E).*?\n#map_htdem/\$1.cal.echo.map.tr1.tif\n#" \
     selection/all_${cover}.txt | sort -u > lists/sel_${cover}_map.txt
-  qsub -V -m n -r n -N max_$cover -q normal \
-    -W group_list=$groupName -j oe -S /bin/bash \
+  qsub -V -m n -r n -N max_$cover -q normal                \
+    -W group_list=$groupName -j oe -S /bin/bash            \
     -l select=1:ncpus=28:model=bro_ele -l walltime=1:00:00 \
     -- dem_mosaic_list.sh lists/sel_${cover}_map.txt selection/max_${cover}.tif $(pwd) --max
 done
